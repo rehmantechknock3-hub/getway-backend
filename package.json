@@ -1,0 +1,30 @@
+{
+  "name": "marketplace",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "type-check": "turbo run type-check",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:push": "pnpm --filter @repo/api db:push",
+    "db:generate": "pnpm --filter @repo/api db:generate",
+    "db:migrate": "pnpm --filter @repo/api db:migrate",
+    "db:studio": "pnpm --filter @repo/api db:studio"
+  },
+  "devDependencies": {
+    "turbo": "^2.8.20",
+    "typescript": "^5.6.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "utf-8-validate": "6.0.6",
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "@types/react": "~19.1.10",
+      "expo-crypto": "~15.0.8"
+    }
+  }
+}

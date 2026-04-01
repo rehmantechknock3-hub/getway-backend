@@ -1,0 +1,49 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev":          "nest start --watch",
+    "build":        "nest build",
+    "start":        "node dist/main",
+    "type-check":   "tsc --noEmit",
+    "lint":         "eslint src --ext .ts",
+    "test":         "vitest run",
+    "db:push":      "prisma db push",
+    "db:generate":  "prisma generate",
+    "db:migrate":         "prisma migrate dev",
+    "db:migrate:deploy":  "prisma migrate deploy",
+    "db:studio":    "prisma studio"
+  },
+  "dependencies": {
+    "@clerk/backend":              "^3.0.1",
+    "@nestjs/common":              "^11.1.17",
+    "@nestjs/config":              "^4.0.3",
+    "@nestjs/core":                "^11.1.17",
+    "@nestjs/mapped-types":        "^2.1.0",
+    "@nestjs/platform-express":    "^11.1.17",
+    "@nestjs/platform-socket.io":  "^11.1.13",
+    "@nestjs/websockets":          "^11.1.16",
+    "@prisma/client":              "^6.19.0",
+    "@repo/schemas":               "workspace:*",
+    "nestjs-zod":                  "^5.1.1",
+    "reflect-metadata":            "^0.2.0",
+    "rxjs":                        "^7.8.0",
+    "socket.io":                   "^4.8.3",
+    "stripe":                      "^20.4.1",
+    "svix":                        "^1.89.0",
+    "zod":                         "^3.25.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli":      "^11.0.16",
+    "@nestjs/testing":  "^11.1.17",
+    "@types/express":   "^5.0.0",
+    "@types/node":      "^22.0.0",
+    "prisma":           "^6.19.0",
+    "ts-loader":        "^9.5.4",
+    "ts-node":          "^10.9.0",
+    "tsconfig-paths":   "^4.2.0",
+    "typescript":       "^5.6.0",
+    "vitest":           "^2.0.0"
+  }
+}

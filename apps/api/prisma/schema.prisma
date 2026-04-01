@@ -1,0 +1,218 @@
+// This is the authoritative database schema.
+// Run: pnpm db:generate   → regenerate Prisma client
+// Run: pnpm db:push       → push to dev DB (no migration file)
+// Run: pnpm db:migrate    → create a named migration
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums ────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+// ── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  clerkId   String   @unique
+  role      UserRole @default(CUSTOMER)
+  email     String   @unique
+  firstName String
+  lastName  String
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  providerProfile  ProviderProfile?
+  bookingsAsCustomer Booking[] @relation("CustomerBookings")
+  sentMessages     Message[]
+
+  @@map("users")
+}
+
+model ProviderProfile {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                String?
+  verificationStatus VerificationStatus @default(PENDING)
+  isOnline           Boolean            @default(false)
+  averageRating      Float              @default(0)
+  totalReviews       Int                @default(0)
+  totalEarnings      Float              @default(0)
+  latitude           Float?
+  longitude          Float?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  services          Service[]
+  bookingsAsProvider Booking[] @relation("ProviderBookings")
+  documents         ProviderDocument[]
+
+  @@map("provider_profiles")
+}
+
+model ProviderDocument {
+  id         String          @id @default(uuid())
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  type       String
+  s3Key      String
+  verifiedAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  @@map("provider_documents")
+}
+
+model ServiceCategory {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  icon        String
+  description String?
+  services    Service[]
+
+  @@map("service_categories")
+}
+
+model Service {
+  id          String          @id @default(uuid())
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    ServiceCategory @relation(fields: [categoryId], references: [id])
+  title       String
+  description String?
+  price       Float
+  duration    Int             // minutes
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  bookings    Booking[]
+
+  @@map("services")
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  customerId  String
+  customer    User          @relation("CustomerBookings", fields: [customerId], references: [id])
+  providerId  String
+  provider    ProviderProfile @relation("ProviderBookings", fields: [providerId], references: [id])
+  serviceId   String
+  service     Service       @relation(fields: [serviceId], references: [id])
+  status      BookingStatus @default(PENDING)
+  scheduledAt DateTime
+  address     String
+  latitude    Float
+  longitude   Float
+  notes       String?
+  totalAmount Float
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  payment      Payment?
+  review       Review?
+  conversation Conversation?
+
+  @@map("bookings")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  @@map("reviews")
+}
+
+model Payment {
+  id                       String        @id @default(uuid())
+  bookingId                String        @unique
+  booking                  Booking       @relation(fields: [bookingId], references: [id])
+  customerId               String
+  providerId               String
+  amount                   Float
+  platformCommissionAmount Float
+  providerAmount           Float
+  currency                 String        @default("USD")
+  status                   PaymentStatus @default(PENDING)
+  stripePaymentIntentId    String?       @unique
+  stripeTransferId         String?
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+model Conversation {
+  id            String    @id @default(uuid())
+  bookingId     String    @unique
+  booking       Booking   @relation(fields: [bookingId], references: [id])
+  customerId    String
+  providerId    String
+  lastMessageAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  messages      Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  type           MessageType  @default(TEXT)
+  content        String
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
