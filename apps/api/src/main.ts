@@ -1,5 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { join } from "path";
+import { existsSync, mkdirSync } from "fs";
 import { AppModule } from "./app.module";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
@@ -9,6 +11,12 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix("api/v1");
+
+  const uploadsRoot = join(process.cwd(), "apps/api/uploads");
+  if (!existsSync(uploadsRoot)) {
+    mkdirSync(uploadsRoot, { recursive: true });
+  }
+  app.useStaticAssets(uploadsRoot, { prefix: "/uploads/" });
 
   app.enableCors({
     origin: [

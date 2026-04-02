@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
   Alert, StatusBar, ScrollView,
 } from "react-native";
-import { useAuth, useClerk } from "@clerk/expo";
+import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { router } from "expo-router";
 import { apiClient } from "@repo/api-client";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -38,11 +38,25 @@ const ROLES: {
 ];
 
 export default function RoleSelectScreen() {
-  const { getToken } = useAuth();
+  const { getToken, sessionClaims } = useAuth();
+  const { user } = useUser();
   const clerk = useClerk();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Role | null>(null);
   const [loading,  setLoading]  = useState(false);
+  const roleFromClaims = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
+  const roleFromUser = (user?.publicMetadata as { role?: string } | undefined)?.role;
+  const role = roleFromClaims ?? roleFromUser;
+
+  useEffect(() => {
+    if (role === "PROVIDER") {
+      router.replace("/(provider)/(tabs)/jobs");
+      return;
+    }
+    if (role === "CUSTOMER") {
+      router.replace("/(customer)/(tabs)/home");
+    }
+  }, [role]);
 
   async function handleConfirm() {
     if (!selected) return;
@@ -57,8 +71,8 @@ export default function RoleSelectScreen() {
       await clerk.session?.reload();
       router.replace(
         selected === "PROVIDER"
-          ? "/(provider)/(tabs)/jobs"
-          : "/(customer)/(tabs)/home",
+          ? "/(auth)/provider-onboarding"
+          : "/(auth)/customer-onboarding",
       );
     } catch (err: unknown) {
       Alert.alert("Error", err instanceof Error ? err.message : "Failed to set role");

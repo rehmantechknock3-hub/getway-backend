@@ -1,14 +1,223 @@
-import { View, Text } from "react-native";
+import { useEffect, useState } from "react";
+
+import { ActivityIndicator, Alert, Image, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth } from "@clerk/expo";
-import { Button } from "@repo/ui";
+
+import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
 
 export default function ProviderProfileScreen() {
   const { signOut } = useAuth();
+  const { data: me, isLoading } = useMe();
+  const updateProfile = useUpdateProfile();
+  const updateProviderOnboarding = useSubmitProviderOnboarding();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("");
+  const [experienceYears, setExperienceYears] = useState("0");
+  const [serviceArea, setServiceArea] = useState("");
+  const [hasTools, setHasTools] = useState(true);
+  const [serviceDescription, setServiceDescription] = useState("");
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+
+  useEffect(() => {
+    if (!me) return;
+    setFirstName(me.firstName);
+    setLastName(me.lastName);
+    setEmail(me.email);
+    setPhone(me.phone ?? "");
+    setServiceCategory(me.providerOnboarding?.serviceCategory ?? "");
+    setExperienceYears(String(me.providerOnboarding?.experienceYears ?? 0));
+    setServiceArea(me.providerOnboarding?.serviceArea ?? "");
+    setHasTools(me.providerOnboarding?.hasTools ?? true);
+    setServiceDescription(me.providerOnboarding?.serviceDescription ?? "");
+    setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
+  }, [me]);
+
+  async function handleSaveProfile() {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim()) {
+      Alert.alert("Required", "Name, email and phone are required.");
+      return;
+    }
+    try {
+      await updateProfile.mutateAsync({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+      });
+      Alert.alert("Saved", "Profile updated successfully.");
+    } catch (error: unknown) {
+      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save profile");
+    }
+  }
+
+  async function handleSaveProviderInfo() {
+    const parsedExperience = Number.parseInt(experienceYears, 10);
+    if (!serviceCategory.trim() || !serviceArea.trim() || !serviceDescription.trim() || Number.isNaN(parsedExperience)) {
+      Alert.alert("Required", "Please complete provider details.");
+      return;
+    }
+    try {
+      await updateProviderOnboarding.mutateAsync({
+        serviceCategory: serviceCategory.trim(),
+        experienceYears: parsedExperience,
+        serviceArea: serviceArea.trim(),
+        hasTools,
+        serviceDescription: serviceDescription.trim(),
+        profilePhotoUrl: profilePhotoUrl.trim() ? profilePhotoUrl.trim() : undefined,
+      });
+      Alert.alert("Saved", "Provider details updated successfully.");
+    } catch (error: unknown) {
+      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save provider details");
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center">
+        <ActivityIndicator color="#E8521A" />
+      </View>
+    );
+  }
 
   return (
-    <View className="flex-1 bg-gray-50 items-center justify-center px-6">
-      <Text className="text-xl font-semibold text-gray-900 mb-8">Provider Profile</Text>
-      <Button label="Sign Out" variant="outline" onPress={() => signOut()} />
-    </View>
+    <ScrollView className="flex-1 bg-canvas px-5 pt-6" contentContainerStyle={{ paddingBottom: 28 }}>
+      <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
+
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-6">
+        <View className="flex-row items-center gap-3 mb-4">
+          {profilePhotoUrl ? (
+            <Image source={{ uri: profilePhotoUrl }} className="w-14 h-14 rounded-2xl bg-canvas-sunken" />
+          ) : (
+            <View className="w-14 h-14 rounded-2xl bg-canvas-sunken items-center justify-center">
+              <Text className="text-ink-muted font-bold text-lg">
+                {(firstName[0] ?? "") + (lastName[0] ?? "")}
+              </Text>
+            </View>
+          )}
+          <View className="flex-1">
+            <Text className="text-ink font-semibold text-lg">{firstName} {lastName}</Text>
+            <Text className="text-ink-muted text-sm">{serviceCategory || "Provider profile"}</Text>
+          </View>
+        </View>
+
+        <View className="flex-row gap-3">
+          <View className="flex-1 bg-canvas rounded-xl border border-ink-faint px-3 py-2.5">
+            <Text className="text-ink-muted text-xs">Rating</Text>
+            <Text className="text-ink font-semibold text-base">{me?.providerMetrics?.averageRating?.toFixed(1) ?? "0.0"}</Text>
+          </View>
+          <View className="flex-1 bg-canvas rounded-xl border border-ink-faint px-3 py-2.5">
+            <Text className="text-ink-muted text-xs">Reviews</Text>
+            <Text className="text-ink font-semibold text-base">{me?.providerMetrics?.totalReviews ?? 0}</Text>
+          </View>
+        </View>
+      </View>
+
+      <Text className="text-ink text-sm font-medium mb-2">First name</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        value={firstName}
+        onChangeText={setFirstName}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Last name</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        value={lastName}
+        onChangeText={setLastName}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Email</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-6"
+        keyboardType="phone-pad"
+        value={phone}
+        onChangeText={setPhone}
+      />
+
+      <TouchableOpacity
+        className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8"
+        onPress={handleSaveProfile}
+        disabled={updateProfile.isPending}
+        style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
+      >
+        {updateProfile.isPending ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text className="text-white font-semibold">Save Profile</Text>
+        )}
+      </TouchableOpacity>
+
+      <Text className="text-xl font-bold text-ink mb-4">Provider Onboarding</Text>
+
+      <Text className="text-ink text-sm font-medium mb-2">Service category</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        value={serviceCategory}
+        onChangeText={setServiceCategory}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        keyboardType="number-pad"
+        value={experienceYears}
+        onChangeText={setExperienceYears}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Service area</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        value={serviceArea}
+        onChangeText={setServiceArea}
+      />
+
+      <Text className="text-ink text-sm font-medium mb-2">Service description</Text>
+      <TextInput
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        value={serviceDescription}
+        onChangeText={setServiceDescription}
+        multiline
+        numberOfLines={3}
+      />
+
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-6 flex-row items-center justify-between">
+        <View className="flex-1 pr-3">
+          <Text className="text-ink font-semibold">Have your own tools</Text>
+          <Text className="text-ink-muted text-sm">Set to off if customer needs to provide equipment.</Text>
+        </View>
+        <Switch value={hasTools} onValueChange={setHasTools} />
+      </View>
+
+      <TouchableOpacity
+        className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8"
+        onPress={handleSaveProviderInfo}
+        disabled={updateProviderOnboarding.isPending}
+        style={{ opacity: updateProviderOnboarding.isPending ? 0.6 : 1 }}
+      >
+        {updateProviderOnboarding.isPending ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text className="text-white font-semibold">Save Provider Details</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        className="border border-ink-faint rounded-2xl py-3.5 items-center"
+        onPress={() => signOut()}
+      >
+        <Text className="text-ink font-semibold">Sign Out</Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }

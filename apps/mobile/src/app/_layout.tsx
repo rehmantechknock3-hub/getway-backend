@@ -1,7 +1,7 @@
 import "../globals.css";
 import { useEffect } from "react";
 import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
-import { ClerkProvider, useAuth } from "@clerk/expo";
+import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setAuthToken } from "@repo/api-client";
@@ -23,6 +23,7 @@ const tokenCache = {
 
 function RootNavigator() {
   const { isLoaded, isSignedIn, getToken, sessionClaims } = useAuth();
+  const { user } = useUser();
   const router   = useRouter();
   const segments = useSegments();
   const navState = useRootNavigationState();
@@ -41,7 +42,16 @@ function RootNavigator() {
     if (!navState?.key)   return; // navigation container not yet mounted
 
     const inAuthGroup = segments[0] === "(auth)";
-    const role = (sessionClaims?.publicMetadata as { role?: string })?.role;
+    const inCustomerOnboarding = segments[1] === "customer-onboarding";
+    const inProviderOnboarding = segments[1] === "provider-onboarding";
+    const roleFromClaims = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
+    const roleFromUser = (user?.publicMetadata as { role?: string } | undefined)?.role;
+    const role = roleFromClaims ?? roleFromUser;
+
+    // Allow onboarding screens to stay mounted while role/session metadata settles.
+    if (inAuthGroup && (inCustomerOnboarding || inProviderOnboarding)) {
+      return;
+    }
 
     if (!isSignedIn) {
       // Only push to welcome if we're outside the auth group.
