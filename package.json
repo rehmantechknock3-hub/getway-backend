@@ -4,6 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
+    "setup:env": "bash scripts/setup-env.sh",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "type-check": "turbo run type-check",
