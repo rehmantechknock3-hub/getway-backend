@@ -15,14 +15,46 @@ export const CustomerOnboardingSchema = z.object({
   notes: z.string().max(300).optional(),
 });
 
-export const ProviderOnboardingSchema = z.object({
-  serviceCategory: z.string().min(1),
+const providerOnboardingFields = {
   experienceYears: z.number().int().min(0).max(60),
   serviceArea: z.string().min(1),
   hasTools: z.boolean(),
   serviceDescription: z.string().min(1).max(500),
   profilePhotoUrl: z.string().url().optional(),
-});
+};
+
+/**
+ * Provider onboarding payload. Uses `serviceCategories` (1–12). Legacy rows with only
+ * `serviceCategory` (string) are normalized during parse.
+ */
+export const ProviderOnboardingSchema = z.preprocess((raw: unknown) => {
+  if (!raw || typeof raw !== "object" || raw === null) return raw;
+  const o = { ...(raw as Record<string, unknown>) };
+  const legacy = o["serviceCategory"];
+  const next = o["serviceCategories"];
+  if (typeof legacy === "string" && legacy.trim().length > 0 && !Array.isArray(next)) {
+    o["serviceCategories"] = [legacy.trim()];
+  }
+  if (typeof o["starterListingPrice"] === "number" && Number.isNaN(o["starterListingPrice"] as number)) {
+    delete o["starterListingPrice"];
+  }
+  if (
+    typeof o["starterListingDurationMinutes"] === "number" &&
+    Number.isNaN(o["starterListingDurationMinutes"] as number)
+  ) {
+    delete o["starterListingDurationMinutes"];
+  }
+  return o;
+}, z.object({
+  serviceCategories: z.array(z.string().min(1).max(80)).min(1).max(12),
+  /**
+   * When set, used for auto-created starter services (one per category).
+   * Omit to create draft rows (price/duration 0, inactive) until the provider completes them under My services.
+   */
+  starterListingPrice: z.number().positive().optional(),
+  starterListingDurationMinutes: z.number().int().positive().optional(),
+  ...providerOnboardingFields,
+}));
 
 /** Safe parse for JSON stored on User.providerOnboarding (API read paths). */
 export function safeParseProviderOnboardingJson(raw: unknown) {
@@ -42,6 +74,8 @@ export const UserSchema = z.object({
   onboardingCompleted: z.boolean().default(false),
   customerOnboarding: CustomerOnboardingSchema.optional(),
   providerOnboarding: ProviderOnboardingSchema.optional(),
+  /** Set when the user has a provider profile row (same id as in provider APIs). */
+  providerProfileId: z.string().uuid().optional(),
   providerMetrics: z.object({
     averageRating: z.number().min(0).max(5),
     totalReviews: z.number().int().min(0),

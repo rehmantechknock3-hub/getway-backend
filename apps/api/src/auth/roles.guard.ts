@@ -10,6 +10,15 @@ import type { UserRole } from "@repo/schemas";
 import { UsersService } from "../users/users.service";
 import { ROLES_KEY } from "./roles.decorator";
 
+function jwtPublicMetadataRole(auth: unknown): string | undefined {
+  const payload = auth as {
+    public_metadata?: { role?: string };
+    /** Present on some Clerk session templates */
+    metadata?: { role?: string };
+  } | undefined;
+  return payload?.public_metadata?.role ?? payload?.metadata?.role;
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(
@@ -36,12 +45,20 @@ export class RolesGuard implements CanActivate {
 
     if (!user) throw new ForbiddenException("User not found");
 
-    if (!requiredRoles.includes(user.role as UserRole)) {
-      throw new ForbiddenException(
-        `Requires role: ${requiredRoles.join(" or ")}`,
-      );
+    const dbRole = user.role as UserRole;
+    if (requiredRoles.includes(dbRole)) return true;
+
+    const jwtRole = jwtPublicMetadataRole(request.auth) as UserRole | undefined;
+    const onlyProvider =
+      requiredRoles.length === 1 && requiredRoles[0] === "PROVIDER";
+    if (
+      onlyProvider &&
+      jwtRole === "PROVIDER" &&
+      dbRole === "CUSTOMER"
+    ) {
+      return true;
     }
 
-    return true;
+    throw new ForbiddenException(`Requires role: ${requiredRoles.join(" or ")}`);
   }
 }

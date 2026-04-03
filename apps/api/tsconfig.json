@@ -19,7 +19,6 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@repo/schemas":    ["../../packages/schemas/src/index.ts"],
-      "@repo/schemas/user.schema": ["../../packages/schemas/src/user.schema.ts"],
       "@repo/utils":      ["../../packages/utils/src/index.ts"],
       "@repo/api-client": ["../../packages/api-client/src/index.ts"],
       "@repo/hooks":      ["../../packages/hooks/src/index.ts"]

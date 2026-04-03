@@ -17,9 +17,13 @@ import { join } from "path";
 import type { Request } from "express";
 import { FileInterceptor } from "@nestjs/platform-express";
 import sharp from "sharp";
-import { ClerkAuthGuard } from "../auth/clerk.guard";
-import { UsersService }   from "./users.service";
 import { z } from "zod";
+
+import { UpdateOnboardingSchema } from "@repo/schemas";
+
+import { ClerkAuthGuard } from "../auth/clerk.guard";
+import { Roles } from "../auth/roles.decorator";
+import { UsersService } from "./users.service";
 
 const UpdateUserProfileSchema = z.object({
   firstName: z.string().min(1),
@@ -44,29 +48,6 @@ const UpdateAvatarSchema = z.object({
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
-const UpdateOnboardingSchema = z.union([
-  z.object({
-    role: z.literal("CUSTOMER"),
-    data: z.object({
-      primaryLocation: z.string().min(1),
-      carCompany: z.string().min(1),
-      carModel: z.string().regex(/^\d+$/),
-      notes: z.string().max(300).optional(),
-    }),
-  }),
-  z.object({
-    role: z.literal("PROVIDER"),
-    data: z.object({
-      serviceCategory: z.string().min(1),
-      experienceYears: z.number().int().min(0).max(60),
-      serviceArea: z.string().min(1),
-      hasTools: z.boolean(),
-      serviceDescription: z.string().min(1).max(500),
-      profilePhotoUrl: z.string().url().optional(),
-    }),
-  }),
-]);
-
 @UseGuards(ClerkAuthGuard)
 @Controller("users")
 export class UsersController {
@@ -76,7 +57,17 @@ export class UsersController {
   async findMe(@Req() req: Request) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
+    await this.usersService.syncRoleFromClerkSession(clerkId, req.auth);
     return this.usersService.findByClerkId(clerkId);
+  }
+
+  @Post("me/provider/ensure-listing")
+  @Roles("PROVIDER")
+  async ensureProviderListing(@Req() req: Request) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+    await this.usersService.syncRoleFromClerkSession(clerkId, req.auth);
+    return this.usersService.ensureProviderStarterListing(clerkId);
   }
 
   @Patch("me/profile")

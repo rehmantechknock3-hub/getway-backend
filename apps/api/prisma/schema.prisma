@@ -70,9 +70,26 @@ model User {
 
   providerProfile  ProviderProfile?
   bookingsAsCustomer Booking[] @relation("CustomerBookings")
+  favoriteProviders FavoriteProvider[]
   sentMessages     Message[]
+  notifications      Notification[]
 
   @@map("users")
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String
+  readAt    DateTime?
+  bookingId String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
 }
 
 model ProviderProfile {
@@ -87,13 +104,19 @@ model ProviderProfile {
   totalEarnings      Float              @default(0)
   latitude           Float?
   longitude          Float?
+  /** Category IDs hidden from this provider’s service picker (shared catalog rows may still exist). */
+  dismissedServiceCategoryIds String[] @default([])
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
   services          Service[]
   bookingsAsProvider Booking[] @relation("ProviderBookings")
   documents         ProviderDocument[]
+  favoritedByCustomers FavoriteProvider[]
+  /** Custom service categories created by this provider (shared catalog rows use `providerId` null). */
+  ownedServiceCategories ServiceCategory[]
 
+  @@index([verificationStatus])
   @@map("provider_profiles")
 }
 
@@ -106,16 +129,21 @@ model ProviderDocument {
   verifiedAt DateTime?
   createdAt  DateTime        @default(now())
 
+  @@index([providerId])
   @@map("provider_documents")
 }
 
 model ServiceCategory {
   id          String    @id @default(uuid())
-  name        String    @unique
+  /** When set, this label is visible only to that provider (and not a shared catalog row). */
+  providerId  String?
+  provider    ProviderProfile? @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  name        String
   icon        String
   description String?
   services    Service[]
 
+  @@index([providerId])
   @@map("service_categories")
 }
 
@@ -135,7 +163,22 @@ model Service {
 
   bookings    Booking[]
 
+  @@index([providerId])
+  @@index([categoryId])
+  @@index([providerId, isActive])
   @@map("services")
+}
+
+model FavoriteProvider {
+  id         String   @id @default(uuid())
+  customerId String
+  customer   User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, providerId])
+  @@map("favorite_providers")
 }
 
 model Booking {
@@ -160,6 +203,11 @@ model Booking {
   review       Review?
   conversation Conversation?
 
+  @@index([providerId])
+  @@index([customerId])
+  @@index([providerId, status])
+  @@index([providerId, scheduledAt])
+  @@index([serviceId])
   @@map("bookings")
 }
 
@@ -218,5 +266,6 @@ model Message {
   readAt         DateTime?
   createdAt      DateTime     @default(now())
 
+  @@index([conversationId, createdAt(sort: Desc)])
   @@map("messages")
 }

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+
 import type {
   SavedLocation,
   User,
@@ -6,8 +7,13 @@ import type {
   CustomerOnboarding,
   ProviderOnboarding,
 } from "@repo/schemas";
+
 import { apiClient } from "../client";
+import { providerKeys } from "../queries/providers.queries";
+import { providerMyServicesKeys } from "../queries/provider-my-services.queries";
 import { userKeys } from "../queries/users.queries";
+
+export type EnsureProviderListingResult = { created: boolean };
 
 type UploadAvatarInput = {
   uri: string;
@@ -78,6 +84,7 @@ export function useSubmitCustomerOnboarding() {
 }
 
 export function useSubmitProviderOnboarding() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: ProviderOnboarding) => {
       const { data: response } = await apiClient.put<User>("/api/v1/users/me/onboarding", {
@@ -85,6 +92,29 @@ export function useSubmitProviderOnboarding() {
         data,
       });
       return response;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
+      void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.categories() });
+      void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
+      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    },
+  });
+}
+
+export function useEnsureProviderListing() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await apiClient.post<EnsureProviderListingResult>(
+        "/api/v1/users/me/provider/ensure-listing"
+      );
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
+      void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
     },
   });
 }

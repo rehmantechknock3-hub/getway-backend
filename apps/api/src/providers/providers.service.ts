@@ -1,12 +1,12 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 
 import { Prisma } from "@prisma/client";
-import type {
-  ProviderPublicDetail,
-  ProviderPublicSummary,
-  ProviderServiceOffer,
+import {
+  safeParseProviderOnboardingJson,
+  type ProviderPublicDetail,
+  type ProviderPublicSummary,
+  type ProviderServiceOffer,
 } from "@repo/schemas";
-import { safeParseProviderOnboardingJson } from "@repo/schemas/user.schema";
 
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -29,11 +29,16 @@ type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{
     services: {
       where: { isActive: true };
       orderBy: { price: "asc" };
-      take: 1;
       include: { category: { select: { name: true } } };
     };
   };
 }>;
+
+type ServiceForSearch = {
+  title: string;
+  description: string | null;
+  category: { name: string };
+};
 
 @Injectable()
 export class ProvidersService {
@@ -42,6 +47,18 @@ export class ProvidersService {
   private parseOnboarding(raw: Prisma.JsonValue | null | undefined) {
     const parsed = safeParseProviderOnboardingJson(raw);
     return parsed.success ? parsed.data : undefined;
+  }
+
+  private buildServiceSearchText(services: ServiceForSearch[]): string | undefined {
+    if (!services.length) return undefined;
+    const chunks: string[] = [];
+    for (const s of services) {
+      chunks.push(s.title);
+      if (s.description) chunks.push(s.description);
+      chunks.push(s.category.name);
+    }
+    const raw = chunks.join(" ").toLowerCase().trim();
+    return raw.length > 0 ? raw : undefined;
   }
 
   private toSummary(row: ProviderWithRelations): ProviderPublicSummary {
@@ -53,7 +70,10 @@ export class ProvidersService {
       firstName: row.user.firstName,
       lastName: row.user.lastName,
       avatarUrl: row.user.avatarUrl ?? undefined,
-      serviceCategory: onboarding?.serviceCategory,
+      serviceCategory:
+        onboarding?.serviceCategories?.length && onboarding.serviceCategories.length > 0
+          ? onboarding.serviceCategories.join(" · ")
+          : undefined,
       serviceDescription: onboarding?.serviceDescription,
       serviceArea: onboarding?.serviceArea,
       averageRating: row.averageRating,
@@ -64,6 +84,8 @@ export class ProvidersService {
       longitude: row.longitude ?? undefined,
       startingPrice: firstService ? firstService.price : undefined,
       primaryServiceTitle: firstService ? firstService.title : undefined,
+      primaryServiceId: firstService ? firstService.id : undefined,
+      serviceSearchText: this.buildServiceSearchText(row.services),
     };
   }
 
@@ -99,7 +121,6 @@ export class ProvidersService {
         services: {
           where: { isActive: true },
           orderBy: { price: "asc" },
-          take: 1,
           include: { category: { select: { name: true } } },
         },
       },
@@ -109,10 +130,18 @@ export class ProvidersService {
     let summaries = rows.map((r) => this.toSummary(r));
 
     if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
-      summaries = summaries.filter((s) => {
-        if (s.latitude == null || s.longitude == null) return false;
-        return distanceKm(lat, lon, s.latitude, s.longitude) <= radiusKm;
-      });
+      const near: { summary: ProviderPublicSummary; distanceKm: number }[] = [];
+      const missingCoords: ProviderPublicSummary[] = [];
+      for (const s of summaries) {
+        if (s.latitude == null || s.longitude == null) {
+          missingCoords.push(s);
+          continue;
+        }
+        const d = distanceKm(lat, lon, s.latitude, s.longitude);
+        if (d <= radiusKm) near.push({ summary: s, distanceKm: d });
+      }
+      near.sort((a, b) => a.distanceKm - b.distanceKm);
+      summaries = [...near.map((x) => x.summary), ...missingCoords];
     }
 
     return summaries;
@@ -134,7 +163,6 @@ export class ProvidersService {
         services: {
           where: { isActive: true },
           orderBy: { price: "asc" },
-          take: 1,
           include: { category: { select: { name: true } } },
         },
       },
@@ -167,5 +195,33 @@ export class ProvidersService {
       categoryName: s.category.name,
       isActive: s.isActive,
     }));
+  }
+
+  private readonly providerSummaryInclude = {
+    user: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        avatarUrl: true,
+        providerOnboarding: true,
+      },
+    },
+    services: {
+      where: { isActive: true },
+      orderBy: { price: "asc" as const },
+      include: { category: { select: { name: true } } },
+    },
+  } as const;
+
+  /** Preserves caller order of `ids` (omits missing profiles). */
+  async findPublicSummariesByIds(ids: string[]): Promise<ProviderPublicSummary[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.providerProfile.findMany({
+      where: { id: { in: ids } },
+      include: this.providerSummaryInclude,
+    });
+    const byId = new Map(rows.map((r) => [r.id, this.toSummary(r)]));
+    return ids.map((id) => byId.get(id)).filter((s): s is ProviderPublicSummary => s != null);
   }
 }

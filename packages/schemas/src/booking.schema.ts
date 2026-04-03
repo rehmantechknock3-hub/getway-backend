@@ -35,15 +35,13 @@ export const CreateBookingSchema = BookingSchema.pick({
   notes:       true,
 });
 
-export const UpdateBookingStatusSchema = z.object({
-  status: BookingStatus,
+/** Admin creates a booking on behalf of a customer (customer internal UUID). */
+export const AdminCreateBookingSchema = CreateBookingSchema.extend({
+  customerId: z.string().uuid(),
 });
 
-export const BookingListResponseSchema = z.object({
-  data:  z.array(BookingSchema),
-  total: z.number().int(),
-  page:  z.number().int(),
-  limit: z.number().int(),
+export const UpdateBookingStatusSchema = z.object({
+  status: BookingStatus,
 });
 
 export const ReviewSchema = z.object({
@@ -60,9 +58,69 @@ export const CreateReviewSchema = ReviewSchema.pick({
   comment:   true,
 });
 
+/** Customer booking payload including an existing review, if any. */
+export const BookingWithReviewSchema = BookingSchema.extend({
+  review: ReviewSchema.nullable().optional(),
+});
+
+export const BookingListResponseSchema = z.object({
+  data:  z.array(BookingWithReviewSchema),
+  total: z.number().int(),
+  page:  z.number().int(),
+  limit: z.number().int(),
+});
+
+/** Booking row for provider app (customer + service labels for UI). */
+export const ProviderBookingViewSchema = BookingSchema.extend({
+  customerFirstName: z.string(),
+  customerLastName:  z.string(),
+  serviceTitle:      z.string(),
+});
+
+/** All-time counts for provider job queue (not limited to current page). */
+export const ProviderJobQueueStatsSchema = z.object({
+  pending:   z.number().int(),
+  active:    z.number().int(),
+  completed: z.number().int(),
+});
+
+export const ProviderBookingListResponseSchema = z.object({
+  data:  z.array(ProviderBookingViewSchema),
+  total: z.number().int(),
+  page:  z.number().int(),
+  limit: z.number().int(),
+  stats: ProviderJobQueueStatsSchema,
+});
+
+/** Single customer review visible to the provider. */
+export const ProviderReviewListItemSchema = z.object({
+  id:                z.string().uuid(),
+  bookingId:         z.string().uuid(),
+  rating:            z.number().int().min(1).max(5),
+  comment:           z.string().max(1000).optional(),
+  createdAt:         z.coerce.date(),
+  customerFirstName: z.string(),
+  customerLastName:  z.string(),
+  serviceTitle:      z.string(),
+});
+
+export const ProviderReviewListResponseSchema = z.object({
+  data:  z.array(ProviderReviewListItemSchema),
+  total: z.number().int(),
+  page:  z.number().int(),
+  limit: z.number().int(),
+});
+
 export type Booking                  = z.infer<typeof BookingSchema>;
+export type BookingWithReview        = z.infer<typeof BookingWithReviewSchema>;
 export type CreateBookingInput       = z.infer<typeof CreateBookingSchema>;
+export type AdminCreateBookingInput  = z.infer<typeof AdminCreateBookingSchema>;
 export type UpdateBookingStatusInput = z.infer<typeof UpdateBookingStatusSchema>;
 export type BookingListResponse      = z.infer<typeof BookingListResponseSchema>;
+export type ProviderBookingView      = z.infer<typeof ProviderBookingViewSchema>;
+export type ProviderBookingListResponse = z.infer<typeof ProviderBookingListResponseSchema>;
+export type ProviderJobQueueStats = z.infer<typeof ProviderJobQueueStatsSchema>;
+export type ProviderReviewListItem = z.infer<typeof ProviderReviewListItemSchema>;
+export type ProviderReviewListResponse = z.infer<typeof ProviderReviewListResponseSchema>;
 export type Review                   = z.infer<typeof ReviewSchema>;
 export type CreateReviewInput        = z.infer<typeof CreateReviewSchema>;

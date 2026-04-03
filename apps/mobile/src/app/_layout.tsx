@@ -5,7 +5,13 @@ import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { setAuthToken, useMe } from "@repo/api-client";
+import { setApiBaseUrl, setAuthToken, useMe } from "@repo/api-client";
+
+setApiBaseUrl(
+  process.env["EXPO_PUBLIC_API_URL"] ??
+    process.env["NEXT_PUBLIC_API_URL"] ??
+    "http://localhost:3001"
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {

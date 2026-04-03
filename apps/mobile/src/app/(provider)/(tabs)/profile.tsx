@@ -2,12 +2,17 @@ import { useEffect, useState } from "react";
 
 import { ActivityIndicator, Alert, Image, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth, useUser } from "@clerk/expo";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
 
+import { ProviderServiceCategoriesField } from "../../../components/ProviderServiceCategoriesField";
 import { textInputBaselineStyle } from "../../../styles/text-input";
+import { normalizeProviderServiceCategories } from "../../../utils/provider-onboarding";
 
 export default function ProviderProfileScreen() {
+  const router = useRouter();
   const { signOut } = useAuth();
   const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
@@ -16,7 +21,7 @@ export default function ProviderProfileScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [serviceCategory, setServiceCategory] = useState("");
+  const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [experienceYears, setExperienceYears] = useState("0");
   const [serviceArea, setServiceArea] = useState("");
   const [hasTools, setHasTools] = useState(true);
@@ -34,7 +39,7 @@ export default function ProviderProfileScreen() {
     setFirstName(clerkFirst || me.firstName);
     setLastName(clerkLast || me.lastName);
     setPhone(me.phone ?? "");
-    setServiceCategory(me.providerOnboarding?.serviceCategory ?? "");
+    setServiceCategories(normalizeProviderServiceCategories(me.providerOnboarding));
     setExperienceYears(String(me.providerOnboarding?.experienceYears ?? 0));
     setServiceArea(me.providerOnboarding?.serviceArea ?? "");
     setHasTools(me.providerOnboarding?.hasTools ?? true);
@@ -63,13 +68,13 @@ export default function ProviderProfileScreen() {
 
   async function handleSaveProviderInfo() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
-    if (!serviceCategory.trim() || !serviceArea.trim() || !serviceDescription.trim() || Number.isNaN(parsedExperience)) {
-      Alert.alert("Required", "Please complete provider details.");
+    if (serviceCategories.length === 0 || !serviceArea.trim() || !serviceDescription.trim() || Number.isNaN(parsedExperience)) {
+      Alert.alert("Required", "Add at least one service category and complete provider details.");
       return;
     }
     try {
       await updateProviderOnboarding.mutateAsync({
-        serviceCategory: serviceCategory.trim(),
+        serviceCategories,
         experienceYears: parsedExperience,
         serviceArea: serviceArea.trim(),
         hasTools,
@@ -94,6 +99,26 @@ export default function ProviderProfileScreen() {
     <ScrollView className="flex-1 bg-canvas px-5 pt-6" contentContainerStyle={{ paddingBottom: 28 }}>
       <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
 
+      <TouchableOpacity
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 flex-row items-center justify-between mb-6 active:opacity-90"
+        onPress={() => router.push("/(provider)/(tabs)/jobs")}
+        accessibilityRole="button"
+        accessibilityLabel="View booking history"
+      >
+        <View className="flex-row items-center gap-3 flex-1">
+          <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
+            <Ionicons name="calendar-outline" size={22} color="#E8521A" />
+          </View>
+          <View className="flex-1 pr-2">
+            <Text className="text-ink font-semibold text-base">View booking history</Text>
+            <Text className="text-ink-muted text-xs mt-0.5 leading-4">
+              Jobs queue — tap any booking to track status from request to completion
+            </Text>
+          </View>
+        </View>
+        <Ionicons name="chevron-forward" size={22} color="#A8A29E" />
+      </TouchableOpacity>
+
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-6">
         <View className="flex-row items-center gap-3 mb-4">
           {profilePhotoUrl ? (
@@ -107,7 +132,9 @@ export default function ProviderProfileScreen() {
           )}
           <View className="flex-1">
             <Text className="text-ink font-semibold text-lg">{firstName} {lastName}</Text>
-            <Text className="text-ink-muted text-sm">{serviceCategory || "Provider profile"}</Text>
+            <Text className="text-ink-muted text-sm">
+              {serviceCategories.length > 0 ? serviceCategories.join(" · ") : "Provider profile"}
+            </Text>
           </View>
         </View>
 
@@ -121,6 +148,19 @@ export default function ProviderProfileScreen() {
             <Text className="text-ink font-semibold text-base">{me?.providerMetrics?.totalReviews ?? 0}</Text>
           </View>
         </View>
+
+        <TouchableOpacity
+          className="mt-4 flex-row items-center justify-between bg-canvas rounded-xl border border-ink-faint px-3 py-3 active:opacity-90"
+          onPress={() => router.push("/(provider)/reviews")}
+          accessibilityRole="button"
+          accessibilityLabel="View customer reviews"
+        >
+          <View className="flex-row items-center gap-2 flex-1">
+            <Ionicons name="star-outline" size={20} color="#E8521A" />
+            <Text className="text-ink font-semibold text-sm">Customer reviews</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#A8A29E" />
+        </TouchableOpacity>
       </View>
 
       <Text className="text-ink text-sm font-medium mb-2">First name</Text>
@@ -171,13 +211,8 @@ export default function ProviderProfileScreen() {
 
       <Text className="text-xl font-bold text-ink mb-4">Provider Onboarding</Text>
 
-      <Text className="text-ink text-sm font-medium mb-2">Service category</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        style={textInputBaselineStyle}
-        value={serviceCategory}
-        onChangeText={setServiceCategory}
-      />
+      <ProviderServiceCategoriesField value={serviceCategories} onChange={setServiceCategories} />
+      <View className="h-2" />
 
       <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
       <TextInput
@@ -205,6 +240,10 @@ export default function ProviderProfileScreen() {
         multiline
         numberOfLines={3}
       />
+
+      <Text className="text-ink-muted text-xs mb-4 leading-5">
+        Set price and duration for each offering under <Text className="font-semibold text-ink-soft">My services</Text>.
+      </Text>
 
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-6 flex-row items-center justify-between">
         <View className="flex-1 pr-3">

@@ -60,7 +60,9 @@ describe("UsersController", () => {
       {
         role: "PROVIDER",
         data: {
-          serviceCategory: "Car Wash",
+          serviceCategories: ["Car Wash", "Car Detailing"],
+          starterListingPrice: 40,
+          starterListingDurationMinutes: 90,
           experienceYears: 3,
           serviceArea: "DHA",
           hasTools: true,
@@ -71,13 +73,29 @@ describe("UsersController", () => {
     );
 
     expect(service.updateProviderOnboarding).toHaveBeenCalledWith("clerk_2", {
-      serviceCategory: "Car Wash",
+      serviceCategories: ["Car Wash", "Car Detailing"],
+      starterListingPrice: 40,
+      starterListingDurationMinutes: 90,
       experienceYears: 3,
       serviceArea: "DHA",
       hasTools: true,
       serviceDescription: "Interior and exterior detailing.",
       profilePhotoUrl: "https://example.com/photo.jpg",
     });
+  });
+
+  it("ensureProviderListing delegates to service", async () => {
+    const service = {
+      syncRoleFromClerkSession: vi.fn().mockResolvedValue(undefined),
+      ensureProviderStarterListing: vi.fn().mockResolvedValue({ created: true }),
+    };
+    const controller = new UsersController(service as never);
+
+    const result = await controller.ensureProviderListing({ auth: { sub: "clerk_p" } } as never);
+
+    expect(service.syncRoleFromClerkSession).toHaveBeenCalledWith("clerk_p", { sub: "clerk_p" });
+    expect(service.ensureProviderStarterListing).toHaveBeenCalledWith("clerk_p");
+    expect(result).toEqual({ created: true });
   });
 
   it("updates avatar for authenticated user", async () => {

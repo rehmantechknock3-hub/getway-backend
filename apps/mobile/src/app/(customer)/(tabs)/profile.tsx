@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
@@ -11,6 +12,7 @@ import { textInputBaselineStyle } from "../../../styles/text-input";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { signOut } = useAuth();
   const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
@@ -140,6 +142,26 @@ export default function ProfileScreen() {
           <Text className="text-3xl font-bold text-ink mb-1">Profile Management</Text>
           <Text className="text-ink-muted text-base">Manage your account and saved places.</Text>
         </View>
+
+        <TouchableOpacity
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 flex-row items-center justify-between mb-5 active:opacity-90"
+          onPress={() => router.push("/(customer)/(tabs)/bookings")}
+          accessibilityRole="button"
+          accessibilityLabel="View booking history"
+        >
+          <View className="flex-row items-center gap-3 flex-1">
+            <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
+              <Ionicons name="calendar-outline" size={22} color="#E8521A" />
+            </View>
+            <View className="flex-1 pr-2">
+              <Text className="text-ink font-semibold text-base">View booking history</Text>
+              <Text className="text-ink-muted text-xs mt-0.5 leading-4">
+                Past and upcoming appointments from the Bookings tab
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color="#A8A29E" />
+        </TouchableOpacity>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
           <View className="flex-row items-center gap-3 mb-4">

@@ -70,7 +70,10 @@ export function useProvider(id: string) {
   });
 }
 
-export function useProviderServices(providerId: string) {
+export function useProviderServices(
+  providerId: string,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: providerKeys.services(providerId),
     queryFn: async () => {
@@ -79,6 +82,6 @@ export function useProviderServices(providerId: string) {
       );
       return data;
     },
-    enabled: !!providerId,
+    enabled: (options?.enabled ?? true) && !!providerId,
   });
 }

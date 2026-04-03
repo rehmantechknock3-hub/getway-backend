@@ -80,7 +80,67 @@ describe("ProvidersService", () => {
       totalReviews: 10,
       startingPrice: 45,
       primaryServiceTitle: "Basic wash",
+      primaryServiceId: "s-1",
+      serviceSearchText: "basic wash cleaning",
     });
+  });
+
+  it("listPublicSummaries aggregates serviceSearchText from all active services", async () => {
+    prisma.providerProfile.findMany.mockResolvedValue([
+      {
+        id: "pp-1",
+        userId: "u-1",
+        bio: null,
+        verificationStatus: "APPROVED",
+        isOnline: true,
+        averageRating: 5,
+        totalReviews: 1,
+        totalEarnings: 0,
+        latitude: null,
+        longitude: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-1",
+          firstName: "X",
+          lastName: "Y",
+          avatarUrl: null,
+          providerOnboarding: null,
+        },
+        services: [
+          {
+            id: "s-1",
+            title: "Oil change",
+            description: "Synthetic blend",
+            price: 40,
+            duration: 30,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            category: { name: "Automotive" },
+          },
+          {
+            id: "s-2",
+            title: "Brake inspection",
+            description: null,
+            price: 55,
+            duration: 45,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            category: { name: "Automotive" },
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.listPublicSummaries();
+
+    expect(result[0]?.serviceSearchText).toBe(
+      "oil change synthetic blend automotive brake inspection automotive"
+    );
+    expect(result[0]?.startingPrice).toBe(40);
+    expect(result[0]?.primaryServiceTitle).toBe("Oil change");
   });
 
   it("listPublicSummaries filters by radius when lat and lon provided", async () => {
