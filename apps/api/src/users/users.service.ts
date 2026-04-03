@@ -3,6 +3,17 @@ import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import type { ClerkUserPayload } from "../auth/webhook.controller";
+
+/** Clerk lists multiple emails; sync must use the user's primary, not `email_addresses[0]`. */
+export function resolveClerkPrimaryEmail(clerkUser: ClerkUserPayload): string {
+  const primaryId = clerkUser.primary_email_address_id;
+  const addresses = clerkUser.email_addresses ?? [];
+  if (primaryId) {
+    const match = addresses.find((e) => e.id === primaryId);
+    if (match?.email_address) return match.email_address;
+  }
+  return addresses[0]?.email_address ?? "";
+}
 import type {
   CustomerOnboarding,
   ProviderOnboarding,
@@ -15,17 +26,27 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async upsertFromClerk(clerkUser: ClerkUserPayload) {
-    const email     = clerkUser.email_addresses?.[0]?.email_address ?? "";
+    const email     = resolveClerkPrimaryEmail(clerkUser);
     const role      = (clerkUser.public_metadata?.role ?? "CUSTOMER") as UserRole;
     const firstName = clerkUser.first_name ?? "";
     const lastName  = clerkUser.last_name  ?? "";
     const avatarUrl = clerkUser.image_url  ?? null;
 
-    return this.prisma.user.upsert({
+    const user = await this.prisma.user.upsert({
       where:  { clerkId: clerkUser.id },
       update: { email, role, firstName, lastName, avatarUrl },
       create: { clerkId: clerkUser.id, email, role, firstName, lastName, avatarUrl },
     });
+
+    if (role === "PROVIDER") {
+      await this.prisma.providerProfile.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id },
+        update: {},
+      });
+    }
+
+    return user;
   }
 
   async findByClerkId(clerkId: string) {

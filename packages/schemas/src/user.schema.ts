@@ -24,6 +24,11 @@ export const ProviderOnboardingSchema = z.object({
   profilePhotoUrl: z.string().url().optional(),
 });
 
+/** Safe parse for JSON stored on User.providerOnboarding (API read paths). */
+export function safeParseProviderOnboardingJson(raw: unknown) {
+  return ProviderOnboardingSchema.safeParse(raw);
+}
+
 export const UserSchema = z.object({
   id:          z.string().uuid(),
   clerkId:     z.string(),

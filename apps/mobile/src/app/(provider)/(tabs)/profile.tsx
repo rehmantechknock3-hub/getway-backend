@@ -1,18 +1,20 @@
 import { useEffect, useState } from "react";
 
 import { ActivityIndicator, Alert, Image, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 
 import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
 
+import { textInputBaselineStyle } from "../../../styles/text-input";
+
 export default function ProviderProfileScreen() {
   const { signOut } = useAuth();
+  const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
   const updateProfile = useUpdateProfile();
   const updateProviderOnboarding = useSubmitProviderOnboarding();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceCategory, setServiceCategory] = useState("");
   const [experienceYears, setExperienceYears] = useState("0");
@@ -21,11 +23,16 @@ export default function ProviderProfileScreen() {
   const [serviceDescription, setServiceDescription] = useState("");
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
 
+  const signInEmail =
+    clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
+  const accountEmail = signInEmail || me?.email || "";
+
   useEffect(() => {
     if (!me) return;
-    setFirstName(me.firstName);
-    setLastName(me.lastName);
-    setEmail(me.email);
+    const clerkFirst = clerkUser?.firstName?.trim() ?? "";
+    const clerkLast = clerkUser?.lastName?.trim() ?? "";
+    setFirstName(clerkFirst || me.firstName);
+    setLastName(clerkLast || me.lastName);
     setPhone(me.phone ?? "");
     setServiceCategory(me.providerOnboarding?.serviceCategory ?? "");
     setExperienceYears(String(me.providerOnboarding?.experienceYears ?? 0));
@@ -33,10 +40,11 @@ export default function ProviderProfileScreen() {
     setHasTools(me.providerOnboarding?.hasTools ?? true);
     setServiceDescription(me.providerOnboarding?.serviceDescription ?? "");
     setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
-  }, [me]);
+  }, [me, clerkUser?.firstName, clerkUser?.lastName]);
 
   async function handleSaveProfile() {
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim()) {
+    const emailToSave = accountEmail.trim();
+    if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
       Alert.alert("Required", "Name, email and phone are required.");
       return;
     }
@@ -44,7 +52,7 @@ export default function ProviderProfileScreen() {
       await updateProfile.mutateAsync({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim(),
+        email: emailToSave,
         phone: phone.trim(),
       });
       Alert.alert("Saved", "Profile updated successfully.");
@@ -118,6 +126,7 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink text-sm font-medium mb-2">First name</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        style={textInputBaselineStyle}
         value={firstName}
         onChangeText={setFirstName}
       />
@@ -125,22 +134,24 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink text-sm font-medium mb-2">Last name</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        style={textInputBaselineStyle}
         value={lastName}
         onChangeText={setLastName}
       />
 
       <Text className="text-ink text-sm font-medium mb-2">Email</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
-      />
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 mb-1">
+        <Text className="text-ink text-base">{accountEmail || "—"}</Text>
+      </View>
+      <Text className="text-ink-muted text-xs mb-4">
+        Same as your sign-in email. Update it in your account settings if needed.
+      </Text>
 
       <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-6"
         keyboardType="phone-pad"
+        style={textInputBaselineStyle}
         value={phone}
         onChangeText={setPhone}
       />
@@ -163,6 +174,7 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink text-sm font-medium mb-2">Service category</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        style={textInputBaselineStyle}
         value={serviceCategory}
         onChangeText={setServiceCategory}
       />
@@ -171,6 +183,7 @@ export default function ProviderProfileScreen() {
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
         keyboardType="number-pad"
+        style={textInputBaselineStyle}
         value={experienceYears}
         onChangeText={setExperienceYears}
       />
@@ -178,6 +191,7 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink text-sm font-medium mb-2">Service area</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        style={textInputBaselineStyle}
         value={serviceArea}
         onChangeText={setServiceArea}
       />
@@ -185,6 +199,7 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink text-sm font-medium mb-2">Service description</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        style={textInputBaselineStyle}
         value={serviceDescription}
         onChangeText={setServiceDescription}
         multiline

@@ -1,28 +1,73 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, StatusBar } from "react-native";
+import { useEffect, useState } from "react";
+
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  StatusBar,
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
+import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { setAuthToken, usePublicProviders } from "@repo/api-client";
+
+import { textInputBaselineStyle } from "../../../styles/text-input";
+
 const CATEGORIES = [
-  { icon: "water",         label: "Plumbing"    },
-  { icon: "flash",         label: "Electrical"  },
-  { icon: "brush",         label: "Cleaning"    },
-  { icon: "construct",     label: "Repairs"     },
-  { icon: "leaf",          label: "Gardening"   },
-  { icon: "color-palette", label: "Painting"    },
+  { icon: "water", label: "Plumbing" },
+  { icon: "flash", label: "Electrical" },
+  { icon: "brush", label: "Cleaning" },
+  { icon: "construct", label: "Repairs" },
+  { icon: "leaf", label: "Gardening" },
+  { icon: "color-palette", label: "Painting" },
 ];
 
-const PROVIDERS = [
-  { name: "Sarah Mitchell",   service: "Deep Cleaning",  rating: 4.9, reviews: 128, price: "$45/hr",  distance: "0.8 mi",  available: true  },
-  { name: "James Rodriguez",  service: "Plumbing",       rating: 4.8, reviews: 94,  price: "$65/hr",  distance: "1.2 mi",  available: true  },
-  { name: "Emma Chen",        service: "Electrical",     rating: 5.0, reviews: 61,  price: "$70/hr",  distance: "2.1 mi",  available: false },
-  { name: "Marcus Thompson",  service: "Gardening",      rating: 4.7, reviews: 203, price: "$35/hr",  distance: "0.5 mi",  available: true  },
-];
+function formatStartingPrice(price: number | undefined): string {
+  if (price == null) return "—";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price);
+}
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { sessionClaims } = useAuth();
+  const { sessionClaims, getToken, isLoaded, isSignedIn } = useAuth();
   const firstName = (sessionClaims?.firstName as string) ?? "there";
+  const [apiReady, setApiReady] = useState(false);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) {
+      setApiReady(false);
+      return;
+    }
+    let cancelled = false;
+    void getToken().then((token) => {
+      if (cancelled) return;
+      setAuthToken(token);
+      setApiReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, isSignedIn, getToken]);
+
+  const providersQueryEnabled = isLoaded && isSignedIn && apiReady;
+  const { data: providers, isLoading, isError, refetch, isRefetching } = usePublicProviders(
+    undefined,
+    undefined,
+    25,
+    { enabled: providersQueryEnabled }
+  );
 
   return (
     <View className="flex-1 bg-canvas">
@@ -34,6 +79,14 @@ export default function HomeScreen() {
           paddingBottom: Math.max(insets.bottom + 90, 100),
         }}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={providersQueryEnabled && isRefetching}
+            onRefresh={() => {
+              void refetch();
+            }}
+          />
+        }
       >
         {/* Header */}
         <View className="flex-row items-center justify-between px-5 mb-6">
@@ -56,6 +109,7 @@ export default function HomeScreen() {
               className="flex-1 text-ink text-base"
               placeholder="Search services or providers..."
               placeholderTextColor="#A8A29E"
+              style={textInputBaselineStyle}
             />
             <TouchableOpacity className="bg-primary-600 rounded-xl px-3 py-1.5">
               <Text className="text-white text-xs font-semibold">Filter</Text>
@@ -73,13 +127,9 @@ export default function HomeScreen() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
             {CATEGORIES.map(({ icon, label }) => (
-              <TouchableOpacity
-                key={label}
-                activeOpacity={0.8}
-                className="items-center gap-2"
-              >
+              <TouchableOpacity key={label} activeOpacity={0.8} className="items-center gap-2">
                 <View className="w-16 h-16 rounded-2xl bg-canvas-raised border border-ink-faint items-center justify-center">
-                  <Ionicons name={icon as any} size={26} color="#E8521A" />
+                  <Ionicons name={icon as keyof typeof Ionicons.glyphMap} size={26} color="#E8521A" />
                 </View>
                 <Text className="text-xs font-medium text-ink-soft">{label}</Text>
               </TouchableOpacity>
@@ -112,48 +162,93 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          <View className="gap-3">
-            {PROVIDERS.map((p) => (
-              <TouchableOpacity
-                key={p.name}
-                activeOpacity={0.9}
-                className="bg-canvas-raised rounded-2xl p-4 border border-ink-faint flex-row items-center gap-4"
-              >
-                {/* Avatar */}
-                <View className="w-14 h-14 rounded-2xl bg-canvas-sunken items-center justify-center">
-                  <Text className="text-xl font-bold text-ink-muted">
-                    {p.name.split(" ").map((n) => n[0]).join("")}
-                  </Text>
-                </View>
+          {!providersQueryEnabled || isLoading ? (
+            <View className="py-12 items-center">
+              <ActivityIndicator />
+            </View>
+          ) : isError ? (
+            <View className="bg-canvas-raised rounded-2xl p-4 border border-ink-faint">
+              <Text className="text-ink-muted text-sm text-center">
+                Could not load providers. Check that the API is running and EXPO_PUBLIC_API_URL reaches your server
+                (use your computer&apos;s LAN IP on a physical device, not localhost). Pull down to retry.
+              </Text>
+            </View>
+          ) : !providers?.length ? (
+            <View className="bg-canvas-raised rounded-2xl p-4 border border-ink-faint">
+              <Text className="text-ink-muted text-sm text-center">
+                No providers returned from the server yet. If you expect listings here, confirm at least one user has
+                completed sign-up as a provider against this same database, or pull down to refresh.
+              </Text>
+            </View>
+          ) : (
+            <View className="gap-3">
+              {providers.map((p) => {
+                const displayName = `${p.firstName} ${p.lastName}`.trim();
+                const serviceLine =
+                  p.serviceCategory ?? p.primaryServiceTitle ?? "Services";
+                const initials = `${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`.toUpperCase();
+                const available = p.isOnline;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    activeOpacity={0.9}
+                    className="bg-canvas-raised rounded-2xl p-4 border border-ink-faint flex-row items-center gap-4"
+                    onPress={() =>
+                      router.push({ pathname: "/provider/[id]", params: { id: p.id } })
+                    }
+                  >
+                    {p.avatarUrl ? (
+                      <Image
+                        source={{ uri: p.avatarUrl }}
+                        className="w-14 h-14 rounded-2xl bg-canvas-sunken"
+                        accessibilityLabel={`${displayName} profile photo`}
+                      />
+                    ) : (
+                      <View className="w-14 h-14 rounded-2xl bg-canvas-sunken items-center justify-center">
+                        <Text className="text-xl font-bold text-ink-muted">{initials}</Text>
+                      </View>
+                    )}
 
-                {/* Info */}
-                <View className="flex-1">
-                  <Text className="text-ink font-semibold text-base">{p.name}</Text>
-                  <Text className="text-ink-muted text-sm">{p.service}</Text>
-                  <View className="flex-row items-center gap-3 mt-1">
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="star" size={12} color="#F59E0B" />
-                      <Text className="text-xs font-medium text-ink-soft">{p.rating} ({p.reviews})</Text>
+                    <View className="flex-1">
+                      <Text className="text-ink font-semibold text-base">{displayName}</Text>
+                      <Text className="text-ink-muted text-sm">{serviceLine}</Text>
+                      <View className="flex-row items-center gap-3 mt-1">
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="star" size={12} color="#F59E0B" />
+                          <Text className="text-xs font-medium text-ink-soft">
+                            {p.averageRating.toFixed(1)} ({p.totalReviews})
+                          </Text>
+                        </View>
+                        {p.serviceArea ? (
+                          <View className="flex-row items-center gap-1 flex-1">
+                            <Ionicons name="location-outline" size={12} color="#A8A29E" />
+                            <Text className="text-xs text-ink-subtle flex-1" numberOfLines={1}>
+                              {p.serviceArea}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
-                    <View className="flex-row items-center gap-1">
-                      <Ionicons name="location-outline" size={12} color="#A8A29E" />
-                      <Text className="text-xs text-ink-subtle">{p.distance}</Text>
-                    </View>
-                  </View>
-                </View>
 
-                {/* Right */}
-                <View className="items-end gap-2">
-                  <Text className="text-primary-600 font-bold text-sm">{p.price}</Text>
-                  <View className={`px-2 py-0.5 rounded-full ${p.available ? "bg-green-100" : "bg-ink-faint"}`}>
-                    <Text className={`text-xs font-medium ${p.available ? "text-green-700" : "text-ink-subtle"}`}>
-                      {p.available ? "Available" : "Busy"}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                    <View className="items-end gap-2">
+                      <Text className="text-primary-600 font-bold text-sm">
+                        {formatStartingPrice(p.startingPrice)}
+                      </Text>
+                      <View
+                        className={`px-2 py-0.5 rounded-full ${available ? "bg-green-100" : "bg-ink-faint"}`}
+                      >
+                        <Text
+                          className={`text-xs font-medium ${available ? "text-green-700" : "text-ink-subtle"}`}
+                        >
+                          {available ? "Available" : "Offline"}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>

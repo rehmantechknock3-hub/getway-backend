@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 
 import { ActivityIndicator, Alert, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
 
+import { textInputBaselineStyle } from "../../../styles/text-input";
+
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { signOut } = useAuth();
+  const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
   const updateProfile = useUpdateProfile();
   const updateSavedLocations = useUpdateSavedLocations();
@@ -17,7 +20,6 @@ export default function ProfileScreen() {
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [savedLocations, setSavedLocations] = useState<Array<{ id: string; label: string; address: string }>>([]);
   const [primaryLocation, setPrimaryLocation] = useState("");
@@ -25,11 +27,19 @@ export default function ProfileScreen() {
   const [carModel, setCarModel] = useState("");
   const [notes, setNotes] = useState("");
 
+  const signInEmail =
+    clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
+  const accountEmail = signInEmail || me?.email || "";
+
   useEffect(() => {
     if (!me) return;
-    setFirstName(me.firstName);
-    setLastName(me.lastName);
-    setEmail(me.email);
+    // Email is shown from Clerk; names were only loaded from the API. The DB row is filled by the Clerk
+    // webhook (`user.created` / `user.updated`). If webhooks missed localhost or ran with stale payload,
+    // `me` can disagree with the signed-in Clerk user — prefer Clerk for name when present.
+    const clerkFirst = clerkUser?.firstName?.trim() ?? "";
+    const clerkLast = clerkUser?.lastName?.trim() ?? "";
+    setFirstName(clerkFirst || me.firstName);
+    setLastName(clerkLast || me.lastName);
     setPhone(me.phone ?? "");
     setSavedLocations(
       (me.savedLocations ?? []).map((location, index) => ({
@@ -42,7 +52,7 @@ export default function ProfileScreen() {
     setCarCompany(me.customerOnboarding?.carCompany ?? "");
     setCarModel(me.customerOnboarding?.carModel ?? "");
     setNotes(me.customerOnboarding?.notes ?? "");
-  }, [me]);
+  }, [me, clerkUser?.firstName, clerkUser?.lastName]);
 
   function updateLocation(index: number, key: "label" | "address", value: string) {
     setSavedLocations((prev) =>
@@ -59,7 +69,8 @@ export default function ProfileScreen() {
   }
 
   async function handleSaveProfile() {
-    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim()) {
+    const emailToSave = accountEmail.trim();
+    if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
       Alert.alert("Required", "Name, email and phone are required.");
       return;
     }
@@ -67,7 +78,7 @@ export default function ProfileScreen() {
       await updateProfile.mutateAsync({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        email: email.trim(),
+        email: emailToSave,
         phone: phone.trim(),
       });
       Alert.alert("Saved", "Profile updated successfully.");
@@ -142,16 +153,37 @@ export default function ProfileScreen() {
           </View>
 
           <Text className="text-ink text-sm font-medium mb-2">First name</Text>
-          <TextInput className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3" value={firstName} onChangeText={setFirstName} />
+          <TextInput
+            className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
+            style={textInputBaselineStyle}
+            value={firstName}
+            onChangeText={setFirstName}
+          />
 
           <Text className="text-ink text-sm font-medium mb-2">Last name</Text>
-          <TextInput className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3" value={lastName} onChangeText={setLastName} />
+          <TextInput
+            className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
+            style={textInputBaselineStyle}
+            value={lastName}
+            onChangeText={setLastName}
+          />
 
           <Text className="text-ink text-sm font-medium mb-2">Email</Text>
-          <TextInput className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3" autoCapitalize="none" value={email} onChangeText={setEmail} />
+          <View className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 mb-1">
+            <Text className="text-ink text-base">{accountEmail || "—"}</Text>
+          </View>
+          <Text className="text-ink-muted text-xs mb-3">
+            Same as your sign-in email. Update it in your account settings if needed.
+          </Text>
 
           <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
-          <TextInput className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+          <TextInput
+            className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+            keyboardType="phone-pad"
+            style={textInputBaselineStyle}
+            value={phone}
+            onChangeText={setPhone}
+          />
 
           <TouchableOpacity
             className="bg-primary-600 rounded-2xl py-3.5 items-center"
@@ -186,6 +218,7 @@ export default function ProfileScreen() {
                     className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2"
                     placeholder="Label (Home, Office)"
                     placeholderTextColor="#A8A29E"
+                    style={textInputBaselineStyle}
                     value={location.label}
                     onChangeText={(value) => updateLocation(index, "label", value)}
                   />
@@ -193,6 +226,7 @@ export default function ProfileScreen() {
                     className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2.5"
                     placeholder="Full address"
                     placeholderTextColor="#A8A29E"
+                    style={textInputBaselineStyle}
                     value={location.address}
                     onChangeText={(value) => updateLocation(index, "address", value)}
                   />
@@ -227,6 +261,7 @@ export default function ProfileScreen() {
             onChangeText={setPrimaryLocation}
             placeholder="e.g. California, USA"
             placeholderTextColor="#A8A29E"
+            style={textInputBaselineStyle}
           />
 
           <Text className="text-ink text-sm font-medium mb-2">Car company</Text>
@@ -236,6 +271,7 @@ export default function ProfileScreen() {
             onChangeText={setCarCompany}
             placeholder="e.g. Toyota"
             placeholderTextColor="#A8A29E"
+            style={textInputBaselineStyle}
           />
 
           <Text className="text-ink text-sm font-medium mb-2">Model (number)</Text>
@@ -246,6 +282,7 @@ export default function ProfileScreen() {
             keyboardType="number-pad"
             placeholder="e.g. 2020"
             placeholderTextColor="#A8A29E"
+            style={textInputBaselineStyle}
           />
 
           <Text className="text-ink text-sm font-medium mb-2">Notes (optional)</Text>
@@ -255,6 +292,7 @@ export default function ProfileScreen() {
             onChangeText={setNotes}
             placeholder="Parking / access notes"
             placeholderTextColor="#A8A29E"
+            style={textInputBaselineStyle}
           />
 
           <TouchableOpacity

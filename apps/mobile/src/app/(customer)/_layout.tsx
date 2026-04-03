@@ -1,51 +1,18 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Stack } from "expo-router";
 
 export default function CustomerLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor:   "#E8521A",
-        tabBarInactiveTintColor: "#9ca3af",
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="(tabs)/home"
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="provider/[id]"
         options={{
-          title: "Discover",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          title: "Provider",
+          headerBackTitle: "Back",
+          headerTintColor: "#1C1917",
         }}
       />
-      <Tabs.Screen
-        name="(tabs)/bookings"
-        options={{
-          title: "Bookings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(tabs)/messages"
-        options={{
-          title: "Messages",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="(tabs)/profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+    </Stack>
   );
 }

@@ -16,8 +16,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useSubmitProviderOnboarding } from "@repo/api-client";
+import { useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
+
+import { textInputBaselineStyle } from "../../styles/text-input";
 
 const SERVICE_CATEGORIES = [
   "Car Wash",
@@ -36,6 +39,7 @@ const SERVICE_CATEGORIES = [
 
 export default function ProviderOnboardingScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const submitOnboarding = useSubmitProviderOnboarding();
   const [serviceCategory, setServiceCategory] = useState("");
   const [experienceYears, setExperienceYears] = useState("0");
@@ -63,6 +67,7 @@ export default function ProviderOnboardingScreen() {
         hasTools,
         serviceDescription: serviceDescription.trim(),
       });
+      await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(provider)/(tabs)/jobs");
     } catch (error: unknown) {
       Alert.alert("Error", error instanceof Error ? error.message : "Failed to save onboarding");
@@ -109,6 +114,7 @@ export default function ProviderOnboardingScreen() {
             placeholder="e.g. 3"
             placeholderTextColor="#A8A29E"
             keyboardType="number-pad"
+            style={textInputBaselineStyle}
             value={experienceYears}
             onChangeText={setExperienceYears}
           />
@@ -118,6 +124,7 @@ export default function ProviderOnboardingScreen() {
             className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
             placeholder="e.g. DHA, Gulberg"
             placeholderTextColor="#A8A29E"
+            style={textInputBaselineStyle}
             value={serviceArea}
             onChangeText={setServiceArea}
           />
@@ -132,7 +139,7 @@ export default function ProviderOnboardingScreen() {
             multiline
             textAlignVertical="top"
             numberOfLines={4}
-            style={{ minHeight: 110 }}
+            style={[textInputBaselineStyle, { minHeight: 110 }]}
           />
         </View>
 

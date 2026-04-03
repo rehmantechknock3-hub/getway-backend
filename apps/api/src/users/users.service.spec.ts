@@ -1,5 +1,38 @@
 import { describe, expect, it, vi } from "vitest";
-import { UsersService } from "./users.service";
+
+import { resolveClerkPrimaryEmail, UsersService } from "./users.service";
+
+describe("resolveClerkPrimaryEmail", () => {
+  it("uses primary_email_address_id when present", () => {
+    expect(
+      resolveClerkPrimaryEmail({
+        id: "u1",
+        primary_email_address_id: "idn_b",
+        email_addresses: [
+          { id: "idn_a", email_address: "old@example.com" },
+          { id: "idn_b", email_address: "primary@example.com" },
+        ],
+        first_name: null,
+        last_name: null,
+        image_url: null,
+        public_metadata: {},
+      })
+    ).toBe("primary@example.com");
+  });
+
+  it("falls back to first address when no primary id", () => {
+    expect(
+      resolveClerkPrimaryEmail({
+        id: "u1",
+        email_addresses: [{ email_address: "only@example.com" }],
+        first_name: null,
+        last_name: null,
+        image_url: null,
+        public_metadata: {},
+      })
+    ).toBe("only@example.com");
+  });
+});
 
 describe("UsersService", () => {
   it("updates customer profile fields", async () => {

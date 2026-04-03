@@ -9,6 +9,8 @@ import { Link, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { textInputBaselineStyle } from "../../styles/text-input";
+
 export default function SignInScreen() {
   const { signIn } = useSignIn();
   const insets = useSafeAreaInsets();
@@ -81,6 +83,7 @@ export default function SignInScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
+            style={textInputBaselineStyle}
             value={email}
             onChangeText={setEmail}
           />
@@ -94,6 +97,7 @@ export default function SignInScreen() {
               placeholderTextColor="#A8A29E"
               secureTextEntry={!showPw}
               autoComplete="password"
+              style={textInputBaselineStyle}
               value={password}
               onChangeText={setPassword}
             />

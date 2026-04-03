@@ -2,11 +2,11 @@ import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 
 const NAV = [
-  { href: "/dashboard/bookings",  label: "Bookings"  },
-  { href: "/dashboard/users",     label: "Users"     },
-  { href: "/dashboard/providers", label: "Providers" },
-  { href: "/dashboard/services",  label: "Services"  },
-  { href: "/dashboard/payments",  label: "Payments"  },
+  { href: "/bookings",  label: "Bookings"  },
+  { href: "/users",     label: "Users"     },
+  { href: "/providers", label: "Providers" },
+  { href: "/services",  label: "Services"  },
+  { href: "/payments",  label: "Payments"  },
 ];
 
 export default function DashboardLayout({

@@ -19,7 +19,9 @@ interface ClerkWebhookEvent {
 
 export interface ClerkUserPayload {
   id: string;
-  email_addresses: Array<{ email_address: string }>;
+  /** When set, email should be taken from the matching `email_addresses[].id`. */
+  primary_email_address_id?: string | null;
+  email_addresses: Array<{ id?: string; email_address: string }>;
   first_name:      string | null;
   last_name:       string | null;
   image_url:       string | null;

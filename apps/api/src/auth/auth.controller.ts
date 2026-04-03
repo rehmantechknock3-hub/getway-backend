@@ -41,8 +41,12 @@ export class AuthController {
     // fired yet and the DB row doesn't exist.
     const clerkUser = await this.clerk.users.getUser(clerkId);
     const user = await this.usersService.upsertFromClerk({
-      id:              clerkUser.id,
-      email_addresses: clerkUser.emailAddresses.map((e) => ({ email_address: e.emailAddress })),
+      id: clerkUser.id,
+      primary_email_address_id: clerkUser.primaryEmailAddressId,
+      email_addresses: clerkUser.emailAddresses.map((e) => ({
+        id: e.id,
+        email_address: e.emailAddress,
+      })),
       first_name:      clerkUser.firstName,
       last_name:       clerkUser.lastName,
       image_url:       clerkUser.imageUrl,

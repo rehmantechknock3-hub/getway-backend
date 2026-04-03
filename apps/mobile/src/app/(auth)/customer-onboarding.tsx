@@ -15,8 +15,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useSubmitCustomerOnboarding } from "@repo/api-client";
+import { useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+
+import { textInputBaselineStyle } from "../../styles/text-input";
 
 const CAR_COMPANIES = [
   "Toyota",
@@ -37,6 +40,7 @@ const CAR_COMPANIES = [
 
 export default function CustomerOnboardingScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const submitOnboarding = useSubmitCustomerOnboarding();
   const [primaryLocation, setPrimaryLocation] = useState("");
   const [carCompany, setCarCompany] = useState("");
@@ -57,6 +61,7 @@ export default function CustomerOnboardingScreen() {
         carModel: carModel.trim(),
         notes: notes.trim() ? notes.trim() : undefined,
       });
+      await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(customer)/(tabs)/home");
     } catch (error: unknown) {
       Alert.alert("Error", error instanceof Error ? error.message : "Failed to save onboarding");
@@ -90,6 +95,7 @@ export default function CustomerOnboardingScreen() {
           className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
           placeholder="e.g. California, USA"
           placeholderTextColor="#A8A29E"
+          style={textInputBaselineStyle}
           value={primaryLocation}
           onChangeText={setPrimaryLocation}
         />
@@ -112,6 +118,7 @@ export default function CustomerOnboardingScreen() {
           placeholder="e.g. 2020"
           placeholderTextColor="#A8A29E"
           keyboardType="number-pad"
+          style={textInputBaselineStyle}
           value={carModel}
           onChangeText={(value) => setCarModel(value.replace(/[^0-9]/g, ""))}
         />
@@ -123,6 +130,7 @@ export default function CustomerOnboardingScreen() {
           placeholderTextColor="#A8A29E"
           multiline
           numberOfLines={3}
+          style={textInputBaselineStyle}
           value={notes}
           onChangeText={setNotes}
         />

@@ -9,6 +9,8 @@ import { Link, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { textInputBaselineStyle } from "../../styles/text-input";
+
 type Step = "details" | "verify";
 
 export default function SignUpScreen() {
@@ -178,6 +180,7 @@ export default function SignUpScreen() {
                 placeholder="Jane"
                 placeholderTextColor="#A8A29E"
                 autoCapitalize="words"
+                style={textInputBaselineStyle}
                 value={firstName}
                 onChangeText={setFirstName}
               />
@@ -189,6 +192,7 @@ export default function SignUpScreen() {
                 placeholder="Doe"
                 placeholderTextColor="#A8A29E"
                 autoCapitalize="words"
+                style={textInputBaselineStyle}
                 value={lastName}
                 onChangeText={setLastName}
               />
@@ -203,6 +207,7 @@ export default function SignUpScreen() {
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
+            style={textInputBaselineStyle}
             value={email}
             onChangeText={setEmail}
           />
@@ -215,6 +220,7 @@ export default function SignUpScreen() {
               placeholderTextColor="#A8A29E"
               secureTextEntry={!showPw}
               autoComplete="new-password"
+              style={textInputBaselineStyle}
               value={password}
               onChangeText={setPassword}
             />
