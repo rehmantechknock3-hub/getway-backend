@@ -119,7 +119,7 @@ export default function SignInScreen() {
             activeOpacity={0.85}
           >
             {loading
-              ? <ActivityIndicator color={appColors.canvas.raised} />
+              ? <ActivityIndicator color={appColors.onPrimary} />
               : <Text className="text-white font-semibold text-base">Sign In</Text>
             }
           </TouchableOpacity>

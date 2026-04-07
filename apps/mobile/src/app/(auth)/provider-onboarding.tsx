@@ -137,7 +137,7 @@ export default function ProviderOnboardingScreen() {
           style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
         >
           {submitOnboarding.isPending ? (
-            <ActivityIndicator color={appColors.canvas.raised} />
+            <ActivityIndicator color={appColors.onPrimary} />
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}

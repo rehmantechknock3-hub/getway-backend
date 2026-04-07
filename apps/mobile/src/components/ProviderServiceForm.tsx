@@ -232,7 +232,7 @@ export function ProviderServiceForm(props: Props) {
           style={{ opacity: busy ? 0.6 : 1 }}
         >
           {createCategory.isPending ? (
-            <ActivityIndicator color={appColors.canvas.raised} />
+            <ActivityIndicator color={appColors.onPrimary} />
           ) : (
             <Text className="text-white font-semibold">Create category</Text>
           )}
@@ -385,7 +385,7 @@ export function ProviderServiceForm(props: Props) {
         style={{ opacity: busy ? 0.6 : 1 }}
       >
         {busy ? (
-          <ActivityIndicator color={appColors.canvas.raised} />
+          <ActivityIndicator color={appColors.onPrimary} />
         ) : (
           <Text className="text-white font-semibold">{props.mode === "new" ? "Add service" : "Save changes"}</Text>
         )}

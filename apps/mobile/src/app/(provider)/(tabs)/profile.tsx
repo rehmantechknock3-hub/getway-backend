@@ -196,7 +196,7 @@ export default function ProviderProfileScreen() {
         style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
       >
         {updateProfile.isPending ? (
-          <ActivityIndicator color={appColors.canvas.raised} />
+          <ActivityIndicator color={appColors.onPrimary} />
         ) : (
           <Text className="text-white font-semibold">Save Profile</Text>
         )}
@@ -253,7 +253,7 @@ export default function ProviderProfileScreen() {
         style={{ opacity: updateProviderOnboarding.isPending ? 0.6 : 1 }}
       >
         {updateProviderOnboarding.isPending ? (
-          <ActivityIndicator color={appColors.canvas.raised} />
+          <ActivityIndicator color={appColors.onPrimary} />
         ) : (
           <Text className="text-white font-semibold">Save Provider Details</Text>
         )}

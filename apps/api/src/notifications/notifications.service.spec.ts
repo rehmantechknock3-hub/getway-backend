@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { NotFoundException } from "@nestjs/common";
 
 import { NotificationsService } from "./notifications.service";
 
@@ -93,6 +94,14 @@ describe("NotificationsService", () => {
     await service.remove("clerk-1", "n-1");
 
     expect(prisma.notification.delete).toHaveBeenCalledWith({ where: { id: "n-1" } });
+  });
+
+  it("remove throws NotFoundException when notification belongs to another user", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "u-1" });
+    prisma.notification.findFirst.mockResolvedValue(null);
+
+    await expect(service.remove("clerk-1", "n-other")).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.notification.delete).not.toHaveBeenCalled();
   });
 
   it("clearAll deletes all notifications for current user", async () => {

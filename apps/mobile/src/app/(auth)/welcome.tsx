@@ -15,7 +15,7 @@ export default function WelcomeScreen() {
       {/* Hero — dark charcoal */}
       <View className="flex-1 items-center justify-center px-8">
         <View className="w-20 h-20 rounded-3xl bg-primary-500 items-center justify-center mb-6">
-          <Ionicons name="flash" size={40} color={appColors.canvas.raised} />
+          <Ionicons name="flash" size={40} color={appColors.onPrimary} />
         </View>
 
         <Text

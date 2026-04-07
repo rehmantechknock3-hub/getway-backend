@@ -389,7 +389,7 @@ export default function HomeScreen() {
             <Ionicons
               name="heart"
               size={16}
-              color={feed === "saved" ? appColors.canvas.raised : appColors.primary[600]}
+              color={feed === "saved" ? appColors.onPrimary : appColors.primary[600]}
             />
             <Text
               className={`text-sm font-bold ${feed === "saved" ? "text-white" : "text-ink-soft"}`}

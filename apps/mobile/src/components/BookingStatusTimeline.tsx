@@ -54,7 +54,7 @@ function StepDot({ state }: { state: StepState }) {
   return (
     <View className={`w-9 h-9 rounded-full items-center justify-center ${ring}`}>
       {state === "done" ? (
-        <Ionicons name="checkmark" size={18} color={appColors.canvas.raised} />
+        <Ionicons name="checkmark" size={18} color={appColors.onPrimary} />
       ) : state === "current" ? (
         <View className="w-2.5 h-2.5 rounded-full bg-primary-500" />
       ) : null}

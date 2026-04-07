@@ -417,7 +417,7 @@ export default function BookServiceScreen() {
               activeOpacity={0.9}
             >
               {createBooking.isPending ? (
-                <ActivityIndicator color={appColors.canvas.raised} />
+                <ActivityIndicator color={appColors.onPrimary} />
               ) : (
                 <Text className="text-white font-bold text-base">Confirm booking</Text>
               )}

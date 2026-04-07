@@ -8,8 +8,9 @@ import {
 } from "@nestjs/websockets";
 import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { verifyToken } from "@clerk/backend";
 import { Server, Socket } from "socket.io";
+
+import { authenticateSocket } from "./ws-auth.helper";
 
 @WebSocketGateway({
   cors: { origin: true },
@@ -23,19 +24,8 @@ export class ChatGateway implements OnGatewayConnection {
   @WebSocketServer() server!: Server;
 
   async handleConnection(client: Socket) {
-    const token = (client.handshake.auth?.token as string | undefined) ?? undefined;
-    if (!token) return client.disconnect();
-    const secretKey = this.configService.get<string>("CLERK_SECRET_KEY");
-    if (!secretKey) {
-      this.logger.error("CLERK_SECRET_KEY is missing; rejecting socket connection");
-      return client.disconnect();
-    }
-    try {
-      const payload = await verifyToken(token, { secretKey });
-      client.data.clerkId = payload.sub;
-    } catch {
-      return client.disconnect();
-    }
+    if (!(await authenticateSocket(client, this.configService, this.logger))) return;
+
     const conversationId = client.handshake.query["conversationId"] as string;
     if (conversationId) client.join(`conversation:${conversationId}`);
   }

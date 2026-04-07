@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import type {
@@ -16,6 +17,8 @@ import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class ReviewsService {
+  private readonly logger = new Logger(ReviewsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService
@@ -90,7 +93,9 @@ export class ReviewsService {
         rating: review.rating,
         serviceTitle: booking.service.title,
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        this.logger.error("Failed to notify provider of new review", error);
+      });
 
     return this.toDto(review);
   }

@@ -138,7 +138,7 @@ export default function SignUpScreen() {
               activeOpacity={0.85}
             >
               {loading
-                ? <ActivityIndicator color={appColors.canvas.raised} />
+                ? <ActivityIndicator color={appColors.onPrimary} />
                 : <Text className="text-white font-semibold text-base">Verify Email</Text>
               }
             </TouchableOpacity>
@@ -241,7 +241,7 @@ export default function SignUpScreen() {
             activeOpacity={0.85}
           >
             {loading
-              ? <ActivityIndicator color={appColors.canvas.raised} />
+              ? <ActivityIndicator color={appColors.onPrimary} />
               : <Text className="text-white font-semibold text-base">Continue</Text>
             }
           </TouchableOpacity>

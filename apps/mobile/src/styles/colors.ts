@@ -16,6 +16,7 @@ export const appColors = {
   canvas: {
     raised: "#FFFFFF",
   },
+  onPrimary: "#FFFFFF",
   semantic: {
     warning: "#F59E0B",
     disabled: "#D6D3D1",

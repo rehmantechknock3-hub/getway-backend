@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from "@nestjs/common";
 import { z } from "zod";
 
+import { Public } from "../auth/public.decorator";
 import { ReviewsService } from "./reviews.service";
 
 const ListPublicProviderReviewsQuerySchema = z.object({
@@ -8,6 +9,7 @@ const ListPublicProviderReviewsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
 });
 
+@Public()
 @Controller("providers/:providerId/reviews")
 export class PublicProviderReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}

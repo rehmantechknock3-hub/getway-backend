@@ -167,13 +167,10 @@ export class UsersController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    const authRole = req.auth?.public_metadata?.role ?? req.auth?.metadata?.role;
-    if (authRole !== "ADMIN") {
-      const me = await this.usersService.findByClerkId(clerkId);
-      if (!me) throw new BadRequestException("Authenticated user is not provisioned");
-      if (me.id !== id) {
-        throw new ForbiddenException("Cannot access other users' profiles");
-      }
+    const me = await this.usersService.findByClerkId(clerkId);
+    if (!me) throw new BadRequestException("Authenticated user is not provisioned");
+    if (me.role !== "ADMIN" && me.id !== id) {
+      throw new ForbiddenException("Cannot access other users' profiles");
     }
 
     return this.usersService.findById(id);

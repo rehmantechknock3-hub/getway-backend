@@ -124,7 +124,7 @@ export default function RoleSelectScreen() {
                     <Ionicons
                       name={role.icon}
                       size={24}
-                      color={active ? appColors.canvas.raised : appColors.primary[500]}
+                      color={active ? appColors.onPrimary : appColors.primary[500]}
                     />
                   </View>
                   <View className="flex-1">
@@ -137,7 +137,7 @@ export default function RoleSelectScreen() {
                     "w-6 h-6 rounded-full border-2 items-center justify-center",
                     active ? "border-primary-600 bg-primary-600" : "border-ink-faint bg-transparent",
                   ].join(" ")}>
-                    {active && <Ionicons name="checkmark" size={14} color={appColors.canvas.raised} />}
+                    {active && <Ionicons name="checkmark" size={14} color={appColors.onPrimary} />}
                   </View>
                 </View>
 
@@ -170,7 +170,7 @@ export default function RoleSelectScreen() {
           activeOpacity={0.85}
         >
           {loading
-            ? <ActivityIndicator color={appColors.canvas.raised} />
+            ? <ActivityIndicator color={appColors.onPrimary} />
             : <Text className="text-white font-semibold text-base">Get Started</Text>
           }
         </TouchableOpacity>

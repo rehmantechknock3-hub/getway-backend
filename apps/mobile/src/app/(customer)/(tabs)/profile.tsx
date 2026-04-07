@@ -214,7 +214,7 @@ export default function ProfileScreen() {
             disabled={updateProfile.isPending}
             style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
           >
-            {updateProfile.isPending ? <ActivityIndicator color={appColors.canvas.raised} /> : <Text className="text-white font-semibold">Save Profile</Text>}
+            {updateProfile.isPending ? <ActivityIndicator color={appColors.onPrimary} /> : <Text className="text-white font-semibold">Save Profile</Text>}
           </TouchableOpacity>
         </View>
 
@@ -267,7 +267,7 @@ export default function ProfileScreen() {
             disabled={updateSavedLocations.isPending}
             style={{ opacity: updateSavedLocations.isPending ? 0.6 : 1 }}
           >
-            {updateSavedLocations.isPending ? <ActivityIndicator color={appColors.canvas.raised} /> : <Text className="text-white font-semibold">Save Locations</Text>}
+            {updateSavedLocations.isPending ? <ActivityIndicator color={appColors.onPrimary} /> : <Text className="text-white font-semibold">Save Locations</Text>}
           </TouchableOpacity>
         </View>
 
@@ -325,7 +325,7 @@ export default function ProfileScreen() {
             style={{ opacity: updateCustomerOnboarding.isPending ? 0.6 : 1 }}
           >
             {updateCustomerOnboarding.isPending ? (
-              <ActivityIndicator color={appColors.canvas.raised} />
+              <ActivityIndicator color={appColors.onPrimary} />
             ) : (
               <Text className="text-white font-semibold">Save Vehicle Preferences</Text>
             )}

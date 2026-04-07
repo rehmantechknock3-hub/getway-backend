@@ -11,6 +11,7 @@ import type { Request } from "express";
 import { createClerkClient } from "@clerk/backend";
 import { SetRoleSchema } from "@repo/schemas";
 
+import { PrismaService } from "../prisma/prisma.service";
 import { UsersService } from "../users/users.service";
 
 @Controller("auth")
@@ -18,6 +19,7 @@ export class AuthController {
   private readonly clerk: ReturnType<typeof createClerkClient>;
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly configService: ConfigService
   ) {
@@ -38,17 +40,25 @@ export class AuthController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    const clerkUser = await this.clerk.users.getUser(clerkId);
-    const existingRole = clerkUser.publicMetadata?.role;
-    if (existingRole !== undefined && existingRole !== null) {
-      throw new ForbiddenException("Role is already set");
-    }
-
     const { role } = parsed;
 
-    await this.clerk.users.updateUserMetadata(clerkId, {
-      publicMetadata: { role },
+    const clerkUser = await this.prisma.$transaction(async (tx) => {
+      // Serialize role assignment attempts per user to avoid TOCTOU races.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${clerkId}))`;
+
+      const current = await this.clerk.users.getUser(clerkId);
+      const existingRole = current.publicMetadata?.role;
+      if (existingRole !== undefined && existingRole !== null) {
+        throw new ForbiddenException("Role is already set");
+      }
+
+      await this.clerk.users.updateUserMetadata(clerkId, {
+        publicMetadata: { role },
+      });
+
+      return current;
     });
+
     const user = await this.usersService.upsertFromClerk({
       id: clerkUser.id,
       primary_email_address_id: clerkUser.primaryEmailAddressId,
