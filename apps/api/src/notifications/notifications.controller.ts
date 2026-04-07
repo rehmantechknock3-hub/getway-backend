@@ -1,7 +1,10 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Query,
@@ -40,5 +43,23 @@ export class NotificationsController {
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
     return this.notificationsService.markRead(clerkId, id);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Req() req: Request, @Param("id") id: string) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    await this.notificationsService.remove(clerkId, id);
+  }
+
+  @Delete()
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async clearAll(@Req() req: Request) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    await this.notificationsService.clearAll(clerkId);
   }
 }

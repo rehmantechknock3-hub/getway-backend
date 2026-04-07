@@ -1,3 +1,4 @@
+import { NotFoundException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 
 import { resolveClerkPrimaryEmail, UsersService } from "./users.service";
@@ -35,6 +36,51 @@ describe("resolveClerkPrimaryEmail", () => {
 });
 
 describe("UsersService", () => {
+  it("findById returns selected user fields", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u1",
+          clerkId: "clerk_1",
+          role: "CUSTOMER",
+          email: "u@example.com",
+          firstName: "U",
+          lastName: "One",
+          phone: null,
+          avatarUrl: null,
+          savedLocations: null,
+          onboardingCompleted: false,
+          customerOnboarding: null,
+          providerOnboarding: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          providerProfile: null,
+        }),
+      },
+    };
+    const service = new UsersService(prisma as never);
+
+    const out = await service.findById("u1");
+
+    expect(out).toMatchObject({
+      id: "u1",
+      clerkId: "clerk_1",
+      role: "CUSTOMER",
+      email: "u@example.com",
+    });
+  });
+
+  it("findById throws NotFoundException when user missing", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new UsersService(prisma as never);
+
+    await expect(service.findById("missing")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it("updates customer profile fields", async () => {
     const prisma = {
       user: {
@@ -59,6 +105,24 @@ describe("UsersService", () => {
         phone: "123456789",
       },
     });
+  });
+
+  it("updateProfile rejects for invalid/unauthorized user id", async () => {
+    const prisma = {
+      user: {
+        update: vi.fn().mockRejectedValue(new Error("Record to update not found")),
+      },
+    };
+    const service = new UsersService(prisma as never);
+
+    await expect(
+      service.updateProfile("clerk_missing", {
+        firstName: "Saad",
+        lastName: "Nadeem",
+        email: "saad@example.com",
+        phone: "123456789",
+      })
+    ).rejects.toThrow();
   });
 
   it("stores saved locations as JSON payload", async () => {

@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { Booking } from "@repo/schemas";
 import { setAuthToken, useBookings } from "@repo/api-client";
+import { appColors } from "../../../styles/colors";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
 
@@ -123,7 +124,7 @@ export default function BookingsScreen() {
         ) : !data?.data.length ? (
           <View className="bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center">
             <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
-              <Ionicons name="calendar-outline" size={30} color="#E8521A" />
+              <Ionicons name="calendar-outline" size={30} color={appColors.primary[600]} />
             </View>
             <Text className="text-ink font-bold text-lg text-center mb-2">No bookings yet</Text>
             <Text className="text-ink-muted text-sm text-center leading-5">
@@ -156,7 +157,7 @@ export default function BookingsScreen() {
                   </View>
                   <BookingStatusProgressDots status={b.status} />
                   <View className="flex-row items-start gap-2 mb-2 mt-3">
-                    <Ionicons name="location-outline" size={18} color="#78716C" />
+                    <Ionicons name="location-outline" size={18} color={appColors.ink.muted} />
                     <Text className="text-ink-soft text-sm flex-1 leading-5">{b.address}</Text>
                   </View>
                   {b.notes ? (
@@ -168,7 +169,7 @@ export default function BookingsScreen() {
                   </View>
                   <View className="flex-row items-center justify-end gap-1 mt-2">
                     <Text className="text-primary-600 text-xs font-semibold">Track status</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#E8521A" />
+                    <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
                   </View>
                 </TouchableOpacity>
               );

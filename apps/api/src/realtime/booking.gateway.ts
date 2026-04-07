@@ -7,18 +7,38 @@ import {
   OnGatewayConnection,
   OnGatewayDisconnect,
 } from "@nestjs/websockets";
+import { Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { verifyToken } from "@clerk/backend";
 import { Server, Socket } from "socket.io";
 
 @WebSocketGateway({
-  cors: { origin: process.env["SOCKET_CORS_ORIGIN"] ?? "http://localhost:3000" },
+  cors: { origin: true },
   namespace: "/bookings",
 })
 export class BookingGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
-  @WebSocketServer() server: Server = new Server();
+  private readonly logger = new Logger(BookingGateway.name);
 
-  handleConnection(client: Socket) {
+  constructor(private readonly configService: ConfigService) {}
+
+  @WebSocketServer() server!: Server;
+
+  async handleConnection(client: Socket) {
+    const token = (client.handshake.auth?.token as string | undefined) ?? undefined;
+    if (!token) return client.disconnect();
+    const secretKey = this.configService.get<string>("CLERK_SECRET_KEY");
+    if (!secretKey) {
+      this.logger.error("CLERK_SECRET_KEY is missing; rejecting socket connection");
+      return client.disconnect();
+    }
+    try {
+      const payload = await verifyToken(token, { secretKey });
+      client.data.clerkId = payload.sub;
+    } catch {
+      return client.disconnect();
+    }
     const bookingId = client.handshake.query["bookingId"] as string;
     if (bookingId) client.join(`booking:${bookingId}`);
   }
@@ -44,8 +64,9 @@ export class BookingGateway
   @SubscribeMessage("location:broadcast")
   handleLocationBroadcast(
     @MessageBody() data: { bookingId: string; latitude: number; longitude: number },
-    @ConnectedSocket() _client: Socket
+    @ConnectedSocket() client: Socket
   ) {
+    if (!client.data?.clerkId) return;
     this.emitLocationUpdate(data.bookingId, data.latitude, data.longitude);
   }
 }

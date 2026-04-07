@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
 
 import { ProviderServiceCategoriesField } from "../../components/ProviderServiceCategoriesField";
+import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
 export default function ProviderOnboardingScreen() {
@@ -69,7 +70,7 @@ export default function ProviderOnboardingScreen() {
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
             <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
-              <Ionicons name="briefcase-outline" size={22} color="#1C1917" />
+              <Ionicons name="briefcase-outline" size={22} color={appColors.ink.DEFAULT} />
             </View>
             <View className="flex-1">
               <Text className="text-2xl font-bold text-ink">Set up your provider profile</Text>
@@ -85,7 +86,7 @@ export default function ProviderOnboardingScreen() {
           <TextInput
             className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
             placeholder="e.g. 3"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             keyboardType="number-pad"
             style={textInputBaselineStyle}
             value={experienceYears}
@@ -96,7 +97,7 @@ export default function ProviderOnboardingScreen() {
           <TextInput
             className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
             placeholder="e.g. DHA, Gulberg"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
             value={serviceArea}
             onChangeText={setServiceArea}
@@ -106,7 +107,7 @@ export default function ProviderOnboardingScreen() {
           <TextInput
             className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
             placeholder="Describe the services you offer"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             value={serviceDescription}
             onChangeText={setServiceDescription}
             multiline
@@ -136,7 +137,7 @@ export default function ProviderOnboardingScreen() {
           style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
         >
           {submitOnboarding.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={appColors.canvas.raised} />
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}

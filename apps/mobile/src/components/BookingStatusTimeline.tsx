@@ -2,6 +2,7 @@ import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { Booking } from "@repo/schemas";
+import { appColors } from "../styles/colors";
 
 type StepState = "done" | "current" | "upcoming";
 
@@ -53,7 +54,7 @@ function StepDot({ state }: { state: StepState }) {
   return (
     <View className={`w-9 h-9 rounded-full items-center justify-center ${ring}`}>
       {state === "done" ? (
-        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+        <Ionicons name="checkmark" size={18} color={appColors.canvas.raised} />
       ) : state === "current" ? (
         <View className="w-2.5 h-2.5 rounded-full bg-primary-500" />
       ) : null}
@@ -84,7 +85,7 @@ export function BookingStatusTimeline({
             <StepDot state="done" />
             <View className="w-0.5 h-5 bg-red-200 my-1" />
             <View className="w-9 h-9 rounded-full bg-red-100 items-center justify-center border border-red-200">
-              <Ionicons name="close" size={18} color="#B91C1C" />
+              <Ionicons name="close" size={18} color={appColors.semantic.destructive} />
             </View>
           </View>
           <View className="flex-1 pt-1">
@@ -116,7 +117,7 @@ export function BookingStatusTimeline({
       <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4">
         <Text className="text-ink font-semibold text-base mb-1">Booking status</Text>
         <View className="bg-ink-faint rounded-xl px-3 py-2.5 mb-4 flex-row items-center gap-2">
-          <Ionicons name="ban-outline" size={20} color="#57534E" />
+          <Ionicons name="ban-outline" size={20} color={appColors.ink.soft} />
           <Text className="text-ink-soft text-sm flex-1 leading-5">
             This booking was cancelled. It will not move forward.
           </Text>
@@ -182,7 +183,7 @@ export function BookingStatusProgressDots({ status }: { status: Booking["status"
     return (
       <View className="flex-row items-center gap-1.5 mt-2">
         <View className="h-1 flex-1 rounded-full bg-ink-faint" />
-        <Text className="text-ink-subtle text-[10px] font-medium uppercase tracking-wide">
+        <Text className="text-ink-subtle text-xs font-medium uppercase tracking-wide">
           {status === "REJECTED" ? "Declined" : "Cancelled"}
         </Text>
       </View>

@@ -7,6 +7,7 @@ import { useAuth } from "@clerk/expo";
 import { setAuthToken, useMyProviderServices } from "@repo/api-client";
 
 import { ProviderServiceForm } from "../../../components/ProviderServiceForm";
+import { appColors } from "../../../styles/colors";
 
 export default function ProviderEditServiceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,7 +39,7 @@ export default function ProviderEditServiceScreen() {
   if (!enabled || isLoading) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center">
-        <ActivityIndicator color="#E8521A" />
+        <ActivityIndicator color={appColors.primary[600]} />
       </View>
     );
   }

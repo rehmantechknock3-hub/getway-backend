@@ -9,6 +9,7 @@ import { Link, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
 type Step = "details" | "verify";
@@ -103,7 +104,7 @@ export default function SignUpScreen() {
             className="mx-5 mb-8 w-10 h-10 rounded-full bg-canvas-sunken items-center justify-center"
             onPress={() => setStep("details")}
           >
-            <Ionicons name="arrow-back" size={20} color="#1C1917" />
+            <Ionicons name="arrow-back" size={20} color={appColors.ink.DEFAULT} />
           </TouchableOpacity>
 
           <View className="px-6">
@@ -120,7 +121,7 @@ export default function SignUpScreen() {
               <TextInput
                 className="text-ink text-3xl font-bold tracking-widest text-center"
                 placeholder="000000"
-                placeholderTextColor="#A8A29E"
+                placeholderTextColor={appColors.ink.subtle}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
@@ -137,7 +138,7 @@ export default function SignUpScreen() {
               activeOpacity={0.85}
             >
               {loading
-                ? <ActivityIndicator color="#fff" />
+                ? <ActivityIndicator color={appColors.canvas.raised} />
                 : <Text className="text-white font-semibold text-base">Verify Email</Text>
               }
             </TouchableOpacity>
@@ -158,7 +159,7 @@ export default function SignUpScreen() {
       >
         <Link href="/(auth)/welcome" asChild>
           <TouchableOpacity className="mx-5 mb-8 w-10 h-10 rounded-full bg-canvas-sunken items-center justify-center">
-            <Ionicons name="arrow-back" size={20} color="#1C1917" />
+            <Ionicons name="arrow-back" size={20} color={appColors.ink.DEFAULT} />
           </TouchableOpacity>
         </Link>
 
@@ -178,7 +179,7 @@ export default function SignUpScreen() {
               <TextInput
                 className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base"
                 placeholder="Jane"
-                placeholderTextColor="#A8A29E"
+                placeholderTextColor={appColors.ink.subtle}
                 autoCapitalize="words"
                 style={textInputBaselineStyle}
                 value={firstName}
@@ -190,7 +191,7 @@ export default function SignUpScreen() {
               <TextInput
                 className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base"
                 placeholder="Doe"
-                placeholderTextColor="#A8A29E"
+                placeholderTextColor={appColors.ink.subtle}
                 autoCapitalize="words"
                 style={textInputBaselineStyle}
                 value={lastName}
@@ -203,7 +204,7 @@ export default function SignUpScreen() {
           <TextInput
             className="w-full bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
             placeholder="you@example.com"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
@@ -217,7 +218,7 @@ export default function SignUpScreen() {
             <TextInput
               className="w-full bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base pr-12"
               placeholder="Min. 8 characters"
-              placeholderTextColor="#A8A29E"
+              placeholderTextColor={appColors.ink.subtle}
               secureTextEntry={!showPw}
               autoComplete="new-password"
               style={textInputBaselineStyle}
@@ -228,7 +229,7 @@ export default function SignUpScreen() {
               className="absolute right-4 top-3.5"
               onPress={() => setShowPw((v) => !v)}
             >
-              <Ionicons name={showPw ? "eye-off" : "eye"} size={20} color="#78716C" />
+              <Ionicons name={showPw ? "eye-off" : "eye"} size={20} color={appColors.ink.muted} />
             </TouchableOpacity>
           </View>
 
@@ -240,7 +241,7 @@ export default function SignUpScreen() {
             activeOpacity={0.85}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={appColors.canvas.raised} />
               : <Text className="text-white font-semibold text-base">Continue</Text>
             }
           </TouchableOpacity>

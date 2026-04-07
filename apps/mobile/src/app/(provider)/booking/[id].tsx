@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { setAuthToken, useProviderBooking } from "@repo/api-client";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
+import { appColors } from "../../../styles/colors";
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -122,7 +123,7 @@ export default function ProviderBookingDetailScreen() {
             <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2">Service</Text>
             <Text className="text-ink font-bold text-lg">{booking.serviceTitle}</Text>
             <View className="flex-row items-center gap-2 mt-3">
-              <Ionicons name="person-outline" size={18} color="#78716C" />
+              <Ionicons name="person-outline" size={18} color={appColors.ink.muted} />
               <Text className="text-ink-soft text-sm flex-1">{customerName || "Customer"}</Text>
             </View>
             <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2 mt-4">
@@ -130,7 +131,7 @@ export default function ProviderBookingDetailScreen() {
             </Text>
             <Text className="text-ink font-bold text-base">{formatWhen(booking.scheduledAt)}</Text>
             <View className="flex-row items-start gap-2 mt-4">
-              <Ionicons name="location-outline" size={20} color="#78716C" />
+              <Ionicons name="location-outline" size={20} color={appColors.ink.muted} />
               <Text className="text-ink-soft text-sm flex-1 leading-5">{booking.address}</Text>
             </View>
             {booking.notes ? (

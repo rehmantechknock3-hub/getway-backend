@@ -1,12 +1,14 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
+import { appColors } from "../../../styles/colors";
+
 export default function ProviderTabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#E8521A",
-        tabBarInactiveTintColor: "#9ca3af",
+        tabBarActiveTintColor: appColors.primary[600],
+        tabBarInactiveTintColor: appColors.ink.subtle,
         headerShown: false,
       }}
     >

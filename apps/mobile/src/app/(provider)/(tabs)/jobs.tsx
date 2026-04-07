@@ -25,6 +25,7 @@ import {
 } from "@repo/api-client";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
+import { appColors } from "../../../styles/colors";
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -88,11 +89,11 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
               <Text className="text-ink font-bold text-base">{job.serviceTitle}</Text>
             </View>
             <View className="flex-row items-center gap-1.5 mb-1">
-              <Ionicons name="person-outline" size={13} color="#78716C" />
+              <Ionicons name="person-outline" size={13} color={appColors.ink.muted} />
               <Text className="text-ink-muted text-sm">{customerName}</Text>
             </View>
             <View className="flex-row items-center gap-1.5">
-              <Ionicons name="location-outline" size={13} color="#78716C" />
+              <Ionicons name="location-outline" size={13} color={appColors.ink.muted} />
               <Text className="text-ink-subtle text-xs flex-1" numberOfLines={2}>
                 {job.address}
               </Text>
@@ -106,7 +107,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
         <View className="h-px bg-ink-faint mx-4 mt-3" />
         <View className="flex-row items-center justify-between px-4 py-3">
           <View className="flex-row items-center gap-1.5">
-            <Ionicons name="time-outline" size={14} color="#78716C" />
+            <Ionicons name="time-outline" size={14} color={appColors.ink.muted} />
             <Text className="text-ink-muted text-xs">
               {formatWhen(job.scheduledAt instanceof Date ? job.scheduledAt : new Date(job.scheduledAt))}
             </Text>
@@ -115,7 +116,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
         </View>
         <View className="flex-row items-center justify-end gap-1 px-4 pb-3">
           <Text className="text-primary-600 text-xs font-semibold">Track status</Text>
-          <Ionicons name="chevron-forward" size={14} color="#E8521A" />
+          <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
         </View>
       </TouchableOpacity>
 
@@ -258,11 +259,11 @@ export default function JobsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Notifications"
             >
-              <Ionicons name="notifications-outline" size={22} color="#1C1917" />
+              <Ionicons name="notifications-outline" size={22} color={appColors.ink.DEFAULT} />
             </TouchableOpacity>
             {(notificationPayload?.unreadCount ?? 0) > 0 ? (
               <View className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary-600 items-center justify-center px-1 border border-canvas">
-                <Text className="text-white text-[10px] font-bold">
+                <Text className="text-white text-xs font-bold">
                   {(notificationPayload?.unreadCount ?? 0) > 9
                     ? "9+"
                     : String(notificationPayload?.unreadCount ?? 0)}
@@ -274,21 +275,21 @@ export default function JobsScreen() {
 
         <View className="flex-row gap-2 px-5 mb-6">
           <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="time-outline" size={20} color="#F59E0B" />
+            <Ionicons name="time-outline" size={20} color={appColors.semantic.warning} />
             <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
               {enabled && !isLoading ? String(stats?.pending ?? 0) : "—"}
             </Text>
             <Text className="text-ink-subtle text-xs text-center">New</Text>
           </View>
           <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="briefcase-outline" size={20} color="#3B82F6" />
+            <Ionicons name="briefcase-outline" size={20} color={appColors.semantic.info} />
             <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
               {enabled && !isLoading ? String(stats?.active ?? 0) : "—"}
             </Text>
             <Text className="text-ink-subtle text-xs text-center">Active</Text>
           </View>
           <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="checkmark-circle-outline" size={20} color="#10B981" />
+            <Ionicons name="checkmark-circle-outline" size={20} color={appColors.semantic.success} />
             <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
               {enabled && !isLoading ? String(stats?.completed ?? 0) : "—"}
             </Text>
@@ -319,7 +320,7 @@ export default function JobsScreen() {
         ) : queueBookings.length === 0 ? (
           <View className="mx-5 bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center">
             <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
-              <Ionicons name="calendar-outline" size={30} color="#E8521A" />
+              <Ionicons name="calendar-outline" size={30} color={appColors.primary[600]} />
             </View>
             <Text className="text-ink font-bold text-lg text-center mb-2">Nothing in your queue</Text>
             <Text className="text-ink-muted text-sm text-center leading-5">

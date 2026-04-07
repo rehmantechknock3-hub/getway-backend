@@ -1,5 +1,7 @@
 import { Stack } from "expo-router";
 
+import { appColors } from "../../styles/colors";
+
 export default function ProviderLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -10,7 +12,7 @@ export default function ProviderLayout() {
           headerShown: true,
           title: "Notifications",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -19,7 +21,7 @@ export default function ProviderLayout() {
           headerShown: true,
           title: "Job",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -28,7 +30,7 @@ export default function ProviderLayout() {
           headerShown: true,
           title: "Customer reviews",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -37,7 +39,7 @@ export default function ProviderLayout() {
           headerShown: true,
           title: "Add service",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -46,7 +48,7 @@ export default function ProviderLayout() {
           headerShown: true,
           title: "Edit service",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
     </Stack>

@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 
 import { PROVIDER_SERVICE_CATEGORY_PRESETS } from "../data/provider-service-category-presets";
+import { appColors } from "../styles/colors";
 import { textInputBaselineStyle } from "../styles/text-input";
 
 const MAX_DEFAULT = 12;
@@ -77,7 +78,7 @@ export function ProviderServiceCategoriesField({
                 accessibilityLabel={`Remove ${name}`}
                 className="w-11 h-11 items-center justify-center -mr-0.5 active:opacity-70"
               >
-                <Ionicons name="close-circle" size={22} color="#9A3412" />
+                <Ionicons name="close-circle" size={22} color={appColors.primary[800]} />
               </TouchableOpacity>
             </View>
           ))}
@@ -90,7 +91,7 @@ export function ProviderServiceCategoriesField({
         activeOpacity={0.85}
       >
         <Text className="text-ink text-base">Browse suggested categories</Text>
-        <Ionicons name="chevron-down" size={18} color="#57534E" />
+        <Ionicons name="chevron-down" size={18} color={appColors.ink.soft} />
       </TouchableOpacity>
 
       <Text className="text-ink text-sm font-medium mb-2">Or add your own</Text>
@@ -101,7 +102,7 @@ export function ProviderServiceCategoriesField({
           value={customName}
           onChangeText={setCustomName}
           placeholder="e.g. Mobile mechanic"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           onSubmitEditing={() => addCustom()}
         />
         <TouchableOpacity
@@ -125,7 +126,7 @@ export function ProviderServiceCategoriesField({
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-ink text-lg font-semibold">Suggested categories</Text>
               <TouchableOpacity onPress={() => setShowModal(false)} accessibilityLabel="Close">
-                <Ionicons name="close" size={22} color="#1C1917" />
+                <Ionicons name="close" size={22} color={appColors.ink.DEFAULT} />
               </TouchableOpacity>
             </View>
             <Text className="text-ink-muted text-xs mb-3">Tap to add or remove. You can choose several.</Text>
@@ -142,7 +143,7 @@ export function ProviderServiceCategoriesField({
                       onPress={() => onChange(togglePreset(value, category, maxCategories))}
                     >
                       <Text className={selected ? "text-primary-800 font-semibold" : "text-ink"}>{category}</Text>
-                      {selected ? <Ionicons name="checkmark-circle" size={20} color="#C2410C" /> : null}
+                      {selected ? <Ionicons name="checkmark-circle" size={20} color={appColors.primary[700]} /> : null}
                     </TouchableOpacity>
                   );
                 })}

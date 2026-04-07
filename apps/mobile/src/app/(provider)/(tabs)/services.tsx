@@ -21,6 +21,7 @@ import {
   useMe,
   useMyProviderServices,
 } from "@repo/api-client";
+import { appColors } from "../../../styles/colors";
 
 function formatUsd(amount: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -128,7 +129,7 @@ export default function ProviderServicesScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add service"
             >
-              <Ionicons name="add-circle" size={34} color="#E8521A" />
+              <Ionicons name="add-circle" size={34} color={appColors.primary[600]} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -165,7 +166,7 @@ export default function ProviderServicesScreen() {
         ) : !servicesQuery.data?.length ? (
           <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-6 items-center">
             <View className="w-14 h-14 rounded-2xl bg-primary-50 items-center justify-center mb-4">
-              <Ionicons name="construct-outline" size={28} color="#E8521A" />
+              <Ionicons name="construct-outline" size={28} color={appColors.primary[600]} />
             </View>
             <Text className="text-ink font-semibold text-center mb-2">No published service yet</Text>
             <Text className="text-ink-muted text-sm text-center leading-5 mb-4">
@@ -219,7 +220,7 @@ export default function ProviderServicesScreen() {
                 </View>
                 <View className="flex-row items-center justify-between mt-3">
                   <View className="flex-row items-center gap-2">
-                    <Ionicons name="time-outline" size={14} color="#78716C" />
+                    <Ionicons name="time-outline" size={14} color={appColors.ink.muted} />
                     <Text className="text-ink-subtle text-xs">
                       {s.duration > 0 ? `${s.duration} min` : "Set duration"}
                     </Text>
@@ -236,7 +237,7 @@ export default function ProviderServicesScreen() {
                 </View>
                 <View className="flex-row items-center justify-end gap-1 mt-2">
                   <Text className="text-primary-600 text-xs font-semibold">Edit</Text>
-                  <Ionicons name="chevron-forward" size={14} color="#E8521A" />
+                  <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
                 </View>
               </TouchableOpacity>
             );

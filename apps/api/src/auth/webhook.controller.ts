@@ -7,6 +7,7 @@ import {
   HttpCode,
   BadRequestException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Webhook } from "svix";
 import type { Request } from "express";
 import { Public } from "./public.decorator";
@@ -31,7 +32,10 @@ export interface ClerkUserPayload {
 
 @Controller("webhooks")
 export class WebhookController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService
+  ) {}
 
   @Public()
   @Post("clerk")
@@ -42,7 +46,7 @@ export class WebhookController {
     @Headers("svix-signature") svixSignature: string,
     @Req() req: RawBodyRequest<Request>
   ) {
-    const secret = process.env["CLERK_WEBHOOK_SECRET"];
+    const secret = this.configService.get<string>("CLERK_WEBHOOK_SECRET");
     if (!secret) throw new BadRequestException("Webhook secret not configured");
 
     const wh      = new Webhook(secret);

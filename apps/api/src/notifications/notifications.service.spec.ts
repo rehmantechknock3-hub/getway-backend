@@ -11,6 +11,8 @@ describe("NotificationsService", () => {
       count: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
     },
     providerProfile: { findUnique: vi.fn() },
   };
@@ -81,5 +83,46 @@ describe("NotificationsService", () => {
 
     expect(result.id).toBe("n-1");
     expect(prisma.notification.update).toHaveBeenCalled();
+  });
+
+  it("remove deletes notification for current user", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "u-1" });
+    prisma.notification.findFirst.mockResolvedValue({ id: "n-1" });
+    prisma.notification.delete.mockResolvedValue({ id: "n-1" });
+
+    await service.remove("clerk-1", "n-1");
+
+    expect(prisma.notification.delete).toHaveBeenCalledWith({ where: { id: "n-1" } });
+  });
+
+  it("clearAll deletes all notifications for current user", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "u-1" });
+    prisma.notification.deleteMany.mockResolvedValue({ count: 3 });
+
+    await service.clearAll("clerk-1");
+
+    expect(prisma.notification.deleteMany).toHaveBeenCalledWith({ where: { userId: "u-1" } });
+  });
+
+  it("notifyProviderNewReview creates notification for provider owner", async () => {
+    prisma.providerProfile.findUnique.mockResolvedValue({ userId: "provider-user-1" });
+    prisma.notification.create.mockResolvedValue({ id: "n-2" });
+
+    await service.notifyProviderNewReview({
+      providerProfileId: "pp-1",
+      bookingId: "b-1",
+      rating: 5,
+      serviceTitle: "Oil Change",
+    });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: {
+        userId: "provider-user-1",
+        type: "PROVIDER_NEW_REVIEW",
+        title: "New customer review",
+        body: 'You received a 5.0-star review for "Oil Change".',
+        bookingId: "b-1",
+      },
+    });
   });
 });

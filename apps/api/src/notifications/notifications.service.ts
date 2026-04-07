@@ -130,6 +130,26 @@ export class NotificationsService {
     });
   }
 
+  async notifyProviderNewReview(params: {
+    providerProfileId: string;
+    bookingId: string;
+    rating: number;
+    serviceTitle: string;
+  }): Promise<void> {
+    const profile = await this.prisma.providerProfile.findUnique({
+      where: { id: params.providerProfileId },
+      select: { userId: true },
+    });
+    if (!profile) return;
+
+    await this.createForUser(profile.userId, {
+      type: "PROVIDER_NEW_REVIEW",
+      title: "New customer review",
+      body: `You received a ${params.rating.toFixed(1)}-star review for "${params.serviceTitle}".`,
+      bookingId: params.bookingId,
+    });
+  }
+
   async listForUser(
     clerkId: string,
     page: number,
@@ -185,5 +205,25 @@ export class NotificationsService {
     });
 
     return this.toDto(updated);
+  }
+
+  async remove(clerkId: string, notificationId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { clerkId } });
+    if (!user) throw new NotFoundException("User not found");
+
+    const row = await this.prisma.notification.findFirst({
+      where: { id: notificationId, userId: user.id },
+      select: { id: true },
+    });
+    if (!row) throw new NotFoundException("Notification not found");
+
+    await this.prisma.notification.delete({ where: { id: notificationId } });
+  }
+
+  async clearAll(clerkId: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { clerkId } });
+    if (!user) throw new NotFoundException("User not found");
+
+    await this.prisma.notification.deleteMany({ where: { userId: user.id } });
   }
 }

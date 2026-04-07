@@ -29,6 +29,7 @@ import {
   usePublicProviders,
 } from "@repo/api-client";
 
+import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
 const CATEGORIES = [
@@ -159,14 +160,14 @@ function ProviderRow({ p }: { p: ProviderPublicSummary }) {
           <Text className="text-ink-subtle text-xs mt-1">Tap for full profile · all services</Text>
           <View className="flex-row items-center gap-3 mt-1">
             <View className="flex-row items-center gap-1">
-              <Ionicons name="star" size={12} color="#F59E0B" />
+              <Ionicons name="star" size={12} color={appColors.semantic.warning} />
               <Text className="text-xs font-medium text-ink-soft">
                 {p.averageRating.toFixed(1)} ({p.totalReviews})
               </Text>
             </View>
             {p.serviceArea ? (
               <View className="flex-row items-center gap-1 flex-1 min-w-0">
-                <Ionicons name="location-outline" size={12} color="#A8A29E" />
+                <Ionicons name="location-outline" size={12} color={appColors.ink.subtle} />
                 <Text className="text-xs text-ink-subtle flex-1" numberOfLines={1}>
                   {p.serviceArea}
                 </Text>
@@ -345,11 +346,11 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Notifications"
             >
-              <Ionicons name="notifications-outline" size={22} color="#1C1917" />
+              <Ionicons name="notifications-outline" size={22} color={appColors.ink.DEFAULT} />
             </TouchableOpacity>
             {(notificationPayload?.unreadCount ?? 0) > 0 ? (
               <View className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary-600 items-center justify-center px-1 border border-canvas">
-                <Text className="text-white text-[10px] font-bold">
+                <Text className="text-white text-xs font-bold">
                   {(notificationPayload?.unreadCount ?? 0) > 9
                     ? "9+"
                     : String(notificationPayload?.unreadCount ?? 0)}
@@ -388,7 +389,7 @@ export default function HomeScreen() {
             <Ionicons
               name="heart"
               size={16}
-              color={feed === "saved" ? "#fff" : "#E8521A"}
+              color={feed === "saved" ? appColors.canvas.raised : appColors.primary[600]}
             />
             <Text
               className={`text-sm font-bold ${feed === "saved" ? "text-white" : "text-ink-soft"}`}
@@ -401,11 +402,11 @@ export default function HomeScreen() {
         {/* Search bar */}
         <View className="mx-5 mb-7">
           <View className="flex-row items-center bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 gap-3">
-            <Ionicons name="search" size={20} color="#78716C" />
+            <Ionicons name="search" size={20} color={appColors.ink.muted} />
             <TextInput
               className="flex-1 text-ink text-base"
               placeholder="Search services or providers..."
-              placeholderTextColor="#A8A29E"
+              placeholderTextColor={appColors.ink.subtle}
               style={textInputBaselineStyle}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -462,7 +463,7 @@ export default function HomeScreen() {
                     <Ionicons
                       name={icon as keyof typeof Ionicons.glyphMap}
                       size={26}
-                      color={selected ? "#E8521A" : "#57534E"}
+                      color={selected ? appColors.primary[600] : appColors.ink.soft}
                     />
                   </View>
                   <Text
@@ -488,7 +489,7 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View className="w-20 h-20 rounded-2xl bg-ink-soft items-center justify-center ml-4">
-            <Ionicons name="pricetag" size={36} color="#FF6B35" />
+            <Ionicons name="pricetag" size={36} color={appColors.primary[500]} />
           </View>
         </View>
 
@@ -596,7 +597,7 @@ export default function HomeScreen() {
               {feed === "saved" ? (
                 <>
                   <View className="w-16 h-16 rounded-full bg-primary-50 items-center justify-center mb-4">
-                    <Ionicons name="heart-outline" size={32} color="#E8521A" />
+                    <Ionicons name="heart-outline" size={32} color={appColors.primary[600]} />
                   </View>
                   <Text className="text-ink font-bold text-lg text-center mb-2">No saved providers yet</Text>
                   <Text className="text-ink-muted text-sm text-center leading-5">
@@ -619,7 +620,7 @@ export default function HomeScreen() {
             </View>
           ) : !filteredList.length ? (
             <View className="bg-canvas-raised rounded-3xl p-8 border border-ink-faint items-center">
-              <Ionicons name="search-outline" size={40} color="#A8A29E" />
+              <Ionicons name="search-outline" size={40} color={appColors.ink.subtle} />
               <Text className="text-ink font-bold text-lg text-center mt-4 mb-2">No matches</Text>
               <Text className="text-ink-muted text-sm text-center leading-5">
                 Try a different search, clear the category chip, or turn off the available-only filter.

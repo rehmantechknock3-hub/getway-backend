@@ -1,4 +1,4 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { UsersController } from "./users.controller";
 
@@ -110,5 +110,49 @@ describe("UsersController", () => {
     );
 
     expect(service.updateAvatar).toHaveBeenCalledWith("clerk_avatar", "data:image/jpeg;base64,abc123");
+  });
+
+  it("findOne allows admin to access any user id", async () => {
+    const service = {
+      findById: vi.fn().mockResolvedValue({ id: "user_x" }),
+    };
+    const controller = new UsersController(service as never);
+
+    const out = await controller.findOne("user_x", {
+      auth: { sub: "clerk_admin", public_metadata: { role: "ADMIN" } },
+    } as never);
+
+    expect(out).toEqual({ id: "user_x" });
+    expect(service.findById).toHaveBeenCalledWith("user_x");
+  });
+
+  it("findOne blocks non-admin from accessing another user", async () => {
+    const service = {
+      findByClerkId: vi.fn().mockResolvedValue({ id: "me" }),
+      findById: vi.fn(),
+    };
+    const controller = new UsersController(service as never);
+
+    await expect(
+      controller.findOne("other", {
+        auth: { sub: "clerk_me", public_metadata: { role: "CUSTOMER" } },
+      } as never)
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it("findOne allows non-admin to access own profile", async () => {
+    const service = {
+      findByClerkId: vi.fn().mockResolvedValue({ id: "me" }),
+      findById: vi.fn().mockResolvedValue({ id: "me" }),
+    };
+    const controller = new UsersController(service as never);
+
+    const out = await controller.findOne("me", {
+      auth: { sub: "clerk_me", public_metadata: { role: "CUSTOMER" } },
+    } as never);
+
+    expect(out).toEqual({ id: "me" });
+    expect(service.findByClerkId).toHaveBeenCalledWith("clerk_me");
+    expect(service.findById).toHaveBeenCalledWith("me");
   });
 });

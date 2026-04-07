@@ -3,6 +3,8 @@ import { Link } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { appColors } from "../../styles/colors";
+
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
@@ -13,7 +15,7 @@ export default function WelcomeScreen() {
       {/* Hero — dark charcoal */}
       <View className="flex-1 items-center justify-center px-8">
         <View className="w-20 h-20 rounded-3xl bg-primary-500 items-center justify-center mb-6">
-          <Ionicons name="flash" size={40} color="#fff" />
+          <Ionicons name="flash" size={40} color={appColors.canvas.raised} />
         </View>
 
         <Text

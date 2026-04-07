@@ -34,4 +34,28 @@ describe("NotificationsController", () => {
     expect(notificationsService.markRead).toHaveBeenCalledWith("clerk_1", "n-1");
     expect(result).toEqual({ id: "n-1" });
   });
+
+  it("remove delegates to service", async () => {
+    const notificationsService = {
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    const controller = new NotificationsController(notificationsService as never);
+
+    const req = { auth: { sub: "clerk_1" } } as never;
+    await controller.remove(req, "n-1");
+
+    expect(notificationsService.remove).toHaveBeenCalledWith("clerk_1", "n-1");
+  });
+
+  it("clearAll delegates to service", async () => {
+    const notificationsService = {
+      clearAll: vi.fn().mockResolvedValue(undefined),
+    };
+    const controller = new NotificationsController(notificationsService as never);
+
+    const req = { auth: { sub: "clerk_1" } } as never;
+    await controller.clearAll(req);
+
+    expect(notificationsService.clearAll).toHaveBeenCalledWith("clerk_1");
+  });
 });

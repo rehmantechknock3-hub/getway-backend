@@ -5,16 +5,20 @@ import { ReviewsService } from "./reviews.service";
 describe("ReviewsService", () => {
   const prisma = {
     user: { findUnique: vi.fn() },
+    providerProfile: { findFirst: vi.fn() },
     booking: { findFirst: vi.fn() },
     review: { findMany: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(),
+  };
+  const notificationsService = {
+    notifyProviderNewReview: vi.fn().mockResolvedValue(undefined),
   };
 
   let service: ReviewsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new ReviewsService(prisma as never);
+    service = new ReviewsService(prisma as never, notificationsService as never);
   });
 
   it("create rejects non-customers", async () => {
@@ -33,6 +37,7 @@ describe("ReviewsService", () => {
       providerId: "pp-1",
       status: "ACCEPTED",
       review: null,
+      service: { title: "Oil Change" },
     });
 
     await expect(service.create("clerk-1", { bookingId: "b-1", rating: 5 })).rejects.toMatchObject({
@@ -48,6 +53,7 @@ describe("ReviewsService", () => {
       providerId: "pp-1",
       status: "COMPLETED",
       review: { id: "r-0" },
+      service: { title: "Oil Change" },
     });
 
     await expect(service.create("clerk-1", { bookingId: "b-1", rating: 5 })).rejects.toMatchObject({
@@ -63,6 +69,7 @@ describe("ReviewsService", () => {
       providerId: "pp-1",
       status: "COMPLETED",
       review: null,
+      service: { title: "Oil Change" },
     });
 
     const createdAt = new Date();
@@ -90,6 +97,12 @@ describe("ReviewsService", () => {
     expect(result.id).toBe("r-1");
     expect(result.rating).toBe(5);
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(notificationsService.notifyProviderNewReview).toHaveBeenCalledWith({
+      providerProfileId: "pp-1",
+      bookingId: "b-1",
+      rating: 5,
+      serviceTitle: "Oil Change",
+    });
   });
 
   it("listForProvider rejects customers", async () => {
@@ -151,5 +164,43 @@ describe("ReviewsService", () => {
       serviceTitle: "Lawn care",
     });
     expect(result.total).toBe(1);
+  });
+
+  it("listForPublicProvider rejects unknown provider", async () => {
+    prisma.providerProfile.findFirst.mockResolvedValue(null);
+
+    await expect(service.listForPublicProvider("bad-provider", 1, 20)).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
+  it("listForPublicProvider returns paginated rows", async () => {
+    prisma.providerProfile.findFirst.mockResolvedValue({ id: "pp-1" });
+    const createdAt = new Date();
+    prisma.review.findMany.mockResolvedValue([
+      {
+        id: "r-1",
+        bookingId: "b-1",
+        rating: 4,
+        comment: "Good work",
+        createdAt,
+        booking: {
+          customer: { firstName: "A", lastName: "B" },
+          service: { title: "Oil change" },
+        },
+      },
+    ]);
+    prisma.review.count.mockResolvedValue(1);
+
+    const result = await service.listForPublicProvider("pp-1", 1, 10);
+
+    expect(result.total).toBe(1);
+    expect(result.data[0]).toMatchObject({
+      id: "r-1",
+      rating: 4,
+      customerFirstName: "A",
+      customerLastName: "B",
+      serviceTitle: "Oil change",
+    });
   });
 });

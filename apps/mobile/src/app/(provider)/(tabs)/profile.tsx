@@ -8,14 +8,15 @@ import { useRouter } from "expo-router";
 import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
 
 import { ProviderServiceCategoriesField } from "../../../components/ProviderServiceCategoriesField";
+import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 import { normalizeProviderServiceCategories } from "../../../utils/provider-onboarding";
 
 export default function ProviderProfileScreen() {
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { isLoaded, isSignedIn, signOut } = useAuth();
   const { user: clerkUser } = useUser();
-  const { data: me, isLoading } = useMe();
+  const { data: me } = useMe({ enabled: isLoaded && isSignedIn });
   const updateProfile = useUpdateProfile();
   const updateProviderOnboarding = useSubmitProviderOnboarding();
   const [firstName, setFirstName] = useState("");
@@ -87,14 +88,6 @@ export default function ProviderProfileScreen() {
     }
   }
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 bg-canvas items-center justify-center">
-        <ActivityIndicator color="#E8521A" />
-      </View>
-    );
-  }
-
   return (
     <ScrollView className="flex-1 bg-canvas px-5 pt-6" contentContainerStyle={{ paddingBottom: 28 }}>
       <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
@@ -107,7 +100,7 @@ export default function ProviderProfileScreen() {
       >
         <View className="flex-row items-center gap-3 flex-1">
           <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
-            <Ionicons name="calendar-outline" size={22} color="#E8521A" />
+            <Ionicons name="calendar-outline" size={22} color={appColors.primary[600]} />
           </View>
           <View className="flex-1 pr-2">
             <Text className="text-ink font-semibold text-base">View booking history</Text>
@@ -116,7 +109,7 @@ export default function ProviderProfileScreen() {
             </Text>
           </View>
         </View>
-        <Ionicons name="chevron-forward" size={22} color="#A8A29E" />
+        <Ionicons name="chevron-forward" size={22} color={appColors.ink.subtle} />
       </TouchableOpacity>
 
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-6">
@@ -156,10 +149,10 @@ export default function ProviderProfileScreen() {
           accessibilityLabel="View customer reviews"
         >
           <View className="flex-row items-center gap-2 flex-1">
-            <Ionicons name="star-outline" size={20} color="#E8521A" />
+            <Ionicons name="star-outline" size={20} color={appColors.primary[600]} />
             <Text className="text-ink font-semibold text-sm">Customer reviews</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#A8A29E" />
+          <Ionicons name="chevron-forward" size={20} color={appColors.ink.subtle} />
         </TouchableOpacity>
       </View>
 
@@ -203,7 +196,7 @@ export default function ProviderProfileScreen() {
         style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
       >
         {updateProfile.isPending ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={appColors.canvas.raised} />
         ) : (
           <Text className="text-white font-semibold">Save Profile</Text>
         )}
@@ -260,7 +253,7 @@ export default function ProviderProfileScreen() {
         style={{ opacity: updateProviderOnboarding.isPending ? 0.6 : 1 }}
       >
         {updateProviderOnboarding.isPending ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={appColors.canvas.raised} />
         ) : (
           <Text className="text-white font-semibold">Save Provider Details</Text>
         )}

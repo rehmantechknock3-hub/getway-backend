@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
 
+import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
 export default function ProfileScreen() {
@@ -151,7 +152,7 @@ export default function ProfileScreen() {
         >
           <View className="flex-row items-center gap-3 flex-1">
             <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
-              <Ionicons name="calendar-outline" size={22} color="#E8521A" />
+              <Ionicons name="calendar-outline" size={22} color={appColors.primary[600]} />
             </View>
             <View className="flex-1 pr-2">
               <Text className="text-ink font-semibold text-base">View booking history</Text>
@@ -160,7 +161,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={22} color="#A8A29E" />
+          <Ionicons name="chevron-forward" size={22} color={appColors.ink.subtle} />
         </TouchableOpacity>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
@@ -213,7 +214,7 @@ export default function ProfileScreen() {
             disabled={updateProfile.isPending}
             style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
           >
-            {updateProfile.isPending ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Save Profile</Text>}
+            {updateProfile.isPending ? <ActivityIndicator color={appColors.canvas.raised} /> : <Text className="text-white font-semibold">Save Profile</Text>}
           </TouchableOpacity>
         </View>
 
@@ -239,7 +240,7 @@ export default function ProfileScreen() {
                   <TextInput
                     className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2"
                     placeholder="Label (Home, Office)"
-                    placeholderTextColor="#A8A29E"
+                    placeholderTextColor={appColors.ink.subtle}
                     style={textInputBaselineStyle}
                     value={location.label}
                     onChangeText={(value) => updateLocation(index, "label", value)}
@@ -247,7 +248,7 @@ export default function ProfileScreen() {
                   <TextInput
                     className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2.5"
                     placeholder="Full address"
-                    placeholderTextColor="#A8A29E"
+                    placeholderTextColor={appColors.ink.subtle}
                     style={textInputBaselineStyle}
                     value={location.address}
                     onChangeText={(value) => updateLocation(index, "address", value)}
@@ -266,7 +267,7 @@ export default function ProfileScreen() {
             disabled={updateSavedLocations.isPending}
             style={{ opacity: updateSavedLocations.isPending ? 0.6 : 1 }}
           >
-            {updateSavedLocations.isPending ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-semibold">Save Locations</Text>}
+            {updateSavedLocations.isPending ? <ActivityIndicator color={appColors.canvas.raised} /> : <Text className="text-white font-semibold">Save Locations</Text>}
           </TouchableOpacity>
         </View>
 
@@ -282,7 +283,7 @@ export default function ProfileScreen() {
             value={primaryLocation}
             onChangeText={setPrimaryLocation}
             placeholder="e.g. California, USA"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
           />
 
@@ -292,7 +293,7 @@ export default function ProfileScreen() {
             value={carCompany}
             onChangeText={setCarCompany}
             placeholder="e.g. Toyota"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
           />
 
@@ -303,7 +304,7 @@ export default function ProfileScreen() {
             onChangeText={(value) => setCarModel(value.replace(/[^0-9]/g, ""))}
             keyboardType="number-pad"
             placeholder="e.g. 2020"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
           />
 
@@ -313,7 +314,7 @@ export default function ProfileScreen() {
             value={notes}
             onChangeText={setNotes}
             placeholder="Parking / access notes"
-            placeholderTextColor="#A8A29E"
+            placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
           />
 
@@ -324,7 +325,7 @@ export default function ProfileScreen() {
             style={{ opacity: updateCustomerOnboarding.isPending ? 0.6 : 1 }}
           >
             {updateCustomerOnboarding.isPending ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={appColors.canvas.raised} />
             ) : (
               <Text className="text-white font-semibold">Save Vehicle Preferences</Text>
             )}

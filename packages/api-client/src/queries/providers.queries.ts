@@ -1,6 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 
-import type { ProviderPublicDetail, ProviderPublicSummary, ProviderServiceOffer } from "@repo/schemas";
+import type {
+  ProviderPublicDetail,
+  ProviderPublicSummary,
+  ProviderReviewListResponse,
+  ProviderServiceOffer,
+} from "@repo/schemas";
 
 import { apiClient } from "../client";
 
@@ -12,6 +17,8 @@ export const providerKeys = {
     ["providers", "nearby", lat, lon, radius] as const,
   detail: (id: string) => ["providers", id] as const,
   services: (id: string) => ["providers", id, "services"] as const,
+  reviews: (id: string, page: number, limit: number) =>
+    ["providers", id, "reviews", page, limit] as const,
 };
 
 export type UsePublicProvidersOptions = {
@@ -79,6 +86,24 @@ export function useProviderServices(
     queryFn: async () => {
       const { data } = await apiClient.get<ProviderServiceOffer[]>(
         `/api/v1/providers/${providerId}/services`
+      );
+      return data;
+    },
+    enabled: (options?.enabled ?? true) && !!providerId,
+  });
+}
+
+export function useProviderPublicReviews(
+  providerId: string,
+  page = 1,
+  limit = 10,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: providerKeys.reviews(providerId, page, limit),
+    queryFn: async () => {
+      const { data } = await apiClient.get<ProviderReviewListResponse>(
+        `/api/v1/providers/${providerId}/reviews?page=${page}&limit=${limit}`
       );
       return data;
     },

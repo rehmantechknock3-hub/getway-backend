@@ -4,12 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type {
   CustomerOnboarding,
   ProviderOnboarding,
   SavedLocation,
+  UserRole,
   UpdateUserProfileInput,
 } from "@repo/schemas";
 import { safeParseProviderOnboardingJson } from "@repo/schemas";
@@ -217,7 +217,45 @@ export class UsersService {
   }
 
   async findById(id: string) {
-    return this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        clerkId: true,
+        role: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        avatarUrl: true,
+        savedLocations: true,
+        onboardingCompleted: true,
+        customerOnboarding: true,
+        providerOnboarding: true,
+        createdAt: true,
+        updatedAt: true,
+        providerProfile: {
+          select: {
+            id: true,
+            averageRating: true,
+            totalReviews: true,
+          },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException("User not found");
+
+    const { providerProfile, ...rest } = user;
+    return {
+      ...rest,
+      providerProfileId: providerProfile?.id,
+      providerMetrics: providerProfile
+        ? {
+            averageRating: providerProfile.averageRating,
+            totalReviews: providerProfile.totalReviews,
+          }
+        : undefined,
+    };
   }
 
   async updateProfile(clerkId: string, input: UpdateUserProfileInput) {

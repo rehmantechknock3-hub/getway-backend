@@ -25,6 +25,7 @@ import {
 } from "@repo/api-client";
 
 import { textInputBaselineStyle } from "../styles/text-input";
+import { appColors } from "../styles/colors";
 
 function apiErrorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("response" in error)) return undefined;
@@ -183,7 +184,7 @@ export function ProviderServiceForm(props: Props) {
   if (!props.enabled || catLoading) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center py-20">
-        <ActivityIndicator color="#E8521A" />
+        <ActivityIndicator color={appColors.primary[600]} />
       </View>
     );
   }
@@ -221,7 +222,7 @@ export function ProviderServiceForm(props: Props) {
           value={newCategoryName}
           onChangeText={setNewCategoryName}
           placeholder="e.g. Transmission service"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           onSubmitEditing={() => void handleCreateCategory()}
         />
         <TouchableOpacity
@@ -231,7 +232,7 @@ export function ProviderServiceForm(props: Props) {
           style={{ opacity: busy ? 0.6 : 1 }}
         >
           {createCategory.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={appColors.canvas.raised} />
           ) : (
             <Text className="text-white font-semibold">Create category</Text>
           )}
@@ -294,7 +295,7 @@ export function ProviderServiceForm(props: Props) {
                 accessibilityLabel={`Delete category ${c.name}`}
                 className="pr-2 pl-1 py-2 active:opacity-70"
               >
-                <Ionicons name="trash-outline" size={20} color="#9A3412" />
+                <Ionicons name="trash-outline" size={20} color={appColors.primary[800]} />
               </Pressable>
             </View>
           );
@@ -309,7 +310,7 @@ export function ProviderServiceForm(props: Props) {
           value={newCategoryName}
           onChangeText={setNewCategoryName}
           placeholder="New category name"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           onSubmitEditing={() => void handleCreateCategory()}
         />
         <TouchableOpacity
@@ -329,7 +330,7 @@ export function ProviderServiceForm(props: Props) {
         value={title}
         onChangeText={setTitle}
         placeholder="e.g. Full synthetic oil change"
-        placeholderTextColor="#A8A29E"
+        placeholderTextColor={appColors.ink.subtle}
       />
 
       <Text className="text-ink text-sm font-medium mb-2">Description (optional)</Text>
@@ -339,7 +340,7 @@ export function ProviderServiceForm(props: Props) {
         value={description}
         onChangeText={setDescription}
         placeholder="What customers get"
-        placeholderTextColor="#A8A29E"
+        placeholderTextColor={appColors.ink.subtle}
         multiline
       />
 
@@ -351,7 +352,7 @@ export function ProviderServiceForm(props: Props) {
         onChangeText={setPrice}
         keyboardType="decimal-pad"
         placeholder="49"
-        placeholderTextColor="#A8A29E"
+        placeholderTextColor={appColors.ink.subtle}
       />
 
       <Text className="text-ink text-sm font-medium mb-2">Duration (minutes)</Text>
@@ -362,7 +363,7 @@ export function ProviderServiceForm(props: Props) {
         onChangeText={setDuration}
         keyboardType="number-pad"
         placeholder="60"
-        placeholderTextColor="#A8A29E"
+        placeholderTextColor={appColors.ink.subtle}
       />
 
       {props.mode === "edit" ? (
@@ -384,7 +385,7 @@ export function ProviderServiceForm(props: Props) {
         style={{ opacity: busy ? 0.6 : 1 }}
       >
         {busy ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={appColors.canvas.raised} />
         ) : (
           <Text className="text-white font-semibold">{props.mode === "new" ? "Add service" : "Save changes"}</Text>
         )}

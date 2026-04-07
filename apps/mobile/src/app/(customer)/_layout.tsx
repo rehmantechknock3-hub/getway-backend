@@ -1,5 +1,7 @@
 import { Stack } from "expo-router";
 
+import { appColors } from "../../styles/colors";
+
 export default function CustomerLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -10,7 +12,7 @@ export default function CustomerLayout() {
           headerShown: true,
           title: "Provider",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -19,7 +21,16 @@ export default function CustomerLayout() {
           headerShown: true,
           title: "Book",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
+        }}
+      />
+      <Stack.Screen
+        name="provider/[id]/reviews"
+        options={{
+          headerShown: true,
+          title: "Reviews",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -28,7 +39,7 @@ export default function CustomerLayout() {
           headerShown: true,
           title: "Booking",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
@@ -37,7 +48,7 @@ export default function CustomerLayout() {
           headerShown: true,
           title: "Notifications",
           headerBackTitle: "Back",
-          headerTintColor: "#1C1917",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
     </Stack>

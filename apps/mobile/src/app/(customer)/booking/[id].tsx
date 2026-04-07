@@ -18,6 +18,7 @@ import { setAuthToken, useBooking, useCreateReview } from "@repo/api-client";
 import type { BookingWithReview } from "@repo/schemas";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
+import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
 function formatWhen(d: Date): string {
@@ -85,7 +86,7 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
               key={v}
               name={v <= submitted.rating ? "star" : "star-outline"}
               size={22}
-              color="#F59E0B"
+              color={appColors.semantic.warning}
             />
           ))}
         </View>
@@ -131,7 +132,7 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
             <Ionicons
               name={v <= rating ? "star" : "star-outline"}
               size={36}
-              color={v <= rating ? "#F59E0B" : "#A8A29E"}
+              color={v <= rating ? appColors.semantic.warning : appColors.ink.subtle}
             />
           </TouchableOpacity>
         ))}
@@ -142,7 +143,7 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
       <TextInput
         className="bg-canvas border border-ink-faint rounded-xl px-3 py-3 text-ink text-sm min-h-[88px]"
         placeholder="Share what went well or what could improve…"
-        placeholderTextColor="#A8A29E"
+        placeholderTextColor={appColors.ink.subtle}
         style={textInputBaselineStyle}
         multiline
         textAlignVertical="top"
@@ -237,7 +238,7 @@ export default function BookingDetailScreen() {
             </Text>
             <Text className="text-ink font-bold text-lg">{formatWhen(booking.scheduledAt)}</Text>
             <View className="flex-row items-start gap-2 mt-4">
-              <Ionicons name="location-outline" size={20} color="#78716C" />
+              <Ionicons name="location-outline" size={20} color={appColors.ink.muted} />
               <Text className="text-ink-soft text-sm flex-1 leading-5">{booking.address}</Text>
             </View>
             {booking.notes ? (

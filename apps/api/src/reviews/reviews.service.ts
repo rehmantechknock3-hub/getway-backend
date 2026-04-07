@@ -11,11 +11,15 @@ import type {
   Review as ReviewDto,
 } from "@repo/schemas";
 
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class ReviewsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationsService: NotificationsService
+  ) {}
 
   private toDto(row: {
     id: string;
@@ -42,7 +46,7 @@ export class ReviewsService {
 
     const booking = await this.prisma.booking.findFirst({
       where: { id: input.bookingId, customerId: user.id },
-      include: { review: true },
+      include: { review: true, service: { select: { title: true } } },
     });
     if (!booking) throw new NotFoundException("Booking not found");
     if (booking.status !== "COMPLETED") {
@@ -79,6 +83,15 @@ export class ReviewsService {
       return created;
     });
 
+    void this.notificationsService
+      .notifyProviderNewReview({
+        providerProfileId: booking.providerId,
+        bookingId: booking.id,
+        rating: review.rating,
+        serviceTitle: booking.service.title,
+      })
+      .catch(() => undefined);
+
     return this.toDto(review);
   }
 
@@ -106,6 +119,57 @@ export class ReviewsService {
 
     const where = { booking: { providerId: user.providerProfile.id } };
 
+    const [rows, total] = await Promise.all([
+      this.prisma.review.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: safeLimit,
+        include: {
+          booking: {
+            include: {
+              customer: { select: { firstName: true, lastName: true } },
+              service: { select: { title: true } },
+            },
+          },
+        },
+      }),
+      this.prisma.review.count({ where }),
+    ]);
+
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        bookingId: r.bookingId,
+        rating: r.rating,
+        comment: r.comment ?? undefined,
+        createdAt: r.createdAt,
+        customerFirstName: r.booking.customer.firstName,
+        customerLastName: r.booking.customer.lastName,
+        serviceTitle: r.booking.service.title,
+      })),
+      total,
+      page: safePage,
+      limit: safeLimit,
+    };
+  }
+
+  async listForPublicProvider(
+    providerProfileId: string,
+    page: number,
+    limit: number
+  ): Promise<ProviderReviewListResponse> {
+    const provider = await this.prisma.providerProfile.findFirst({
+      where: { id: providerProfileId },
+      select: { id: true },
+    });
+    if (!provider) throw new NotFoundException("Provider not found");
+
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(50, Math.max(1, limit));
+    const skip = (safePage - 1) * safeLimit;
+
+    const where = { booking: { providerId: providerProfileId } };
     const [rows, total] = await Promise.all([
       this.prisma.review.findMany({
         where,

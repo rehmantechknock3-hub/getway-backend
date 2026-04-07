@@ -125,6 +125,10 @@ export const UpdateOnboardingSchema = z.union([
   ProviderOnboardingInputSchema,
 ]);
 
+export const SetRoleSchema = z.object({
+  role: z.enum(["CUSTOMER", "PROVIDER"]),
+});
+
 export type User             = z.infer<typeof UserSchema>;
 export type CreateUserInput  = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput  = z.infer<typeof UpdateUserSchema>;
@@ -134,3 +138,4 @@ export type ProviderOnboarding = z.infer<typeof ProviderOnboardingSchema>;
 export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>;
 export type UpdateSavedLocationsInput = z.infer<typeof UpdateSavedLocationsSchema>;
 export type UpdateOnboardingInput = z.infer<typeof UpdateOnboardingSchema>;
+export type SetRoleInput = z.infer<typeof SetRoleSchema>;

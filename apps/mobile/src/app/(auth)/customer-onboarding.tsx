@@ -19,6 +19,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
 
+import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
 const CAR_COMPANIES = [
@@ -94,7 +95,7 @@ export default function CustomerOnboardingScreen() {
         <TextInput
           className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
           placeholder="e.g. California, USA"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           style={textInputBaselineStyle}
           value={primaryLocation}
           onChangeText={setPrimaryLocation}
@@ -116,7 +117,7 @@ export default function CustomerOnboardingScreen() {
         <TextInput
           className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
           placeholder="e.g. 2020"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           keyboardType="number-pad"
           style={textInputBaselineStyle}
           value={carModel}
@@ -127,7 +128,7 @@ export default function CustomerOnboardingScreen() {
         <TextInput
           className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-8"
           placeholder="Any parking or access notes"
-          placeholderTextColor="#A8A29E"
+          placeholderTextColor={appColors.ink.subtle}
           multiline
           numberOfLines={3}
           style={textInputBaselineStyle}
@@ -142,7 +143,7 @@ export default function CustomerOnboardingScreen() {
           style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
         >
           {submitOnboarding.isPending ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={appColors.canvas.raised} />
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}

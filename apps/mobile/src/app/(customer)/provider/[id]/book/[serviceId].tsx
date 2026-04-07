@@ -23,6 +23,7 @@ import {
   useProviderServices,
 } from "@repo/api-client";
 
+import { appColors } from "../../../../../styles/colors";
 import { textInputBaselineStyle } from "../../../../../styles/text-input";
 
 const DAY_OFFSETS = [1, 2, 3, 5, 7] as const;
@@ -33,7 +34,7 @@ const SLOT_LABELS = [
   { label: "Evening", hour: 18 },
 ] as const;
 
-const PLACEHOLDER_MUTED = "#A8A29E";
+const PLACEHOLDER_MUTED = appColors.ink.subtle;
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -388,9 +389,9 @@ export default function BookServiceScreen() {
             activeOpacity={0.85}
           >
             {locating ? (
-              <ActivityIndicator size="small" color="#E8521A" />
+              <ActivityIndicator size="small" color={appColors.primary[600]} />
             ) : (
-              <Ionicons name="navigate-outline" size={20} color="#E8521A" />
+              <Ionicons name="navigate-outline" size={20} color={appColors.primary[600]} />
             )}
             <Text className="text-primary-700 font-semibold text-sm">Use my location for map pin</Text>
           </TouchableOpacity>
@@ -416,7 +417,7 @@ export default function BookServiceScreen() {
               activeOpacity={0.9}
             >
               {createBooking.isPending ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={appColors.canvas.raised} />
               ) : (
                 <Text className="text-white font-bold text-base">Confirm booking</Text>
               )}

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Patch,
@@ -162,7 +163,19 @@ export class UsersController {
   }
 
   @Get(":id")
-  findOne(@Param("id") id: string) {
+  async findOne(@Param("id") id: string, @Req() req: Request) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    const authRole = req.auth?.public_metadata?.role ?? req.auth?.metadata?.role;
+    if (authRole !== "ADMIN") {
+      const me = await this.usersService.findByClerkId(clerkId);
+      if (!me) throw new BadRequestException("Authenticated user is not provisioned");
+      if (me.id !== id) {
+        throw new ForbiddenException("Cannot access other users' profiles");
+      }
+    }
+
     return this.usersService.findById(id);
   }
 }

@@ -1,72 +1,62 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
-import { setAuthToken, useProviderReviews } from "@repo/api-client";
-import { appColors } from "../../styles/colors";
+import { useProviderPublicReviews } from "@repo/api-client";
 
-function formatReviewDate(d: Date): string {
+import { appColors } from "../../../../styles/colors";
+
+const PAGE_SIZE = 10;
+
+function formatReviewDate(value: Date): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
-    d instanceof Date ? d : new Date(d)
+    value instanceof Date ? value : new Date(value)
   );
 }
 
-export default function ProviderReviewsScreen() {
+export default function CustomerProviderReviewsScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const providerId = typeof id === "string" ? id : id?.[0] ?? "";
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
-  const { data, isLoading, isError, refetch, isRefetching } = useProviderReviews(1, { enabled });
-
-  useFocusEffect(
-    useCallback(() => {
-      if (!enabled) return;
-      void refetch();
-    }, [enabled, refetch])
+  const { data, isLoading, isError, isFetching } = useProviderPublicReviews(
+    providerId,
+    page,
+    PAGE_SIZE,
+    { enabled: !!providerId }
   );
 
   const reviews = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+
+  const pageLabel = useMemo(() => `Page ${page} of ${totalPages}`, [page, totalPages]);
+
+  if (!providerId) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center px-6">
+        <Text className="text-ink-muted text-center">Missing provider.</Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
       className="flex-1 bg-canvas"
       contentContainerStyle={{
         paddingTop: 12,
-        paddingBottom: Math.max(insets.bottom + 24, 32),
         paddingHorizontal: 20,
+        paddingBottom: Math.max(insets.bottom + 24, 32),
       }}
-      refreshControl={
-        <RefreshControl refreshing={enabled && isRefetching} onRefresh={() => void refetch()} />
-      }
+      showsVerticalScrollIndicator={false}
     >
-      {!enabled || isLoading ? (
+      {isLoading ? (
         <View className="py-20 items-center">
           <ActivityIndicator color={appColors.primary[600]} />
         </View>
@@ -74,21 +64,21 @@ export default function ProviderReviewsScreen() {
         <View className="bg-canvas-raised rounded-3xl p-6 border border-ink-faint mt-4">
           <Text className="text-ink text-center font-medium mb-2">Could not load reviews</Text>
           <Text className="text-ink-muted text-sm text-center">
-            Pull to refresh, or confirm you are signed in as a provider and the API is running.
+            Please try again in a moment.
           </Text>
         </View>
       ) : reviews.length === 0 ? (
-        <View className="bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center mt-4">
+        <View className="bg-canvas-raised rounded-3xl p-8 border border-ink-faint items-center mt-4">
           <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
             <Ionicons name="star-outline" size={30} color={appColors.primary[600]} />
           </View>
           <Text className="text-ink font-bold text-lg text-center mb-2">No reviews yet</Text>
           <Text className="text-ink-muted text-sm text-center leading-5">
-            When customers complete jobs and leave feedback, their ratings and comments appear here.
+            Reviews from completed bookings will appear here.
           </Text>
         </View>
       ) : (
-        <View className="gap-3 mt-2">
+        <View className="gap-3 mt-1">
           {reviews.map((item) => {
             const customerName = `${item.customerFirstName} ${item.customerLastName}`.trim();
             return (
@@ -129,6 +119,36 @@ export default function ProviderReviewsScreen() {
           })}
         </View>
       )}
+
+      {total > PAGE_SIZE ? (
+        <View className="mt-5 flex-row items-center justify-between">
+          <TouchableOpacity
+            onPress={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={!canPrev || isFetching}
+            className={`px-4 py-2.5 rounded-xl border ${
+              canPrev ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised"
+            }`}
+          >
+            <Text className={canPrev ? "text-primary-700 font-semibold" : "text-ink-muted"}>
+              Previous
+            </Text>
+          </TouchableOpacity>
+
+          <Text className="text-ink-muted text-xs">{pageLabel}</Text>
+
+          <TouchableOpacity
+            onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={!canNext || isFetching}
+            className={`px-4 py-2.5 rounded-xl border ${
+              canNext ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised"
+            }`}
+          >
+            <Text className={canNext ? "text-primary-700 font-semibold" : "text-ink-muted"}>
+              Next
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }

@@ -12,15 +12,18 @@ vi.mock("svix", () => ({
 }));
 
 describe("WebhookController", () => {
-  const originalSecret = process.env["CLERK_WEBHOOK_SECRET"];
+  const configService = {
+    get: vi.fn(),
+  };
 
   beforeEach(() => {
-    process.env["CLERK_WEBHOOK_SECRET"] = "whsec_test";
+    configService.get.mockReset();
+    configService.get.mockReturnValue("whsec_test");
     verifyMock.mockReset();
   });
 
   afterEach(() => {
-    process.env["CLERK_WEBHOOK_SECRET"] = originalSecret;
+    vi.restoreAllMocks();
   });
 
   it("calls deleteByClerkId on user.deleted", async () => {
@@ -32,7 +35,7 @@ describe("WebhookController", () => {
       upsertFromClerk: vi.fn(),
       deleteByClerkId: vi.fn().mockResolvedValue({ deleted: true }),
     };
-    const controller = new WebhookController(usersService as never);
+    const controller = new WebhookController(usersService as never, configService as never);
 
     await controller.handleClerkWebhook(
       "msg_id",
@@ -46,8 +49,8 @@ describe("WebhookController", () => {
   });
 
   it("rejects when webhook secret is missing", async () => {
-    delete process.env["CLERK_WEBHOOK_SECRET"];
-    const controller = new WebhookController({} as never);
+    configService.get.mockReturnValue(undefined);
+    const controller = new WebhookController({} as never, configService as never);
 
     await expect(
       controller.handleClerkWebhook("i", "t", "s", { rawBody: Buffer.from("{}") } as never)
