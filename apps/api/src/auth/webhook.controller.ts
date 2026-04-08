@@ -7,6 +7,7 @@ import {
   HttpCode,
   BadRequestException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Webhook } from "svix";
 import type { Request } from "express";
 import { Public } from "./public.decorator";
@@ -19,16 +20,22 @@ interface ClerkWebhookEvent {
 
 export interface ClerkUserPayload {
   id: string;
-  email_addresses: Array<{ email_address: string }>;
-  first_name:      string | null;
-  last_name:       string | null;
-  image_url:       string | null;
-  public_metadata: { role?: string };
+  /** When set, email should be taken from the matching `email_addresses[].id`. */
+  primary_email_address_id?: string | null;
+  /** Omitted on some events (e.g. `user.deleted`). */
+  email_addresses?: Array<{ id?: string; email_address: string }>;
+  first_name?: string | null;
+  last_name?: string | null;
+  image_url?: string | null;
+  public_metadata?: { role?: string };
 }
 
 @Controller("webhooks")
 export class WebhookController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService
+  ) {}
 
   @Public()
   @Post("clerk")
@@ -39,7 +46,7 @@ export class WebhookController {
     @Headers("svix-signature") svixSignature: string,
     @Req() req: RawBodyRequest<Request>
   ) {
-    const secret = process.env["CLERK_WEBHOOK_SECRET"];
+    const secret = this.configService.get<string>("CLERK_WEBHOOK_SECRET");
     if (!secret) throw new BadRequestException("Webhook secret not configured");
 
     const wh      = new Webhook(secret);
@@ -61,6 +68,9 @@ export class WebhookController {
       case "user.created":
       case "user.updated":
         await this.usersService.upsertFromClerk(event.data);
+        break;
+      case "user.deleted":
+        await this.usersService.deleteByClerkId(event.data.id);
         break;
     }
 

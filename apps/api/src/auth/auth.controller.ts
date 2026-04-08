@@ -1,48 +1,71 @@
 import {
-  Controller,
-  Post,
-  Body,
-  Req,
   BadRequestException,
+  Controller,
+  Body,
+  ForbiddenException,
+  Post,
+  Req,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import type { Request } from "express";
 import { createClerkClient } from "@clerk/backend";
-import { UsersService } from "../users/users.service";
-import { z } from "zod";
+import { SetRoleSchema } from "@repo/schemas";
 
-const SetRoleSchema = z.object({
-  role: z.enum(["CUSTOMER", "PROVIDER"]),
-});
+import { PrismaService } from "../prisma/prisma.service";
+import { UsersService } from "../users/users.service";
 
 @Controller("auth")
 export class AuthController {
-  private readonly clerk = createClerkClient({
-    secretKey: process.env["CLERK_SECRET_KEY"],
-  });
+  private readonly clerk: ReturnType<typeof createClerkClient>;
 
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usersService: UsersService,
+    private readonly configService: ConfigService
+  ) {
+    this.clerk = createClerkClient({
+      secretKey: this.configService.get<string>("CLERK_SECRET_KEY"),
+    });
+  }
 
   @Post("set-role")
   async setRole(@Body() body: unknown, @Req() req: Request) {
-    const parsed = SetRoleSchema.safeParse(body);
-    if (!parsed.success) throw new BadRequestException("Invalid role");
+    let parsed: { role: "CUSTOMER" | "PROVIDER" };
+    try {
+      parsed = SetRoleSchema.parse(body);
+    } catch {
+      throw new BadRequestException("Invalid role");
+    }
 
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    const { role } = parsed.data;
+    const { role } = parsed;
 
-    await this.clerk.users.updateUserMetadata(clerkId, {
-      publicMetadata: { role },
+    const clerkUser = await this.prisma.$transaction(async (tx) => {
+      // Serialize role assignment attempts per user to avoid TOCTOU races.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${clerkId}))`;
+
+      const current = await this.clerk.users.getUser(clerkId);
+      const existingRole = current.publicMetadata?.role;
+      if (existingRole !== undefined && existingRole !== null) {
+        throw new ForbiddenException("Role is already set");
+      }
+
+      await this.clerk.users.updateUserMetadata(clerkId, {
+        publicMetadata: { role },
+      });
+
+      return current;
     });
 
-    // Fetch the full Clerk user so we can upsert with complete data.
-    // This handles the race condition where the user.created webhook hasn't
-    // fired yet and the DB row doesn't exist.
-    const clerkUser = await this.clerk.users.getUser(clerkId);
     const user = await this.usersService.upsertFromClerk({
-      id:              clerkUser.id,
-      email_addresses: clerkUser.emailAddresses.map((e) => ({ email_address: e.emailAddress })),
+      id: clerkUser.id,
+      primary_email_address_id: clerkUser.primaryEmailAddressId,
+      email_addresses: clerkUser.emailAddresses.map((e) => ({
+        id: e.id,
+        email_address: e.emailAddress,
+      })),
       first_name:      clerkUser.firstName,
       last_name:       clerkUser.lastName,
       image_url:       clerkUser.imageUrl,

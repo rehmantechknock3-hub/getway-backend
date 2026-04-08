@@ -1,51 +1,56 @@
-import { Tabs } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Stack } from "expo-router";
+
+import { appColors } from "../../styles/colors";
 
 export default function CustomerLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor:   "#E8521A",
-        tabBarInactiveTintColor: "#9ca3af",
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="(tabs)/home"
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(tabs)" />
+      <Stack.Screen
+        name="provider/[id]/index"
         options={{
-          title: "Discover",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          title: "Provider",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
-      <Tabs.Screen
-        name="(tabs)/bookings"
+      <Stack.Screen
+        name="provider/[id]/book/[serviceId]"
         options={{
-          title: "Bookings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          title: "Book",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
-      <Tabs.Screen
-        name="(tabs)/messages"
+      <Stack.Screen
+        name="provider/[id]/reviews"
         options={{
-          title: "Messages",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          title: "Reviews",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
-      <Tabs.Screen
-        name="(tabs)/profile"
+      <Stack.Screen
+        name="booking/[id]"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
-          ),
+          headerShown: true,
+          title: "Booking",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
-    </Tabs>
+      <Stack.Screen
+        name="notifications"
+        options={{
+          headerShown: true,
+          title: "Notifications",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
+        }}
+      />
+    </Stack>
   );
 }

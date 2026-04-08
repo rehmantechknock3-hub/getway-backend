@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "../client";
-import type { Booking, BookingListResponse } from "@repo/schemas";
+import type { BookingListResponse, BookingWithReview } from "@repo/schemas";
 
 export const bookingKeys = {
   all:    ()           => ["bookings"]           as const,
@@ -8,7 +8,10 @@ export const bookingKeys = {
   detail: (id: string) => ["bookings", id]       as const,
 };
 
-export function useBookings(page = 1) {
+export function useBookings(
+  page = 1,
+  options?: { enabled?: boolean }
+) {
   return useQuery({
     queryKey: bookingKeys.list(page),
     queryFn: async () => {
@@ -17,16 +20,18 @@ export function useBookings(page = 1) {
       );
       return data;
     },
+    enabled: options?.enabled ?? true,
   });
 }
 
-export function useBooking(id: string) {
+export function useBooking(id: string, options?: { enabled?: boolean }) {
+  const enabled = (options?.enabled ?? true) && !!id;
   return useQuery({
     queryKey: bookingKeys.detail(id),
     queryFn: async () => {
-      const { data } = await apiClient.get<Booking>(`/api/v1/bookings/${id}`);
+      const { data } = await apiClient.get<BookingWithReview>(`/api/v1/bookings/${id}`);
       return data;
     },
-    enabled: !!id,
+    enabled,
   });
 }

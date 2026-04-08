@@ -4,6 +4,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { Reflector } from "@nestjs/core";
 import { verifyToken } from "@clerk/backend";
 import type { Request } from "express";
@@ -11,7 +12,10 @@ import { IS_PUBLIC_KEY } from "./public.decorator";
 
 @Injectable()
 export class ClerkAuthGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private readonly configService: ConfigService
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
@@ -26,8 +30,10 @@ export class ClerkAuthGuard implements CanActivate {
     if (!token) throw new UnauthorizedException("No bearer token provided");
 
     try {
+      const secretKey = this.configService.get<string>("CLERK_SECRET_KEY");
+      if (!secretKey) throw new UnauthorizedException("Auth secret not configured");
       const payload = await verifyToken(token, {
-        secretKey: process.env["CLERK_SECRET_KEY"],
+        secretKey,
       });
       request.auth = payload;
       return true;

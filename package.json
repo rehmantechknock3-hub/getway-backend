@@ -4,6 +4,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
+    "prepare": "pnpm --filter @repo/schemas build",
     "setup:env": "bash scripts/setup-env.sh",
     "dev": "turbo run dev",
     "build": "turbo run build",

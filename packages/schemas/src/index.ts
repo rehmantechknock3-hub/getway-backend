@@ -4,8 +4,14 @@ export * from "./user.schema";
 // Provider & Services
 export * from "./provider.schema";
 
+// Favorites
+export * from "./favorite.schema";
+
 // Bookings & Reviews
 export * from "./booking.schema";
+
+// Notifications
+export * from "./notification.schema";
 
 // Payments
 export * from "./payment.schema";

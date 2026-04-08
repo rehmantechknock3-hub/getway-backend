@@ -3,6 +3,64 @@ import { z } from "zod";
 export const UserRole = z.enum(["CUSTOMER", "PROVIDER", "ADMIN"]);
 export type UserRole = z.infer<typeof UserRole>;
 
+export const SavedLocationSchema = z.object({
+  label: z.string().min(1),
+  address: z.string().min(1),
+});
+
+export const CustomerOnboardingSchema = z.object({
+  primaryLocation: z.string().min(1),
+  carCompany: z.string().min(1),
+  carModel: z.string().regex(/^\d+$/),
+  notes: z.string().max(300).optional(),
+});
+
+const providerOnboardingFields = {
+  experienceYears: z.number().int().min(0).max(60),
+  serviceArea: z.string().min(1),
+  hasTools: z.boolean(),
+  serviceDescription: z.string().min(1).max(500),
+  profilePhotoUrl: z.string().url().optional(),
+};
+
+/**
+ * Provider onboarding payload. Uses `serviceCategories` (1–12). Legacy rows with only
+ * `serviceCategory` (string) are normalized during parse.
+ */
+export const ProviderOnboardingSchema = z.preprocess((raw: unknown) => {
+  if (!raw || typeof raw !== "object" || raw === null) return raw;
+  const o = { ...(raw as Record<string, unknown>) };
+  const legacy = o["serviceCategory"];
+  const next = o["serviceCategories"];
+  if (typeof legacy === "string" && legacy.trim().length > 0 && !Array.isArray(next)) {
+    o["serviceCategories"] = [legacy.trim()];
+  }
+  if (typeof o["starterListingPrice"] === "number" && Number.isNaN(o["starterListingPrice"] as number)) {
+    delete o["starterListingPrice"];
+  }
+  if (
+    typeof o["starterListingDurationMinutes"] === "number" &&
+    Number.isNaN(o["starterListingDurationMinutes"] as number)
+  ) {
+    delete o["starterListingDurationMinutes"];
+  }
+  return o;
+}, z.object({
+  serviceCategories: z.array(z.string().min(1).max(80)).min(1).max(12),
+  /**
+   * When set, used for auto-created starter services (one per category).
+   * Omit to create draft rows (price/duration 0, inactive) until the provider completes them under My services.
+   */
+  starterListingPrice: z.number().positive().optional(),
+  starterListingDurationMinutes: z.number().int().positive().optional(),
+  ...providerOnboardingFields,
+}));
+
+/** Safe parse for JSON stored on User.providerOnboarding (API read paths). */
+export function safeParseProviderOnboardingJson(raw: unknown) {
+  return ProviderOnboardingSchema.safeParse(raw);
+}
+
 export const UserSchema = z.object({
   id:          z.string().uuid(),
   clerkId:     z.string(),
@@ -12,6 +70,16 @@ export const UserSchema = z.object({
   lastName:    z.string().min(1),
   phone:       z.string().optional(),
   avatarUrl:   z.string().url().optional(),
+  savedLocations: z.array(SavedLocationSchema).default([]),
+  onboardingCompleted: z.boolean().default(false),
+  customerOnboarding: CustomerOnboardingSchema.optional(),
+  providerOnboarding: ProviderOnboardingSchema.optional(),
+  /** Set when the user has a provider profile row (same id as in provider APIs). */
+  providerProfileId: z.string().uuid().optional(),
+  providerMetrics: z.object({
+    averageRating: z.number().min(0).max(5),
+    totalReviews: z.number().int().min(0),
+  }).optional(),
   createdAt:   z.coerce.date(),
   updatedAt:   z.coerce.date(),
 });
@@ -31,6 +99,43 @@ export const UpdateUserSchema = UserSchema.pick({
   avatarUrl:  true,
 }).partial();
 
+export const UpdateUserProfileSchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  email: z.string().email(),
+  phone: z.string().min(6).max(20),
+});
+
+export const UpdateSavedLocationsSchema = z.object({
+  savedLocations: z.array(SavedLocationSchema).max(10),
+});
+
+export const CustomerOnboardingInputSchema = z.object({
+  role: z.literal("CUSTOMER"),
+  data: CustomerOnboardingSchema,
+});
+
+export const ProviderOnboardingInputSchema = z.object({
+  role: z.literal("PROVIDER"),
+  data: ProviderOnboardingSchema,
+});
+
+export const UpdateOnboardingSchema = z.union([
+  CustomerOnboardingInputSchema,
+  ProviderOnboardingInputSchema,
+]);
+
+export const SetRoleSchema = z.object({
+  role: z.enum(["CUSTOMER", "PROVIDER"]),
+});
+
 export type User             = z.infer<typeof UserSchema>;
 export type CreateUserInput  = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput  = z.infer<typeof UpdateUserSchema>;
+export type SavedLocation = z.infer<typeof SavedLocationSchema>;
+export type CustomerOnboarding = z.infer<typeof CustomerOnboardingSchema>;
+export type ProviderOnboarding = z.infer<typeof ProviderOnboardingSchema>;
+export type UpdateUserProfileInput = z.infer<typeof UpdateUserProfileSchema>;
+export type UpdateSavedLocationsInput = z.infer<typeof UpdateSavedLocationsSchema>;
+export type UpdateOnboardingInput = z.infer<typeof UpdateOnboardingSchema>;
+export type SetRoleInput = z.infer<typeof SetRoleSchema>;

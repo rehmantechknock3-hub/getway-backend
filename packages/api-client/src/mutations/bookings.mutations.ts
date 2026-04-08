@@ -1,6 +1,10 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../client";
 import { bookingKeys } from "../queries/bookings.queries";
+import { favoriteKeys } from "../queries/favorites.queries";
+import { providerKeys } from "../queries/providers.queries";
+import { providerReviewKeys } from "../queries/provider-reviews.queries";
+import { userKeys } from "../queries/users.queries";
 import type {
   Booking,
   CreateBookingInput,
@@ -40,10 +44,19 @@ export function useUpdateBookingStatus(bookingId: string) {
 }
 
 export function useCreateReview() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CreateReviewInput) => {
       const { data } = await apiClient.post<Review>("/api/v1/reviews", input);
       return data;
+    },
+    onSuccess: (review) => {
+      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(review.bookingId) });
+      queryClient.invalidateQueries({ queryKey: bookingKeys.all() });
+      queryClient.invalidateQueries({ queryKey: providerKeys.all() });
+      queryClient.invalidateQueries({ queryKey: favoriteKeys.all() });
+      queryClient.invalidateQueries({ queryKey: providerReviewKeys.all() });
+      queryClient.invalidateQueries({ queryKey: userKeys.me() });
     },
   });
 }
