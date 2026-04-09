@@ -15,6 +15,8 @@ This file gives Claude context about the codebase so it can assist effectively w
 
 No other guideline files exist. `BEST_PRACTICES.md` is the single authority for import order, type conventions, styling rules, and testing standards.
 
+**IMPORTANT — After every PR:** Before finishing, ask the user whether `knowledge.md` needs updating. Any new ADR, dependency addition, API endpoint, or architectural decision made during the PR must be logged there. `knowledge.md` must never go stale.
+
 ---
 
 ## MANDATORY: Read Before Writing Any Code
