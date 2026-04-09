@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { ActivityIndicator, Alert, Image, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -14,6 +15,7 @@ import { normalizeProviderServiceCategories } from "../../../utils/provider-onbo
 
 export default function ProviderProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { isLoaded, isSignedIn, signOut } = useAuth();
   const { user: clerkUser } = useUser();
   const { data: me } = useMe({ enabled: isLoaded && isSignedIn });
@@ -89,7 +91,7 @@ export default function ProviderProfileScreen() {
   }
 
   return (
-    <ScrollView className="flex-1 bg-canvas px-5 pt-6" contentContainerStyle={{ paddingBottom: 28 }}>
+    <ScrollView className="flex-1 bg-canvas px-5" contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: Math.max(insets.bottom + 20, 32) }}>
       <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
 
       <TouchableOpacity
