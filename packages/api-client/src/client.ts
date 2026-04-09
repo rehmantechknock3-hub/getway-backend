@@ -1,5 +1,7 @@
 import axios from "axios";
 
+import { addBreadcrumb, randomUUID, reportError } from "@repo/utils";
+
 const defaultBaseUrl =
   process.env["EXPO_PUBLIC_API_URL"] ??
   process.env["NEXT_PUBLIC_API_URL"] ??
@@ -42,6 +44,57 @@ export function setAuthToken(token: string | null): void {
     delete apiClient.defaults.headers.common["Authorization"];
   }
 }
+
+// ── Request-ID interceptor ─────────────────────────────────────────────────
+// Attaches a unique X-Request-ID to every outgoing request so the backend can
+// correlate logs and the response echoes the same ID for Sentry breadcrumbs.
+
+apiClient.interceptors.request.use((config) => {
+  config.headers["X-Request-ID"] = randomUUID();
+  return config;
+});
+
+// ── Response interceptor ──────────────────────────────────────────────────
+// Records Sentry breadcrumbs on every response (success and failure) so
+// production issues carry a full API call timeline.
+
+apiClient.interceptors.response.use(
+  (response) => {
+    addBreadcrumb({
+      category: "api",
+      message: `${response.config.method?.toUpperCase()} ${response.config.url}`,
+      data: {
+        requestId: response.headers["x-request-id"] as string | undefined,
+        status: response.status,
+      },
+      level: "info",
+    });
+    return response;
+  },
+  (error: unknown) => {
+    if (axios.isAxiosError(error)) {
+      const requestId =
+        (error.config?.headers?.["X-Request-ID"] as string | undefined) ??
+        undefined;
+      reportError(error, {
+        action: "apiRequest",
+        extra: {
+          requestId,
+          url: error.config?.url,
+          method: error.config?.method?.toUpperCase(),
+          status: error.response?.status,
+        },
+      });
+      addBreadcrumb({
+        category: "api",
+        message: `${error.config?.method?.toUpperCase()} ${error.config?.url} FAILED`,
+        data: { requestId, status: error.response?.status },
+        level: "error",
+      });
+    }
+    return Promise.reject(error);
+  },
+);
 
 /** Standard API error shape from the NestJS backend. */
 export type ApiError = {

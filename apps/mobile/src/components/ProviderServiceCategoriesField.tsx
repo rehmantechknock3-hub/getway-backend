@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -46,6 +47,19 @@ export function ProviderServiceCategoriesField({
 }: ProviderServiceCategoriesFieldProps) {
   const [showModal, setShowModal] = useState(false);
   const [customName, setCustomName] = useState("");
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (showModal) {
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      overlayOpacity.setValue(0);
+    }
+  }, [showModal, overlayOpacity]);
 
   function addCustom() {
     const next = addCategoryName(value, customName, maxCategories);
@@ -121,7 +135,8 @@ export function ProviderServiceCategoriesField({
         animationType="slide"
         onRequestClose={() => setShowModal(false)}
       >
-        <Pressable className="flex-1 bg-black/30 justify-end" onPress={() => setShowModal(false)}>
+        <Animated.View className="flex-1 justify-end" style={{ backgroundColor: "rgba(0,0,0,0.3)", opacity: overlayOpacity }}>
+        <Pressable className="flex-1 justify-end" onPress={() => setShowModal(false)}>
           <Pressable className="bg-canvas rounded-t-3xl p-5 max-h-[70%]" onPress={() => undefined}>
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-ink text-lg font-semibold">Suggested categories</Text>
@@ -157,6 +172,7 @@ export function ProviderServiceCategoriesField({
             </TouchableOpacity>
           </Pressable>
         </Pressable>
+        </Animated.View>
       </Modal>
     </View>
   );

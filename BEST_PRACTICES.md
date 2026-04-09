@@ -192,16 +192,53 @@ describe('BookingsService', () => {
 - Use NestJS built-in exceptions: `NotFoundException`, `ForbiddenException`, `BadRequestException`, `ConflictException`, `UnauthorizedException`. Never throw raw `Error`.
 - Never swallow errors with empty `catch {}` blocks.
 - Log unexpected errors via NestJS `Logger` (injected per module) before re-throwing.
+- **Always include the Request-ID in log context.** The `RequestIdMiddleware` attaches `req.requestId` from the `X-Request-ID` header (or generates one). Use it in every service log call so backend traces can be correlated with mobile Sentry reports.
 
 ```ts
-// ✅
+// ✅ Service with Request-ID context
 private readonly logger = new Logger(BookingsService.name);
 
-async findOne(id: string) {
+async findOne(id: string, requestId?: string) {
   const booking = await this.prisma.booking.findUnique({ where: { id } });
-  if (!booking) throw new NotFoundException(`Booking ${id} not found`);
+  if (!booking) {
+    this.logger.warn(`Booking ${id} not found [rid:${requestId}]`);
+    throw new NotFoundException(`Booking ${id} not found`);
+  }
   return booking;
 }
+```
+
+- **External API / third-party calls inside services** must be wrapped in try-catch with contextual logging:
+
+```ts
+// ✅ Wrapping an external call in a service
+async verifyStripePayment(paymentIntentId: string, requestId?: string) {
+  try {
+    return await this.stripe.paymentIntents.retrieve(paymentIntentId);
+  } catch (error: unknown) {
+    this.logger.error(
+      `Stripe retrieve failed for ${paymentIntentId} [rid:${requestId}]`,
+      error instanceof Error ? error.stack : undefined,
+    );
+    throw new BadRequestException('Payment verification failed');
+  }
+}
+```
+
+### Request-ID Middleware
+
+The `RequestIdMiddleware` (`apps/api/src/common/request-id.middleware.ts`) must be applied globally in `AppModule`. It:
+1. Reads `X-Request-ID` from the incoming request header (the mobile/web client generates it)
+2. Falls back to a new UUID if none is present
+3. Attaches it to `req.requestId`
+4. Echoes it back in the response `X-Request-ID` header
+
+```ts
+// ❌ Service log without context — useless in production
+this.logger.error('Something failed');
+
+// ✅ Service log with Request-ID and entity context
+this.logger.error(`Failed to update booking ${id} [rid:${requestId}]`, error.stack);
 ```
 
 ---
@@ -252,3 +289,231 @@ async findOne(id: string) {
 - Zod schema validation at every system boundary (API input, webhook payload, external API response). Trust nothing from outside.
 - Keep components focused: if a file exceeds ~200 lines, consider splitting it.
 - Run `pnpm type-check` and `pnpm lint` locally before pushing. CI blocks on failures.
+
+---
+
+## 11. Mobile — Error Handling & User Feedback
+
+### The Boundary Rule
+
+Every user-facing async action handler (button press, form submit, pull-to-refresh callback) **must** have a top-level try-catch. This is the single most important error handling rule in the mobile app.
+
+```tsx
+// ✅ Correct — top-level boundary catches everything
+async function handleSubmitBooking() {
+  try {
+    await createBooking.mutateAsync(payload);
+    showToast('success', 'Booking confirmed');
+  } catch (error: unknown) {
+    reportError(error, { screen: 'BookingScreen', action: 'submitBooking' });
+    showToast('error', error instanceof Error ? error.message : 'Something went wrong');
+  }
+}
+
+// ❌ Wrong — no catch, spinner spins forever if promise rejects
+async function handleSubmitBooking() {
+  setLoading(true);
+  await createBooking.mutateAsync(payload);
+  setLoading(false);
+}
+
+// ❌ Wrong — catch swallows error silently
+async function handleSubmitBooking() {
+  try {
+    await createBooking.mutateAsync(payload);
+  } catch {
+    // "it's fine"
+  }
+}
+```
+
+### Toast vs Alert
+
+| Use | When |
+|---|---|
+| **Toast** (`showToast`) | Recoverable errors: network timeout, validation failure, "try again" scenarios. Also success confirmations. |
+| **Alert** (`Alert.alert`) | "Action required" only: session expired (must re-login), destructive confirmation ("Delete this booking?"), permission denied (must go to settings). |
+
+```tsx
+// ✅ Toast for a recoverable error
+showToast('error', 'Could not load services. Pull to retry.');
+
+// ✅ Alert for action required
+Alert.alert('Session Expired', 'Please sign in again.', [
+  { text: 'Sign In', onPress: () => signOut() },
+]);
+
+// ❌ Alert for a network error — user can't do anything with this modal
+Alert.alert('Error', 'Network request failed');
+```
+
+### Error Reporting Protocol
+
+Every catch block must call the `reportError` utility from `@repo/utils`. Never just `console.error`.
+
+```tsx
+import { reportError } from '@repo/utils';
+
+// reportError does:
+// - Production: Sentry.captureException with screen/action/userId context
+// - Development: structured console output → [ERROR] [Screen] [action] -> {message, code, stack}
+// - Always: returns void, never throws
+
+catch (error: unknown) {
+  reportError(error, {
+    screen: 'ProviderOnboarding',
+    action: 'submitOnboarding',
+    // userId is auto-attached from Sentry user context, no need to pass manually
+  });
+  showToast('error', 'Failed to save. Please try again.');
+}
+```
+
+### Loading State Safety
+
+If you set `setLoading(true)` before an async call, the `finally` block (or try-catch structure) **must** reset it. A stuck spinner is worse than showing an error.
+
+```tsx
+// ✅ Loading always resets
+async function handleSave() {
+  setLoading(true);
+  try {
+    await save.mutateAsync(data);
+    showToast('success', 'Saved');
+  } catch (error: unknown) {
+    reportError(error, { screen: 'Profile', action: 'save' });
+    showToast('error', 'Save failed');
+  } finally {
+    setLoading(false);
+  }
+}
+```
+
+---
+
+## 12. Third-Party SDK Wrappers — The "Safe SDK" Pattern
+
+### Why
+
+Some SDKs (Clerk, Stripe) have unreliable error contracts — TypeScript says they return `{ error }` but they actually `throw` internally. We discovered this with Clerk's `signIn.finalize()` throwing `Error("Cannot finalize sign-in without a created session.")` despite the type signature saying it returns `Promise<{ error: ClerkError | null }>`.
+
+### Rule
+
+**Never call a "dishonest" third-party SDK method directly from a UI component.** Wrap it in a utility that normalizes the error contract.
+
+Dishonest SDKs (known list — add to this as we discover more):
+- `@clerk/expo` — `signIn.password()`, `signIn.finalize()`, `signUp.password()`, `signUp.finalize()`, `signUp.verifications.*`
+- `@stripe/stripe-react-native` — payment sheet methods (TBD, verify when integrating in M4)
+
+### Pattern
+
+```ts
+// packages/utils/src/safe-sdk.ts
+
+/**
+ * Wraps a Clerk-style SDK call that claims to return { error } but may throw.
+ * Guarantees: returns { data, error } — never throws.
+ */
+export async function safeClerkCall<T>(
+  fn: () => Promise<{ error: T | null }>,
+): Promise<{ error: T | Error | null }> {
+  try {
+    return await fn();
+  } catch (thrown: unknown) {
+    return { error: thrown instanceof Error ? thrown : new Error(String(thrown)) };
+  }
+}
+```
+
+```tsx
+// ✅ Using the wrapper in a screen
+import { safeClerkCall } from '@repo/utils';
+
+async function handleSignIn() {
+  setLoading(true);
+  try {
+    const { error: pwError } = await safeClerkCall(() =>
+      signIn.password({ identifier: email.trim(), password }),
+    );
+    if (pwError) {
+      showToast('error', pwError.message ?? 'Sign in failed');
+      return;
+    }
+
+    const { error: finalError } = await safeClerkCall(() => signIn.finalize());
+    if (finalError) {
+      showToast('error', finalError.message ?? 'Failed to complete sign in');
+      return;
+    }
+  } catch (error: unknown) {
+    reportError(error, { screen: 'SignIn', action: 'signIn' });
+    showToast('error', 'Sign in failed. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+}
+```
+
+---
+
+## 13. Request-ID Correlation — End-to-End Tracing
+
+### The Flow
+
+```
+Mobile/Web (generates UUID) → X-Request-ID header → NestJS middleware → req.requestId
+                                                                       → response X-Request-ID
+                                                                       → Logger context
+                                                       Sentry breadcrumb ← response header
+```
+
+### Client Side (packages/api-client)
+
+The Axios request interceptor in `packages/api-client/src/client.ts` generates a UUID for every outgoing request and attaches it as `X-Request-ID`. The response interceptor reads it back and attaches to Sentry breadcrumbs.
+
+```ts
+// ✅ Required interceptor pattern in client.ts
+import { randomUUID } from '@repo/utils';
+
+apiClient.interceptors.request.use((config) => {
+  config.headers['X-Request-ID'] = randomUUID();
+  return config;
+});
+```
+
+### Server Side (apps/api)
+
+The `RequestIdMiddleware` extracts or generates the ID, attaches to `req`, and echoes it in the response. Applied globally via `AppModule.configure()`.
+
+### Sentry Integration
+
+On the mobile side, after each API response, the interceptor adds a Sentry breadcrumb:
+
+```ts
+apiClient.interceptors.response.use(
+  (response) => {
+    addBreadcrumb({
+      category: 'api',
+      message: `${response.config.method?.toUpperCase()} ${response.config.url}`,
+      data: { requestId: response.headers['x-request-id'], status: response.status },
+      level: 'info',
+    });
+    return response;
+  },
+  (error) => {
+    // Same breadcrumb for failures, with error details
+    reportError(error, {
+      action: 'apiRequest',
+      extra: { requestId: error.config?.headers?.['X-Request-ID'] },
+    });
+    return Promise.reject(error);
+  },
+);
+```
+
+### Debugging with Request-ID
+
+When a user reports an issue:
+1. Find the Sentry event → get the `requestId` from breadcrumbs
+2. Search backend logs for `[rid:<requestId>]`
+3. Full trace from button press → API call → database query → response

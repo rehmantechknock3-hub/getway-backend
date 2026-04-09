@@ -1,10 +1,12 @@
-import { Module }   from "@nestjs/common";
+import { type MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { CacheModule } from "@nestjs/cache-manager";
-import { ClerkAuthGuard } from "./auth/clerk.guard";
-import { RolesGuard }     from "./auth/roles.guard";
 import { ConfigModule } from "@nestjs/config";
-import { PrismaModule }        from "./prisma/prisma.module";
+
+import { ClerkAuthGuard }         from "./auth/clerk.guard";
+import { RolesGuard }             from "./auth/roles.guard";
+import { RequestIdMiddleware }    from "./common/request-id.middleware";
+import { PrismaModule }           from "./prisma/prisma.module";
 import { AuthModule }          from "./auth/auth.module";
 import { UsersModule }         from "./users/users.module";
 import { ProvidersModule }     from "./providers/providers.module";
@@ -44,4 +46,8 @@ import { ProviderServicesModule } from "./provider-services/provider-services.mo
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes("*");
+  }
+}

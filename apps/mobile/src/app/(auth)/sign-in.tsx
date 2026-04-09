@@ -27,21 +27,26 @@ export default function SignInScreen() {
 
     setLoading(true);
 
-    const { error: signInError } = await signIn.password({ identifier: email.trim(), password });
+    try {
+      const { error: signInError } = await signIn.password({ identifier: email.trim(), password });
 
-    if (signInError) {
+      if (signInError) {
+        setLoading(false);
+        Alert.alert("Error", signInError.message ?? "Sign in failed");
+        return;
+      }
+
+      const { error: finalError } = await signIn.finalize();
+
       setLoading(false);
-      Alert.alert("Error", signInError.message ?? "Sign in failed");
-      return;
-    }
 
-    const { error: finalError } = await signIn.finalize();
-
-    setLoading(false);
-
-    if (finalError) {
-      Alert.alert("Error", finalError.message ?? "Failed to complete sign in");
-      return;
+      if (finalError) {
+        Alert.alert("Error", finalError.message ?? "Failed to complete sign in");
+        return;
+      }
+    } catch (error: unknown) {
+      setLoading(false);
+      Alert.alert("Error", error instanceof Error ? error.message : "Sign in failed. Please try again.");
     }
 
     // RootNavigator in _layout.tsx detects isSignedIn and redirects to the correct tab

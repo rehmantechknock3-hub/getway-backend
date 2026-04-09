@@ -34,52 +34,62 @@ export default function SignUpScreen() {
 
     setLoading(true);
 
-    const { error: createError } = await signUp.password({
-      emailAddress: email.trim(),
-      password,
-      firstName:    firstName.trim(),
-      lastName:     lastName.trim(),
-    });
+    try {
+      const { error: createError } = await signUp.password({
+        emailAddress: email.trim(),
+        password,
+        firstName:    firstName.trim(),
+        lastName:     lastName.trim(),
+      });
 
-    if (createError) {
+      if (createError) {
+        setLoading(false);
+        Alert.alert("Error", createError.message ?? "Sign up failed");
+        return;
+      }
+
+      const { error: sendError } = await signUp.verifications.sendEmailCode();
+
       setLoading(false);
-      Alert.alert("Error", createError.message ?? "Sign up failed");
-      return;
+
+      if (sendError) {
+        Alert.alert("Error", sendError.message ?? "Failed to send verification email");
+        return;
+      }
+
+      setStep("verify");
+    } catch (error: unknown) {
+      setLoading(false);
+      Alert.alert("Error", error instanceof Error ? error.message : "Sign up failed. Please try again.");
     }
-
-    const { error: sendError } = await signUp.verifications.sendEmailCode();
-
-    setLoading(false);
-
-    if (sendError) {
-      Alert.alert("Error", sendError.message ?? "Failed to send verification email");
-      return;
-    }
-
-    setStep("verify");
   }
 
   async function handleVerify() {
     setLoading(true);
 
-    const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
+    try {
+      const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
 
-    if (verifyError) {
+      if (verifyError) {
+        setLoading(false);
+        Alert.alert("Error", verifyError.message ?? "Verification failed");
+        return;
+      }
+
+      const { error: finalError } = await signUp.finalize();
+
       setLoading(false);
-      Alert.alert("Error", verifyError.message ?? "Verification failed");
-      return;
+
+      if (finalError) {
+        Alert.alert("Error", finalError.message ?? "Failed to complete sign up");
+        return;
+      }
+
+      router.replace("/(auth)/role-select");
+    } catch (error: unknown) {
+      setLoading(false);
+      Alert.alert("Error", error instanceof Error ? error.message : "Verification failed. Please try again.");
     }
-
-    const { error: finalError } = await signUp.finalize();
-
-    setLoading(false);
-
-    if (finalError) {
-      Alert.alert("Error", finalError.message ?? "Failed to complete sign up");
-      return;
-    }
-
-    router.replace("/(auth)/role-select");
   }
 
   // Step indicator
