@@ -8,6 +8,7 @@ import {
   type ProviderServiceOffer,
 } from "@repo/schemas";
 
+import { GoogleMapsService, type DrivingDistanceResult } from "../maps/google-maps.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -40,9 +41,14 @@ type ServiceForSearch = {
   category: { name: string };
 };
 
+type ProviderLocation = { latitude: number; longitude: number };
+
 @Injectable()
 export class ProvidersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleMaps: GoogleMapsService
+  ) {}
 
   private parseOnboarding(raw: Prisma.JsonValue | null | undefined) {
     const parsed = safeParseProviderOnboardingJson(raw);
@@ -89,6 +95,20 @@ export class ProvidersService {
     };
   }
 
+  private extractProviderLocations(row: ProviderWithRelations): ProviderLocation[] {
+    const onboarding = this.parseOnboarding(row.user.providerOnboarding);
+    const locations: ProviderLocation[] = [];
+    for (const location of onboarding?.shopLocations ?? []) {
+      if (typeof location.latitude === "number" && typeof location.longitude === "number") {
+        locations.push({ latitude: location.latitude, longitude: location.longitude });
+      }
+    }
+    if (locations.length === 0 && row.latitude != null && row.longitude != null) {
+      locations.push({ latitude: row.latitude, longitude: row.longitude });
+    }
+    return locations;
+  }
+
   private toDetail(row: ProviderWithRelations): ProviderPublicDetail {
     const onboarding = this.parseOnboarding(row.user.providerOnboarding);
     const summary = this.toSummary(row);
@@ -103,7 +123,8 @@ export class ProvidersService {
   async listPublicSummaries(
     lat?: number,
     lon?: number,
-    radiusKm = 25
+    radiusKm = 25,
+    requestId?: string
   ): Promise<ProviderPublicSummary[]> {
     // List by provider_profiles row, not users.role. Role controls which app shell you see; someone may still
     // have completed provider onboarding (profile row) while role is CUSTOMER, and should remain discoverable.
@@ -127,21 +148,87 @@ export class ProvidersService {
       orderBy: { averageRating: "desc" },
     });
 
-    let summaries = rows.map((r) => this.toSummary(r));
+    const enrichedRows: ProviderWithRelations[] = [];
+    for (const row of rows) {
+      const enriched = await this.googleMaps.backfillProviderCoordinatesIfNeeded(row, requestId);
+      enrichedRows.push(enriched);
+    }
+
+    let summaries = enrichedRows.map((r) => this.toSummary(r));
 
     if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
-      const near: { summary: ProviderPublicSummary; distanceKm: number }[] = [];
-      const missingCoords: ProviderPublicSummary[] = [];
-      for (const s of summaries) {
-        if (s.latitude == null || s.longitude == null) {
-          missingCoords.push(s);
+      type NearEntry = {
+        summary: ProviderPublicSummary;
+        haversineKm: number;
+        destLat: number;
+        destLon: number;
+      };
+      const near: NearEntry[] = [];
+      for (const row of enrichedRows) {
+        const s = this.toSummary(row);
+        const locations = this.extractProviderLocations(row);
+        if (locations.length === 0) {
           continue;
         }
-        const d = distanceKm(lat, lon, s.latitude, s.longitude);
-        if (d <= radiusKm) near.push({ summary: s, distanceKm: d });
+        let best = { distance: Number.POSITIVE_INFINITY, lat: 0, lon: 0 };
+        for (const location of locations) {
+          const d = distanceKm(lat, lon, location.latitude, location.longitude);
+          if (d < best.distance) {
+            best = { distance: d, lat: location.latitude, lon: location.longitude };
+          }
+        }
+        // First gate: straight-line to nearest pin keeps the Matrix batch small. Final inclusion uses the same
+        // distance we show (driving when available), so radius matches the UI (Haversine can be < radius while
+        // road distance is not).
+        if (best.distance <= radiusKm) {
+          near.push({
+            summary: s,
+            haversineKm: best.distance,
+            destLat: best.lat,
+            destLon: best.lon,
+          });
+        }
       }
-      near.sort((a, b) => a.distanceKm - b.distanceKm);
-      summaries = [...near.map((x) => x.summary), ...missingCoords];
+
+      const drivingMap = await this.googleMaps.resolveDrivingDistances(
+        lat,
+        lon,
+        near.map((n) => ({
+          providerId: n.summary.id,
+          destLat: n.destLat,
+          destLon: n.destLon,
+          fallbackKm: n.haversineKm,
+        })),
+        requestId
+      );
+
+      const radiusMeters = radiusKm * 1000;
+      type Scored = { n: NearEntry; resolved: DrivingDistanceResult };
+      const scored: Scored[] = [];
+      for (const n of near) {
+        const fromMap = drivingMap.get(n.summary.id);
+        const haversineMeters = Math.max(0, Math.round(n.haversineKm * 1000));
+        const straightFallback: DrivingDistanceResult = {
+          km: haversineMeters / 1000,
+          meters: haversineMeters,
+          kind: "STRAIGHT_LINE",
+        };
+        const resolved = fromMap ?? straightFallback;
+        if (resolved.meters <= radiusMeters) {
+          scored.push({ n, resolved });
+        }
+      }
+
+      scored.sort((a, b) => a.resolved.km - b.resolved.km);
+
+      summaries = scored.map(({ n, resolved }) => ({
+        ...n.summary,
+        distanceKm: resolved.km,
+        distanceMeters: resolved.meters,
+        nearestLocationLatitude: n.destLat,
+        nearestLocationLongitude: n.destLon,
+        distanceKind: resolved.kind,
+      }));
     }
 
     return summaries;
@@ -223,5 +310,99 @@ export class ProvidersService {
     });
     const byId = new Map(rows.map((r) => [r.id, this.toSummary(r)]));
     return ids.map((id) => byId.get(id)).filter((s): s is ProviderPublicSummary => s != null);
+  }
+
+  /**
+   * Same distance semantics as geo `listPublicSummaries` (nearest shop + driving Matrix), preserving `ids` order.
+   * Used for favorites so Saved matches Discover for the same customer coordinates.
+   */
+  async findPublicSummariesByIdsWithDrivingDistances(
+    ids: string[],
+    lat: number,
+    lon: number,
+    requestId?: string
+  ): Promise<ProviderPublicSummary[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.providerProfile.findMany({
+      where: { id: { in: ids } },
+      include: this.providerSummaryInclude,
+    });
+    const enrichedRows: ProviderWithRelations[] = [];
+    for (const row of rows) {
+      enrichedRows.push(await this.googleMaps.backfillProviderCoordinatesIfNeeded(row, requestId));
+    }
+    const byId = new Map(enrichedRows.map((r) => [r.id, r]));
+
+    type NearEntry = {
+      summary: ProviderPublicSummary;
+      haversineKm: number;
+      destLat: number;
+      destLon: number;
+    };
+    const near: NearEntry[] = [];
+    for (const id of ids) {
+      const row = byId.get(id);
+      if (!row) continue;
+      const summary = this.toSummary(row);
+      const locations = this.extractProviderLocations(row);
+      if (locations.length === 0) continue;
+      let best = { distance: Number.POSITIVE_INFINITY, destLat: 0, destLon: 0 };
+      for (const location of locations) {
+        const d = distanceKm(lat, lon, location.latitude, location.longitude);
+        if (d < best.distance) {
+          best = { distance: d, destLat: location.latitude, destLon: location.longitude };
+        }
+      }
+      near.push({
+        summary,
+        haversineKm: best.distance,
+        destLat: best.destLat,
+        destLon: best.destLon,
+      });
+    }
+
+    const drivingMap =
+      near.length > 0
+        ? await this.googleMaps.resolveDrivingDistances(
+            lat,
+            lon,
+            near.map((n) => ({
+              providerId: n.summary.id,
+              destLat: n.destLat,
+              destLon: n.destLon,
+              fallbackKm: n.haversineKm,
+            })),
+            requestId
+          )
+        : new Map<string, DrivingDistanceResult>();
+
+    const withDistance = new Map<string, ProviderPublicSummary>();
+    for (const n of near) {
+      const fromMap = drivingMap.get(n.summary.id);
+      const haversineMeters = Math.max(0, Math.round(n.haversineKm * 1000));
+      const straightFallback: DrivingDistanceResult = {
+        km: haversineMeters / 1000,
+        meters: haversineMeters,
+        kind: "STRAIGHT_LINE",
+      };
+      const resolved = fromMap ?? straightFallback;
+      withDistance.set(n.summary.id, {
+        ...n.summary,
+        distanceKm: resolved.km,
+        distanceMeters: resolved.meters,
+        nearestLocationLatitude: n.destLat,
+        nearestLocationLongitude: n.destLon,
+        distanceKind: resolved.kind,
+      });
+    }
+
+    return ids
+      .map((id) => {
+        const hit = withDistance.get(id);
+        if (hit) return hit;
+        const row = byId.get(id);
+        return row ? this.toSummary(row) : undefined;
+      })
+      .filter((s): s is ProviderPublicSummary => s != null);
   }
 }

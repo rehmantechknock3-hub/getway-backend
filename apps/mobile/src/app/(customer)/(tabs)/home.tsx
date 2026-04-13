@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Alert,
+  Linking,
   View,
   Text,
   ScrollView,
@@ -25,6 +26,7 @@ import {
   getApiBaseUrl,
   setAuthToken,
   useFavoriteProviders,
+  useMe,
   useNotifications,
   usePublicProviders,
 } from "@repo/api-client";
@@ -40,6 +42,7 @@ const CATEGORIES = [
   { icon: "leaf", label: "Gardening" },
   { icon: "color-palette", label: "Painting" },
 ];
+const DISCOVERY_RADIUS_KM = 10;
 
 function formatQueryError(e: unknown): string {
   if (e == null) return "";
@@ -105,7 +108,51 @@ function formatStartingPrice(price: number | undefined): string {
   }).format(price);
 }
 
-function ProviderRow({ p }: { p: ProviderPublicSummary }) {
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const earthRadiusKm = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function formatDistance(distanceKm: number | undefined): string | null {
+  if (distanceKm == null || Number.isNaN(distanceKm)) return null;
+  if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m away`;
+  return `${distanceKm.toFixed(1)} km away`;
+}
+
+/** Prefer API `distanceMeters` (Google’s integer route length) so list matches Maps more closely. */
+function formatListedDistance(
+  p: ProviderPublicSummary,
+  customerCoords: { lat: number; lon: number } | null
+): string | null {
+  if (p.distanceMeters != null) {
+    const m = p.distanceMeters;
+    if (m < 1000) return `${m} m away`;
+    return `${(m / 1000).toFixed(1)} km away`;
+  }
+  if (p.distanceKm != null && !Number.isNaN(p.distanceKm)) {
+    return formatDistance(p.distanceKm);
+  }
+  if (customerCoords && p.latitude != null && p.longitude != null) {
+    return formatDistance(distanceKm(customerCoords.lat, customerCoords.lon, p.latitude, p.longitude));
+  }
+  return null;
+}
+
+function ProviderRow({
+  p,
+  customerCoords,
+}: {
+  p: ProviderPublicSummary;
+  customerCoords: { lat: number; lon: number } | null;
+}) {
   const displayName = `${p.firstName} ${p.lastName}`.trim();
   const serviceLine = p.serviceCategory ?? p.primaryServiceTitle ?? "Services";
   const initials = `${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`.toUpperCase();
@@ -113,12 +160,17 @@ function ProviderRow({ p }: { p: ProviderPublicSummary }) {
   const bookLabel = p.primaryServiceTitle
     ? `Book ${p.primaryServiceTitle}`
     : "Book service";
+  const distanceLabel = formatListedDistance(p, customerCoords);
 
   const openProfile = () => {
     router.push(`/(customer)/provider/${p.id}` as const);
   };
 
   const openBook = () => {
+    if (!p.isOnline) {
+      Alert.alert("Provider is offline", "This provider is currently offline. Please try again later.");
+      return;
+    }
     if (!p.primaryServiceId) {
       Alert.alert(
         "Booking isn’t available yet",
@@ -173,6 +225,12 @@ function ProviderRow({ p }: { p: ProviderPublicSummary }) {
                 </Text>
               </View>
             ) : null}
+            {distanceLabel ? (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="navigate-outline" size={12} color={appColors.primary[600]} />
+                <Text className="text-xs font-medium text-primary-700">{distanceLabel}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </TouchableOpacity>
@@ -214,23 +272,76 @@ export default function HomeScreen() {
   const [customerCoords, setCustomerCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [customerLocationReady, setCustomerLocationReady] = useState(false);
 
+  const refreshAuthToken = useCallback(async () => {
+    const token = await getToken();
+    setAuthToken(token);
+    setApiReady(Boolean(token));
+    return token;
+  }, [getToken]);
+
+  const refreshCustomerLocation = useCallback(async () => {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (perm.status !== Location.PermissionStatus.GRANTED) {
+      setCustomerCoords(null);
+      return;
+    }
+
+    try {
+      const precise = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Highest,
+      });
+      setCustomerCoords({
+        lat: precise.coords.latitude,
+        lon: precise.coords.longitude,
+      });
+      return;
+    } catch {
+      // Fallback when highest accuracy is temporarily unavailable.
+    }
+
+    const fallback = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+    setCustomerCoords({
+      lat: fallback.coords.latitude,
+      lon: fallback.coords.longitude,
+    });
+  }, []);
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
       setApiReady(false);
       return;
     }
     let cancelled = false;
-    void getToken().then((token) => {
+    void refreshAuthToken().then(() => {
       if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, refreshAuthToken]);
 
   const providersQueryEnabled = isLoaded && isSignedIn && apiReady;
+
+  const { data: me, refetch: refetchMe } = useMe({ enabled: providersQueryEnabled });
+
+  const discoveryCoords = useMemo(() => {
+    const primaryLat = me?.customerOnboarding?.primaryLatitude;
+    const primaryLon = me?.customerOnboarding?.primaryLongitude;
+    const hasPrimary =
+      typeof primaryLat === "number" &&
+      typeof primaryLon === "number" &&
+      Number.isFinite(primaryLat) &&
+      Number.isFinite(primaryLon);
+    if (hasPrimary) {
+      return { lat: primaryLat, lon: primaryLon };
+    }
+    if (customerCoords) {
+      return customerCoords;
+    }
+    return null;
+  }, [me?.customerOnboarding?.primaryLatitude, me?.customerOnboarding?.primaryLongitude, customerCoords]);
 
   const { data: notificationPayload, refetch: refetchNotifications } = useNotifications(1, {
     enabled: providersQueryEnabled,
@@ -238,8 +349,13 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (providersQueryEnabled) void refetchNotifications();
-    }, [providersQueryEnabled, refetchNotifications])
+      if (!providersQueryEnabled) return;
+      void (async () => {
+        await refreshAuthToken();
+        await refetchNotifications();
+        await refetchMe();
+      })();
+    }, [providersQueryEnabled, refetchNotifications, refreshAuthToken, refetchMe])
   );
 
   useEffect(() => {
@@ -248,22 +364,10 @@ export default function HomeScreen() {
     setCustomerLocationReady(false);
     void (async () => {
       try {
-        const perm = await Location.requestForegroundPermissionsAsync();
+        await refreshCustomerLocation();
         if (cancelled) return;
-        if (perm.status !== Location.PermissionStatus.GRANTED) {
-          setCustomerCoords(null);
-          return;
-        }
-        const pos = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
-        if (cancelled) return;
-        setCustomerCoords({
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-        });
       } catch {
-        if (!cancelled) setCustomerCoords(null);
+        // Keep last known location if a refresh attempt fails.
       } finally {
         if (!cancelled) setCustomerLocationReady(true);
       }
@@ -271,7 +375,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [providersQueryEnabled]);
+  }, [providersQueryEnabled, refreshCustomerLocation]);
   const {
     data: providers,
     isLoading,
@@ -279,8 +383,8 @@ export default function HomeScreen() {
     error: providersFetchError,
     refetch,
     isRefetching,
-  } = usePublicProviders(customerCoords?.lat, customerCoords?.lon, 25, {
-    enabled: providersQueryEnabled && feed === "discover" && customerLocationReady,
+  } = usePublicProviders(discoveryCoords?.lat, discoveryCoords?.lon, DISCOVERY_RADIUS_KM, {
+    enabled: providersQueryEnabled && feed === "discover" && !!discoveryCoords,
   });
   const {
     data: favoritesPayload,
@@ -289,7 +393,11 @@ export default function HomeScreen() {
     error: favoritesFetchError,
     refetch: refetchFavorites,
     isRefetching: favoritesRefetching,
-  } = useFavoriteProviders({ enabled: providersQueryEnabled && feed === "saved" });
+  } = useFavoriteProviders({
+    enabled: providersQueryEnabled && feed === "saved",
+    lat: discoveryCoords?.lat,
+    lon: discoveryCoords?.lon,
+  });
 
   const list = feed === "discover" ? providers : favoritesPayload?.data;
   const listLoading = feed === "discover" ? isLoading : favoritesLoading;
@@ -308,8 +416,23 @@ export default function HomeScreen() {
   }, [list, searchQuery, categoryFilter, onlineOnly, feed]);
 
   const onListRefresh = () => {
-    if (feed === "discover") void refetch();
-    else void refetchFavorites();
+    if (feed === "discover") {
+      void (async () => {
+        try {
+          await refreshAuthToken();
+          await refreshCustomerLocation();
+          await refetchMe();
+        } finally {
+          await refetch();
+        }
+      })();
+    }
+    else {
+      void (async () => {
+        await refreshAuthToken();
+        await refetchFavorites();
+      })();
+    }
   };
 
   const activeFetchError = feed === "discover" ? providersFetchError : favoritesFetchError;
@@ -499,11 +622,6 @@ export default function HomeScreen() {
             <Text className="text-lg font-bold text-ink">
               {feed === "discover" ? "Nearby providers" : "Saved providers"}
             </Text>
-            {feed === "discover" ? (
-              <TouchableOpacity>
-                <Text className="text-primary-600 text-sm font-medium">View map</Text>
-              </TouchableOpacity>
-            ) : null}
           </View>
 
           {!providersQueryEnabled || listLoading ? (
@@ -592,6 +710,23 @@ export default function HomeScreen() {
                 );
               })()}
             </View>
+          ) : feed === "discover" && !discoveryCoords ? (
+            <View className="bg-canvas-raised rounded-3xl p-8 border border-ink-faint items-center">
+              <Ionicons name="location-outline" size={36} color={appColors.ink.subtle} />
+              <Text className="text-ink font-bold text-lg text-center mt-3 mb-2">
+                Set where to search
+              </Text>
+              <Text className="text-ink-muted text-sm text-center leading-5 mb-5">
+                Turn on location access, or save a primary location under Profile (vehicle preferences). Discovery uses
+                your saved primary location when it is set, otherwise your current position.
+              </Text>
+              <TouchableOpacity
+                className="bg-primary-600 rounded-2xl px-5 py-3"
+                onPress={() => void Linking.openSettings()}
+              >
+                <Text className="text-white font-semibold text-sm">Open location settings</Text>
+              </TouchableOpacity>
+            </View>
           ) : !list?.length ? (
             <View className="bg-canvas-raised rounded-3xl p-8 border border-ink-faint items-center">
               {feed === "saved" ? (
@@ -640,7 +775,7 @@ export default function HomeScreen() {
           ) : (
             <View className="gap-3">
               {filteredList.map((p) => (
-                <ProviderRow key={p.id} p={p} />
+                <ProviderRow key={p.id} p={p} customerCoords={discoveryCoords} />
               ))}
             </View>
           )}

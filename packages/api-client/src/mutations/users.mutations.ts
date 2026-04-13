@@ -72,6 +72,7 @@ export function useUpdateAvatar() {
 }
 
 export function useSubmitCustomerOnboarding() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: CustomerOnboarding) => {
       const { data: response } = await apiClient.put<User>("/api/v1/users/me/onboarding", {
@@ -79,6 +80,10 @@ export function useSubmitCustomerOnboarding() {
         data,
       });
       return response;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
     },
   });
 }
@@ -115,6 +120,22 @@ export function useEnsureProviderListing() {
       void queryClient.invalidateQueries({ queryKey: userKeys.me() });
       void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
       void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
+    },
+  });
+}
+
+export function useUpdateProviderPresence() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (isOnline: boolean) => {
+      const { data } = await apiClient.patch<User>("/api/v1/users/me/provider/presence", {
+        isOnline,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
     },
   });
 }

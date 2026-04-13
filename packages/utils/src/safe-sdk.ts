@@ -24,7 +24,7 @@
  *   return;
  * }
  */
-export async function safeClerkCall<R extends { error: unknown }>(
+export async function safeClerkCall<R>(
   fn: () => Promise<R>,
 ): Promise<R | { error: Error }> {
   try {

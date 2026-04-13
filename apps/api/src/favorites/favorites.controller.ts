@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
 } from "@nestjs/common";
 import type { Request } from "express";
@@ -18,10 +19,28 @@ export class FavoritesController {
   constructor(private readonly favoritesService: FavoritesService) {}
 
   @Get()
-  async list(@Req() req: Request) {
+  async list(
+    @Req() req: Request,
+    @Query("lat") latRaw?: string,
+    @Query("lon") lonRaw?: string
+  ) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    return this.favoritesService.list(clerkId);
+    const lat = latRaw != null ? Number.parseFloat(latRaw) : undefined;
+    const lon = lonRaw != null ? Number.parseFloat(lonRaw) : undefined;
+    const hasGeo =
+      lat != null &&
+      lon != null &&
+      !Number.isNaN(lat) &&
+      !Number.isNaN(lon) &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lon);
+    return this.favoritesService.list(
+      clerkId,
+      hasGeo ? lat : undefined,
+      hasGeo ? lon : undefined,
+      req.requestId
+    );
   }
 
   @Post(":providerId")

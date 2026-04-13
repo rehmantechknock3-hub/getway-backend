@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { Request } from "express";
 
 import { ProvidersController } from "./providers.controller";
 import { ProvidersService } from "./providers.service";
@@ -18,8 +19,8 @@ describe("ProvidersController", () => {
 
   it("list passes parsed query to service", async () => {
     providersService.listPublicSummaries.mockResolvedValue([]);
-    await controller.list({ lat: "1", lon: "2", radius: "10" });
-    expect(providersService.listPublicSummaries).toHaveBeenCalledWith(1, 2, 10);
+    await controller.list({ lat: "1", lon: "2", radius: "10" }, { requestId: "rid-test" } as Request);
+    expect(providersService.listPublicSummaries).toHaveBeenCalledWith(1, 2, 10, "rid-test");
   });
 
   it("getOne returns provider detail", async () => {

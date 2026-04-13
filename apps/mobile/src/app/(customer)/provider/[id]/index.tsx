@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "@clerk/expo";
@@ -68,10 +69,28 @@ export default function ProviderDetailScreen() {
     return favoritesPayload.data.some((p) => p.id === providerId);
   }, [favoritesPayload?.data, providerId]);
 
-  const { data: provider, isLoading: loadingProvider, isError: errorProvider } =
-    useProvider(providerId);
-  const { data: services, isLoading: loadingServices } = useProviderServices(providerId);
-  const { data: providerReviews, isLoading: loadingReviews } = useProviderPublicReviews(providerId, 1, 3);
+  const {
+    data: provider,
+    isLoading: loadingProvider,
+    isError: errorProvider,
+    refetch: refetchProvider,
+  } = useProvider(providerId);
+  const { data: services, isLoading: loadingServices, refetch: refetchServices } =
+    useProviderServices(providerId);
+  const {
+    data: providerReviews,
+    isLoading: loadingReviews,
+    refetch: refetchProviderReviews,
+  } = useProviderPublicReviews(providerId, 1, 3);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerId) return;
+      void refetchProvider();
+      void refetchServices();
+      void refetchProviderReviews();
+    }, [providerId, refetchProvider, refetchServices, refetchProviderReviews])
+  );
 
   const initials = useMemo(() => {
     if (!provider) return "";
@@ -185,7 +204,12 @@ export default function ProviderDetailScreen() {
                     <View className="w-2 h-2 rounded-full bg-green-500" />
                     <Text className="text-green-700 text-xs font-medium">Online</Text>
                   </View>
-                ) : null}
+                ) : (
+                  <View className="flex-row items-center gap-1">
+                    <View className="w-2 h-2 rounded-full bg-ink-subtle" />
+                    <Text className="text-ink-subtle text-xs font-medium">Offline</Text>
+                  </View>
+                )}
               </View>
             </View>
           </View>
@@ -221,6 +245,17 @@ export default function ProviderDetailScreen() {
           Pick a service and time to book. The provider is notified in their Jobs tab.
         </Text>
 
+        {!provider.isOnline ? (
+          <View className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4">
+            <Text className="text-amber-900 text-sm font-semibold mb-1">Why booking isn&apos;t available</Text>
+            <Text className="text-amber-800 text-sm leading-5">
+              This provider&apos;s status is <Text className="font-semibold">Offline</Text>. New bookings can only be
+              started when they are <Text className="font-semibold">Online</Text> (they turn that on in the Provider
+              app). You can still view their profile and save them to favorites.
+            </Text>
+          </View>
+        ) : null}
+
         {loadingServices ? (
           <ActivityIndicator className="my-6" />
         ) : !services?.length ? (
@@ -250,14 +285,30 @@ export default function ProviderDetailScreen() {
                 </View>
                 <Text className="text-ink-subtle text-xs mt-2 mb-3">{s.duration} min</Text>
                 <TouchableOpacity
-                  activeOpacity={0.9}
-                  className="bg-primary-600 rounded-xl py-3 items-center"
+                  activeOpacity={provider.isOnline ? 0.9 : 1}
+                  disabled={!provider.isOnline}
+                  className={`rounded-xl py-3 items-center ${provider.isOnline ? "bg-primary-600" : "bg-ink-faint"}`}
                   onPress={() =>
                     router.push(`/(customer)/provider/${providerId}/book/${s.id}` as const)
                   }
+                  accessibilityState={{ disabled: !provider.isOnline }}
+                  accessibilityLabel={
+                    provider.isOnline
+                      ? `Book ${s.title}`
+                      : `${s.title} — booking unavailable because provider status is offline`
+                  }
                 >
-                  <Text className="text-white font-bold text-sm">Book this service</Text>
+                  <Text
+                    className={`font-bold text-sm ${provider.isOnline ? "text-white" : "text-ink-subtle"}`}
+                  >
+                    Book this service
+                  </Text>
                 </TouchableOpacity>
+                {!provider.isOnline ? (
+                  <Text className="text-ink-subtle text-xs text-center mt-2 leading-4">
+                    Disabled — provider status is Offline.
+                  </Text>
+                ) : null}
               </View>
             ))}
           </View>

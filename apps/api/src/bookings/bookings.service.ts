@@ -183,10 +183,19 @@ export class BookingsService {
 
     const service = await this.prisma.service.findFirst({
       where: { id: input.serviceId, isActive: true },
-      select: { id: true, providerId: true, price: true, title: true },
+      select: {
+        id: true,
+        providerId: true,
+        price: true,
+        title: true,
+        provider: { select: { isOnline: true } },
+      },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (!service.provider.isOnline) {
+      throw new ForbiddenException("Provider is offline");
     }
 
     const scheduledAt =
@@ -236,10 +245,18 @@ export class BookingsService {
 
     const service = await this.prisma.service.findFirst({
       where: { id: input.serviceId, isActive: true },
-      select: { id: true, providerId: true, price: true },
+      select: {
+        id: true,
+        providerId: true,
+        price: true,
+        provider: { select: { isOnline: true } },
+      },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (!service.provider.isOnline) {
+      throw new ForbiddenException("Provider is offline");
     }
 
     const scheduledAt =

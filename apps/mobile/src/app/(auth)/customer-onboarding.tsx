@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -18,7 +18,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import { fetchGoogleGeocodeLocation } from "@repo/utils";
 
+import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
@@ -48,6 +50,32 @@ export default function CustomerOnboardingScreen() {
   const [carModel, setCarModel] = useState("");
   const [notes, setNotes] = useState("");
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [previewLatitude, setPreviewLatitude] = useState<number | undefined>(undefined);
+  const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    const query = primaryLocation.trim();
+    if (!googleMapsApiKey || query.length < 3) {
+      setPreviewLatitude(undefined);
+      setPreviewLongitude(undefined);
+      setPreviewLoading(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPreviewLoading(true);
+      void (async () => {
+        const coords = await fetchGoogleGeocodeLocation(query, googleMapsApiKey);
+        setPreviewLatitude(coords?.latitude);
+        setPreviewLongitude(coords?.longitude);
+        setPreviewLoading(false);
+      })();
+    }, 450);
+
+    return () => clearTimeout(timeout);
+  }, [primaryLocation, googleMapsApiKey]);
 
   async function handleContinue() {
     if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
@@ -99,6 +127,18 @@ export default function CustomerOnboardingScreen() {
           style={textInputBaselineStyle}
           value={primaryLocation}
           onChangeText={setPrimaryLocation}
+        />
+        <LocationPreviewMap
+          title="Location preview"
+          description="Verify your service location is pinned correctly."
+          latitude={previewLatitude}
+          longitude={previewLongitude}
+          isLoading={previewLoading}
+          emptyMessage={
+            googleMapsApiKey
+              ? "Type at least 3 characters to preview your location."
+              : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview your location on map."
+          }
         />
 
         <Text className="text-ink text-sm font-medium mb-2">Car company</Text>

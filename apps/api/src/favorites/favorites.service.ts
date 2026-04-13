@@ -15,7 +15,12 @@ export class FavoritesService {
     private readonly providersService: ProvidersService,
   ) {}
 
-  async list(clerkId: string): Promise<FavoriteProviderListResponse> {
+  async list(
+    clerkId: string,
+    lat?: number,
+    lon?: number,
+    requestId?: string
+  ): Promise<FavoriteProviderListResponse> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
     if (!user) throw new NotFoundException("User not found");
     if (user.role !== "CUSTOMER") {
@@ -28,7 +33,16 @@ export class FavoritesService {
       select: { providerId: true },
     });
     const ids = links.map((l) => l.providerId);
-    const data = await this.providersService.findPublicSummariesByIds(ids);
+    const hasGeo =
+      lat != null && lon != null && Number.isFinite(lat) && Number.isFinite(lon);
+    const data = hasGeo
+      ? await this.providersService.findPublicSummariesByIdsWithDrivingDistances(
+          ids,
+          lat,
+          lon,
+          requestId
+        )
+      : await this.providersService.findPublicSummariesByIds(ids);
     return { data };
   }
 

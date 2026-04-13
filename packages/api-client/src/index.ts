@@ -1,5 +1,11 @@
 // HTTP client
-export { apiClient, getApiBaseUrl, setApiBaseUrl, setAuthToken } from "./client";
+export {
+  apiClient,
+  getApiBaseUrl,
+  setApiBaseUrl,
+  setAuthToken,
+  setAuthTokenResolver,
+} from "./client";
 export type { ApiError } from "./client";
 
 // Queries

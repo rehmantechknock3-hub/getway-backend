@@ -2,12 +2,15 @@ import { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, KeyboardAvoidingView, Platform,
-  Alert, StatusBar, ScrollView,
+  StatusBar, ScrollView,
 } from "react-native";
-import { useSignUp } from "@clerk/expo";
+import { useClerk, useSignUp } from "@clerk/expo";
 import { Link, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
+import { showToast } from "@repo/ui";
+import { reportError, safeClerkCall } from "@repo/utils";
 
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
@@ -16,6 +19,7 @@ type Step = "details" | "verify";
 
 export default function SignUpScreen() {
   const { signUp } = useSignUp();
+  const clerk = useClerk();
   const insets = useSafeAreaInsets();
 
   const [step,      setStep]      = useState<Step>("details");
@@ -28,67 +32,91 @@ export default function SignUpScreen() {
   const [showPw,    setShowPw]    = useState(false);
 
   async function handleCreate() {
-    if (!firstName.trim() || !lastName.trim()) return Alert.alert("Required", "Please enter your first and last name.");
-    if (!email.trim())                          return Alert.alert("Required", "Please enter your email address.");
-    if (password.length < 8)                    return Alert.alert("Required", "Password must be at least 8 characters.");
+    if (!firstName.trim() || !lastName.trim()) {
+      showToast("error", "Please enter your first and last name.");
+      return;
+    }
+    if (!email.trim()) {
+      showToast("error", "Please enter your email address.");
+      return;
+    }
+    if (password.length < 8) {
+      showToast("error", "Password must be at least 8 characters.");
+      return;
+    }
 
     setLoading(true);
-
     try {
-      const { error: createError } = await signUp.password({
-        emailAddress: email.trim(),
-        password,
-        firstName:    firstName.trim(),
-        lastName:     lastName.trim(),
-      });
-
-      if (createError) {
-        setLoading(false);
-        Alert.alert("Error", createError.message ?? "Sign up failed");
-        return;
+      const createResult = await safeClerkCall(() =>
+        signUp.password({
+          emailAddress: email.trim(),
+          password,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+        })
+      );
+      if ("error" in createResult && createResult.error) {
+        throw createResult.error;
       }
 
-      const { error: sendError } = await signUp.verifications.sendEmailCode();
-
-      setLoading(false);
-
-      if (sendError) {
-        Alert.alert("Error", sendError.message ?? "Failed to send verification email");
-        return;
+      const sendCodeResult = await safeClerkCall(() =>
+        signUp.verifications.sendEmailCode()
+      );
+      if ("error" in sendCodeResult && sendCodeResult.error) {
+        throw sendCodeResult.error;
       }
 
       setStep("verify");
     } catch (error: unknown) {
+      reportError(error, {
+        screen: "SignUpScreen",
+        action: "handleCreate",
+        extra: { identifier: email.trim() },
+      });
+      showToast("error", error instanceof Error ? error.message : "Sign up failed");
+    } finally {
       setLoading(false);
-      Alert.alert("Error", error instanceof Error ? error.message : "Sign up failed. Please try again.");
     }
   }
 
   async function handleVerify() {
     setLoading(true);
-
     try {
-      const { error: verifyError } = await signUp.verifications.verifyEmailCode({ code });
+      const verifyResult = await safeClerkCall(() =>
+        signUp.verifications.verifyEmailCode({ code })
+      );
+      if ("error" in verifyResult && verifyResult.error) {
+        throw verifyResult.error;
+      }
 
-      if (verifyError) {
-        setLoading(false);
-        Alert.alert("Error", verifyError.message ?? "Verification failed");
+      const createdSessionId = signUp.createdSessionId;
+      if (!createdSessionId) {
+        showToast("error", "Verification completed but session is unavailable.");
         return;
       }
 
-      const { error: finalError } = await signUp.finalize();
-
-      setLoading(false);
-
-      if (finalError) {
-        Alert.alert("Error", finalError.message ?? "Failed to complete sign up");
-        return;
+      const activateResult = await safeClerkCall(() =>
+        clerk.setActive({ session: createdSessionId })
+      );
+      if (
+        typeof activateResult === "object" &&
+        activateResult !== null &&
+        "error" in activateResult &&
+        activateResult.error
+      ) {
+        throw activateResult.error;
       }
 
       router.replace("/(auth)/role-select");
     } catch (error: unknown) {
+      reportError(error, {
+        screen: "SignUpScreen",
+        action: "handleVerify",
+        extra: { identifier: email.trim() },
+      });
+      showToast("error", error instanceof Error ? error.message : "Verification failed");
+    } finally {
       setLoading(false);
-      Alert.alert("Error", error instanceof Error ? error.message : "Verification failed. Please try again.");
     }
   }
 

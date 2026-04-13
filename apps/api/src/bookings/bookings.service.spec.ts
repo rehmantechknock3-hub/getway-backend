@@ -65,6 +65,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 99.5,
       title: "Test service",
+      provider: { isOnline: true },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -133,6 +134,7 @@ describe("BookingsService", () => {
       providerId: "pp-2",
       price: 50,
       title: "Other service",
+      provider: { isOnline: true },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -170,6 +172,31 @@ describe("BookingsService", () => {
       })
     );
     expect(result.customerId).toBe("cust-1");
+  });
+
+  it("create rejects booking when provider is offline", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "CUSTOMER",
+    });
+    prisma.service.findFirst.mockResolvedValue({
+      id: "svc-1",
+      providerId: "pp-1",
+      price: 90,
+      title: "Test service",
+      provider: { isOnline: false },
+    });
+
+    await expect(
+      service.create("clerk-1", {
+        serviceId: "svc-1",
+        scheduledAt: new Date("2026-05-01T10:00:00Z"),
+        address: "1 Main St",
+        latitude: 40.7,
+        longitude: -74,
+      })
+    ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.booking.create).not.toHaveBeenCalled();
   });
 
   it("listAll returns paginated bookings", async () => {

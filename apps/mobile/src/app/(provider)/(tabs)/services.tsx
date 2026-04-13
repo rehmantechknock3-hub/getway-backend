@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -17,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import {
   setAuthToken,
+  useDeleteProviderService,
   useEnsureProviderListing,
   useMe,
   useMyProviderServices,
@@ -47,6 +49,7 @@ export default function ProviderServicesScreen() {
   const [apiReady, setApiReady] = useState(false);
   const bootstrapListingRef = useRef(false);
   const ensureListing = useEnsureProviderListing();
+  const deleteService = useDeleteProviderService();
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
@@ -98,6 +101,28 @@ export default function ProviderServicesScreen() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot when empty list first loads
   }, [profileId, servicesQuery.isSuccess, servicesQuery.data?.length]);
+
+  function promptDeleteService(serviceId: string, serviceTitle: string) {
+    Alert.alert(
+      "Delete service?",
+      `Delete "${serviceTitle}" permanently? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void deleteService
+              .mutateAsync(serviceId)
+              .then(() => servicesQuery.refetch())
+              .catch(() => {
+                Alert.alert("Could not delete service", "Please try again.");
+              });
+          },
+        },
+      ]
+    );
+  }
 
   return (
     <View className="flex-1 bg-canvas">
@@ -189,15 +214,11 @@ export default function ProviderServicesScreen() {
             {servicesQuery.data.map((s) => {
               const incomplete = serviceNeedsPriceOrDuration(s);
               return (
-              <TouchableOpacity
+              <View
                 key={s.id}
-                activeOpacity={0.92}
                 className={`bg-canvas-raised rounded-2xl p-4 ${
                   incomplete ? "border-2 border-red-400" : "border border-ink-faint"
                 }`}
-                onPress={() => router.push(`/(provider)/service/${s.id}`)}
-                accessibilityRole="button"
-                accessibilityLabel={`Edit ${s.title}`}
               >
                 <View className="flex-row items-start justify-between gap-3">
                   <View className="flex-1 min-w-0">
@@ -235,11 +256,28 @@ export default function ProviderServicesScreen() {
                     </Text>
                   </View>
                 </View>
-                <View className="flex-row items-center justify-end gap-1 mt-2">
-                  <Text className="text-primary-600 text-xs font-semibold">Edit</Text>
-                  <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
+                <View className="flex-row items-center justify-end gap-3 mt-3">
+                  <TouchableOpacity
+                    className="flex-row items-center gap-1"
+                    onPress={() => router.push(`/(provider)/service/${s.id}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit ${s.title}`}
+                  >
+                    <Text className="text-primary-600 text-xs font-semibold">Edit</Text>
+                    <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-row items-center gap-1"
+                    onPress={() => promptDeleteService(s.id, s.title)}
+                    disabled={deleteService.isPending}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${s.title}`}
+                  >
+                    <Ionicons name="trash-outline" size={14} color={appColors.primary[700]} />
+                    <Text className="text-primary-700 text-xs font-semibold">Delete</Text>
+                  </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             );
             })}
           </View>

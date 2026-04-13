@@ -1,6 +1,14 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,11 +31,18 @@ export default function CustomerProviderReviewsScreen() {
   const insets = useSafeAreaInsets();
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError, isFetching } = useProviderPublicReviews(
+  const { data, isLoading, isError, isFetching, refetch, isRefetching } = useProviderPublicReviews(
     providerId,
     page,
     PAGE_SIZE,
     { enabled: !!providerId }
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!providerId) return;
+      void refetch();
+    }, [providerId, refetch])
   );
 
   const reviews = data?.data ?? [];
@@ -55,6 +70,9 @@ export default function CustomerProviderReviewsScreen() {
         paddingBottom: Math.max(insets.bottom + 24, 32),
       }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />
+      }
     >
       {isLoading ? (
         <View className="py-20 items-center">

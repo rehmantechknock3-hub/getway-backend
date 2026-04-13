@@ -27,7 +27,7 @@ describe("UsersController", () => {
     const controller = new UsersController(service as never);
 
     await controller.updateOnboarding(
-      { auth: { sub: "clerk_1" } } as never,
+      { auth: { sub: "clerk_1" }, requestId: "rid-cust" } as never,
       {
         role: "CUSTOMER",
         data: {
@@ -39,12 +39,16 @@ describe("UsersController", () => {
       }
     );
 
-    expect(service.updateCustomerOnboarding).toHaveBeenCalledWith("clerk_1", {
-      primaryLocation: "Johar Town",
-      carCompany: "Toyota",
-      carModel: "2020",
-      notes: "Underground parking",
-    });
+    expect(service.updateCustomerOnboarding).toHaveBeenCalledWith(
+      "clerk_1",
+      {
+        primaryLocation: "Johar Town",
+        carCompany: "Toyota",
+        carModel: "2020",
+        notes: "Underground parking",
+      },
+      "rid-cust"
+    );
     expect(service.updateProviderOnboarding).not.toHaveBeenCalled();
   });
 
@@ -56,7 +60,7 @@ describe("UsersController", () => {
     const controller = new UsersController(service as never);
 
     await controller.updateOnboarding(
-      { auth: { sub: "clerk_2" } } as never,
+      { auth: { sub: "clerk_2" }, requestId: "rid-prov" } as never,
       {
         role: "PROVIDER",
         data: {
@@ -65,6 +69,9 @@ describe("UsersController", () => {
           starterListingDurationMinutes: 90,
           experienceYears: 3,
           serviceArea: "DHA",
+          shopAddress: "DHA Main Market",
+          shopPlaceId: "place_abc1234567",
+          shopLocations: [{ address: "DHA Main Market", placeId: "place_abc1234567" }],
           hasTools: true,
           serviceDescription: "Interior and exterior detailing.",
           profilePhotoUrl: "https://example.com/photo.jpg",
@@ -78,6 +85,9 @@ describe("UsersController", () => {
       starterListingDurationMinutes: 90,
       experienceYears: 3,
       serviceArea: "DHA",
+      shopAddress: "DHA Main Market",
+      shopPlaceId: "place_abc1234567",
+      shopLocations: [{ address: "DHA Main Market", placeId: "place_abc1234567" }],
       hasTools: true,
       serviceDescription: "Interior and exterior detailing.",
       profilePhotoUrl: "https://example.com/photo.jpg",
@@ -112,8 +122,23 @@ describe("UsersController", () => {
     expect(service.updateAvatar).toHaveBeenCalledWith("clerk_avatar", "data:image/jpeg;base64,abc123");
   });
 
+  it("updates provider presence for authenticated provider", async () => {
+    const service = {
+      updateProviderPresence: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const controller = new UsersController(service as never);
+
+    await controller.updateProviderPresence(
+      { auth: { sub: "clerk_provider" } } as never,
+      { isOnline: true }
+    );
+
+    expect(service.updateProviderPresence).toHaveBeenCalledWith("clerk_provider", true);
+  });
+
   it("findOne allows admin to access any user id", async () => {
     const service = {
+      findByClerkId: vi.fn().mockResolvedValue({ id: "admin_user", role: "ADMIN" }),
       findById: vi.fn().mockResolvedValue({ id: "user_x" }),
     };
     const controller = new UsersController(service as never);
@@ -123,6 +148,7 @@ describe("UsersController", () => {
     } as never);
 
     expect(out).toEqual({ id: "user_x" });
+    expect(service.findByClerkId).toHaveBeenCalledWith("clerk_admin");
     expect(service.findById).toHaveBeenCalledWith("user_x");
   });
 

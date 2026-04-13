@@ -62,7 +62,7 @@ export function useNearbyProviders(lat: number, lon: number, radiusKm = 10) {
       );
       return data;
     },
-    enabled: !!lat && !!lon,
+    enabled: lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon),
   });
 }
 
@@ -108,5 +108,7 @@ export function useProviderPublicReviews(
       return data;
     },
     enabled: (options?.enabled ?? true) && !!providerId,
+    /** New reviews after completed bookings should show without waiting for global staleTime. */
+    staleTime: 0,
   });
 }

@@ -12,7 +12,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
-import { setAuthToken, useProviderReviews } from "@repo/api-client";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { setAuthToken, useProviderReviews, userKeys } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { reportError } from "@repo/utils";
+
 import { appColors } from "../../styles/colors";
 
 function formatReviewDate(d: Date): string {
@@ -23,6 +28,7 @@ function formatReviewDate(d: Date): string {
 
 export default function ProviderReviewsScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [apiReady, setApiReady] = useState(false);
 
@@ -32,11 +38,18 @@ export default function ProviderReviewsScreen() {
       return;
     }
     let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
+    void getToken()
+      .then((token) => {
+        if (cancelled) return;
+        setAuthToken(token);
+        setApiReady(true);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        reportError(error, { screen: "ProviderReviews", action: "getToken" });
+        showToast("error", "Could not verify your session. Try again.");
+        setApiReady(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -45,11 +58,27 @@ export default function ProviderReviewsScreen() {
   const enabled = isLoaded && isSignedIn && apiReady;
   const { data, isLoading, isError, refetch, isRefetching } = useProviderReviews(1, { enabled });
 
+  const refreshReviewsAndProfileMetrics = useCallback(async () => {
+    try {
+      const result = await refetch();
+      if (result.isError) {
+        const err = result.error ?? new Error("Failed to refresh reviews");
+        reportError(err, { screen: "ProviderReviews", action: "refreshReviewsAndProfileMetrics" });
+        showToast("error", "Could not refresh reviews. Pull to try again.");
+        return;
+      }
+      await queryClient.invalidateQueries({ queryKey: userKeys.me(), refetchType: "all" });
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderReviews", action: "refreshReviewsAndProfileMetrics" });
+      showToast("error", "Could not refresh reviews. Pull to try again.");
+    }
+  }, [queryClient, refetch]);
+
   useFocusEffect(
     useCallback(() => {
       if (!enabled) return;
-      void refetch();
-    }, [enabled, refetch])
+      void refreshReviewsAndProfileMetrics();
+    }, [enabled, refreshReviewsAndProfileMetrics])
   );
 
   const reviews = data?.data ?? [];
@@ -63,7 +92,10 @@ export default function ProviderReviewsScreen() {
         paddingHorizontal: 20,
       }}
       refreshControl={
-        <RefreshControl refreshing={enabled && isRefetching} onRefresh={() => void refetch()} />
+        <RefreshControl
+          refreshing={enabled && isRefetching}
+          onRefresh={() => void refreshReviewsAndProfileMetrics()}
+        />
       }
     >
       {!enabled || isLoading ? (

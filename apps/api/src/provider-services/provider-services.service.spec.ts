@@ -5,6 +5,15 @@ import { ProviderServicesService } from "./provider-services.service";
 const providerUser = {
   id: "u-1",
   role: "PROVIDER" as const,
+  providerOnboarding: {
+    serviceCategories: ["Car Detailing", "Oil Change"],
+    serviceArea: "Lahore",
+    shopAddress: "Lake City",
+    shopLocations: [{ address: "Lake City" }],
+    hasTools: true,
+    serviceDescription: "desc",
+    experienceYears: 4,
+  },
   providerProfile: {
     id: "pp-1",
     dismissedServiceCategoryIds: [] as string[],
@@ -19,12 +28,15 @@ describe("ProviderServicesService", () => {
   };
 
   const prisma = {
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), update: vi.fn() },
+    providerProfile: { update: vi.fn() },
     service: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
       count: vi.fn(),
     },
     serviceCategory: {
@@ -227,19 +239,28 @@ describe("ProviderServicesService", () => {
     );
   });
 
-  it("deleteCategory rejects when services still use the category", async () => {
+  it("deleteCategory removes provider services and dismisses shared category", async () => {
     prisma.user.findUnique.mockResolvedValue(providerUser);
     prisma.serviceCategory.findUnique.mockResolvedValue({
       id: "c-1",
-      name: "X",
+      name: "Car Detailing",
       icon: "i",
       description: null,
-      providerId: "pp-1",
+      providerId: null,
     });
-    prisma.service.count.mockResolvedValue(2);
+    prisma.service.deleteMany.mockResolvedValue({ count: 1 });
+    prisma.providerProfile.update.mockResolvedValue({});
 
-    await expect(service.deleteCategory("clerk-p", "c-1")).rejects.toMatchObject({ status: 409 });
+    await service.deleteCategory("clerk-p", "c-1");
 
+    expect(prisma.service.deleteMany).toHaveBeenCalledWith({
+      where: { providerId: "pp-1", categoryId: "c-1" },
+    });
+    expect(prisma.providerProfile.update).toHaveBeenCalledWith({
+      where: { id: "pp-1" },
+      data: { dismissedServiceCategoryIds: ["c-1"] },
+    });
+    expect(prisma.user.update).toHaveBeenCalled();
     expect(prisma.serviceCategory.delete).not.toHaveBeenCalled();
   });
 
@@ -262,12 +283,12 @@ describe("ProviderServicesService", () => {
     prisma.user.findUnique.mockResolvedValue(providerUser);
     prisma.serviceCategory.findUnique.mockResolvedValue({
       id: "c-orphan",
-      name: "Typo",
+      name: "Car Detailing",
       icon: "i",
       description: null,
       providerId: "pp-1",
     });
-    prisma.service.count.mockResolvedValue(0);
+    prisma.service.deleteMany.mockResolvedValue({ count: 0 });
     prisma.serviceCategory.delete.mockResolvedValue({
       id: "c-orphan",
       name: "Typo",
@@ -279,6 +300,7 @@ describe("ProviderServicesService", () => {
     await service.deleteCategory("clerk-p", "c-orphan");
 
     expect(prisma.serviceCategory.delete).toHaveBeenCalledWith({ where: { id: "c-orphan" } });
+    expect(prisma.user.update).toHaveBeenCalled();
   });
 
   it("update returns unchanged row when payload empty", async () => {
@@ -300,5 +322,55 @@ describe("ProviderServicesService", () => {
 
     expect(result.title).toBe("T");
     expect(prisma.service.update).not.toHaveBeenCalled();
+  });
+
+  it("remove deletes service for provider and clears caches", async () => {
+    prisma.user.findUnique.mockResolvedValue(providerUser);
+    prisma.service.findFirst.mockResolvedValue({ id: "s-1", categoryId: "c-own" });
+    prisma.service.delete.mockResolvedValue({ id: "s-1" });
+    prisma.service.count.mockResolvedValue(0);
+    prisma.serviceCategory.findUnique.mockResolvedValue({
+      id: "c-own",
+      providerId: "pp-1",
+      name: "Car Detailing",
+    });
+    prisma.serviceCategory.delete.mockResolvedValue({ id: "c-own" });
+
+    await service.remove("clerk-p", "s-1");
+
+    expect(prisma.service.delete).toHaveBeenCalledWith({ where: { id: "s-1" } });
+    expect(prisma.serviceCategory.delete).toHaveBeenCalledWith({ where: { id: "c-own" } });
+    expect(prisma.user.update).toHaveBeenCalled();
+    expect(cache.del).toHaveBeenCalledWith("svc:mine:clerk-p");
+    expect(cache.del).toHaveBeenCalledWith("gn:srv-categories:v2:clerk-p");
+  });
+
+  it("remove dismisses shared category when deleted service was the last one", async () => {
+    prisma.user.findUnique.mockResolvedValue(providerUser);
+    prisma.service.findFirst.mockResolvedValue({ id: "s-1", categoryId: "c-shared" });
+    prisma.service.delete.mockResolvedValue({ id: "s-1" });
+    prisma.service.count.mockResolvedValue(0);
+    prisma.serviceCategory.findUnique.mockResolvedValue({
+      id: "c-shared",
+      providerId: null,
+      name: "Oil Change",
+    });
+    prisma.providerProfile.update.mockResolvedValue({});
+
+    await service.remove("clerk-p", "s-1");
+
+    expect(prisma.providerProfile.update).toHaveBeenCalledWith({
+      where: { id: "pp-1" },
+      data: { dismissedServiceCategoryIds: ["c-shared"] },
+    });
+    expect(prisma.user.update).toHaveBeenCalled();
+  });
+
+  it("remove rejects when service is not owned by provider", async () => {
+    prisma.user.findUnique.mockResolvedValue(providerUser);
+    prisma.service.findFirst.mockResolvedValue(null);
+
+    await expect(service.remove("clerk-p", "missing")).rejects.toMatchObject({ status: 404 });
+    expect(prisma.service.delete).not.toHaveBeenCalled();
   });
 });

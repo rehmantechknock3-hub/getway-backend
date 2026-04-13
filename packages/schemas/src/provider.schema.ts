@@ -76,6 +76,19 @@ export const ProviderPublicSummarySchema = z.object({
   verificationStatus: VerificationStatus,
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  /**
+   * Driving distance in km (Google Distance Matrix, cached) from the customer to the nearest listed
+   * service location when the list request includes lat/lon. Falls back to straight-line km when routing
+   * is unavailable. Prefer `distanceMeters` for display (integer from Google; avoids rounding error).
+   */
+  distanceKm: z.number().nonnegative().optional(),
+  /** Integer metres along the road when `distanceKind === "DRIVING"`; rounded Haversine when straight-line. */
+  distanceMeters: z.number().int().nonnegative().optional(),
+  /** Nearest shop / pin used for routing; geo list `radius` uses the same resolved distance as the UI (driving when available). */
+  nearestLocationLatitude: z.number().optional(),
+  nearestLocationLongitude: z.number().optional(),
+  /** DRIVING = `distanceKm` from Distance Matrix. STRAIGHT_LINE = Haversine fallback. */
+  distanceKind: z.enum(["DRIVING", "STRAIGHT_LINE"]).optional(),
   startingPrice: z.number().optional(),
   primaryServiceTitle: z.string().optional(),
   /** Cheapest active service id (same ordering as startingPrice / primaryServiceTitle). */

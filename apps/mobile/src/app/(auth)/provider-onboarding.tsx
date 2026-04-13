@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -17,7 +17,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import {
+  enrichShopLocationsWithCoordinates,
+  fetchGoogleGeocodeLocation,
+  fetchGooglePlaceDetailsLocation,
+  reportError,
+} from "@repo/utils";
 
+import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { ProviderServiceCategoriesField } from "../../components/ProviderServiceCategoriesField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
@@ -29,13 +37,113 @@ export default function ProviderOnboardingScreen() {
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [experienceYears, setExperienceYears] = useState("0");
   const [serviceArea, setServiceArea] = useState("");
+  const [shopAddress, setShopAddress] = useState("");
+  const [shopPlaceId, setShopPlaceId] = useState<string | undefined>(undefined);
+  const [shopLocations, setShopLocations] = useState<
+    Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>
+  >([]);
+  const [placeSuggestions, setPlaceSuggestions] = useState<
+    Array<{ description: string; placeId: string }>
+  >([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [previewLatitude, setPreviewLatitude] = useState<number | undefined>(undefined);
+  const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [hasTools, setHasTools] = useState(true);
   const [serviceDescription, setServiceDescription] = useState("");
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  useEffect(() => {
+    const q = shopAddress.trim();
+    if (!googleMapsApiKey || q.length < 3) {
+      setPlaceSuggestions([]);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPlacesLoading(true);
+      void (async () => {
+        try {
+          const url =
+            "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
+            `?input=${encodeURIComponent(q)}` +
+            "&types=establishment" +
+            `&key=${encodeURIComponent(googleMapsApiKey)}`;
+          const res = await fetch(url);
+          const json = (await res.json()) as {
+            status?: string;
+            predictions?: Array<{ description?: string; place_id?: string }>;
+          };
+          if (json.status !== "OK" || !Array.isArray(json.predictions)) {
+            setPlaceSuggestions([]);
+            return;
+          }
+          setPlaceSuggestions(
+            json.predictions
+              .filter(
+                (item): item is { description: string; place_id: string } =>
+                  typeof item.description === "string" && typeof item.place_id === "string"
+              )
+              .slice(0, 5)
+              .map((item) => ({ description: item.description, placeId: item.place_id }))
+          );
+        } catch {
+          setPlaceSuggestions([]);
+        } finally {
+          setPlacesLoading(false);
+        }
+      })();
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [shopAddress, googleMapsApiKey]);
+
+  useEffect(() => {
+    const query = shopAddress.trim();
+    if (!googleMapsApiKey || query.length < 3) {
+      setPreviewLatitude(undefined);
+      setPreviewLongitude(undefined);
+      setPreviewLoading(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPreviewLoading(true);
+      void (async () => {
+        let coords =
+          shopPlaceId != null
+            ? await fetchGooglePlaceDetailsLocation(shopPlaceId, googleMapsApiKey)
+            : null;
+        if (!coords) {
+          coords = await fetchGoogleGeocodeLocation(query, googleMapsApiKey);
+        }
+        setPreviewLatitude(coords?.latitude);
+        setPreviewLongitude(coords?.longitude);
+        setPreviewLoading(false);
+      })();
+    }, 450);
+
+    return () => clearTimeout(timeout);
+  }, [shopAddress, shopPlaceId, googleMapsApiKey]);
 
   async function handleContinue() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
-    if (serviceCategories.length === 0 || !serviceArea.trim() || !serviceDescription.trim()) {
-      Alert.alert("Required", "Pick at least one category, and fill service area and description.");
+    const pendingAddress = shopAddress.trim();
+    const normalizedLocations =
+      pendingAddress.length > 0 &&
+      !shopLocations.some((location) => location.address.toLowerCase() === pendingAddress.toLowerCase())
+        ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
+        : shopLocations;
+    if (
+      serviceCategories.length === 0 ||
+      !serviceArea.trim() ||
+      normalizedLocations.length === 0 ||
+      !serviceDescription.trim()
+    ) {
+      Alert.alert(
+        "Required",
+        "Pick categories, add at least one shop location, and complete service details."
+      );
       return;
     }
     if (Number.isNaN(parsedExperience) || parsedExperience < 0) {
@@ -44,10 +152,32 @@ export default function ProviderOnboardingScreen() {
     }
 
     try {
+      let locationsToSave = normalizedLocations;
+      if (googleMapsApiKey) {
+        locationsToSave = await enrichShopLocationsWithCoordinates(normalizedLocations, googleMapsApiKey);
+        const anyMissing = locationsToSave.some(
+          (location) => typeof location.latitude !== "number" || typeof location.longitude !== "number"
+        );
+        if (anyMissing) {
+          reportError(new Error("Provider onboarding: shop coordinates missing after enrichment"), {
+            screen: "ProviderOnboarding",
+            action: "handleContinue",
+          });
+          showToast(
+            "error",
+            "Could not pin your shop on the map. Pick an address from the suggestions, or enable Places + Geocoding for your Google API key."
+          );
+          return;
+        }
+      }
+
       await submitOnboarding.mutateAsync({
         serviceCategories,
         experienceYears: parsedExperience,
         serviceArea: serviceArea.trim(),
+        shopAddress: locationsToSave[0]?.address ?? pendingAddress,
+        shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
+        shopLocations: locationsToSave,
         hasTools,
         serviceDescription: serviceDescription.trim(),
       });
@@ -101,6 +231,92 @@ export default function ProviderOnboardingScreen() {
             style={textInputBaselineStyle}
             value={serviceArea}
             onChangeText={setServiceArea}
+          />
+
+          <Text className="text-ink text-sm font-medium mb-2">Shop address</Text>
+          <View className="flex-row gap-2 items-center">
+            <TextInput
+              className="flex-1 bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base"
+              placeholder="Search your shop address"
+              placeholderTextColor={appColors.ink.subtle}
+              style={textInputBaselineStyle}
+              value={shopAddress}
+              onChangeText={(value) => {
+                setShopAddress(value);
+                setShopPlaceId(undefined);
+              }}
+            />
+            <TouchableOpacity
+              className="bg-primary-600 rounded-xl px-3 py-2.5"
+              onPress={() => {
+                const trimmed = shopAddress.trim();
+                if (!trimmed) return;
+                const duplicate = shopLocations.some(
+                  (location) => location.address.toLowerCase() === trimmed.toLowerCase()
+                );
+                if (duplicate) return;
+                setShopLocations((prev) => [...prev, { address: trimmed, placeId: shopPlaceId }]);
+                setShopAddress("");
+                setShopPlaceId(undefined);
+                setPlaceSuggestions([]);
+              }}
+            >
+              <Text className="text-white text-xs font-semibold">Add</Text>
+            </TouchableOpacity>
+          </View>
+          {shopLocations.length > 0 ? (
+            <View className="mt-2 mb-2 gap-2">
+              {shopLocations.map((location, index) => (
+                <View
+                  key={`${location.address}-${index}`}
+                  className="bg-canvas rounded-xl border border-ink-faint px-3 py-2 flex-row items-center justify-between"
+                >
+                  <Text className="text-ink text-xs flex-1 mr-2">{location.address}</Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      setShopLocations((prev) => prev.filter((_, locationIndex) => locationIndex !== index))
+                    }
+                  >
+                    <Text className="text-red-600 text-xs font-semibold">Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {placesLoading ? (
+            <View className="py-2">
+              <ActivityIndicator size="small" color={appColors.primary[600]} />
+            </View>
+          ) : null}
+          {placeSuggestions.length > 0 ? (
+            <View className="bg-canvas border border-ink-faint rounded-2xl mt-2 mb-3 overflow-hidden">
+              {placeSuggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.placeId}
+                  className="px-4 py-3 border-b border-ink-faint"
+                  onPress={() => {
+                    setShopAddress(item.description);
+                    setShopPlaceId(item.placeId);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use address ${item.description}`}
+                >
+                  <Text className="text-ink text-sm">{item.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          <LocationPreviewMap
+            title="Shop pin preview"
+            description="Confirm this pin matches your shop location."
+            latitude={previewLatitude}
+            longitude={previewLongitude}
+            isLoading={previewLoading}
+            emptyMessage={
+              googleMapsApiKey
+                ? "Search a shop address to preview it on map."
+                : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview your shop on map."
+            }
           />
 
           <Text className="text-ink text-sm font-medium mb-2">Service description</Text>

@@ -82,4 +82,13 @@ export class ProviderServicesController {
 
     return this.providerServicesService.update(clerkId, id, parsed.data);
   }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Req() req: Request, @Param("id", ParseUUIDPipe) id: string) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    await this.providerServicesService.remove(clerkId, id);
+  }
 }

@@ -7,7 +7,9 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
+import { fetchGoogleGeocodeLocation } from "@repo/utils";
 
+import { LocationPreviewMap } from "../../../components/LocationPreviewMap";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
@@ -26,9 +28,13 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState("");
   const [savedLocations, setSavedLocations] = useState<Array<{ id: string; label: string; address: string }>>([]);
   const [primaryLocation, setPrimaryLocation] = useState("");
+  const [primaryPreviewLatitude, setPrimaryPreviewLatitude] = useState<number | undefined>(undefined);
+  const [primaryPreviewLongitude, setPrimaryPreviewLongitude] = useState<number | undefined>(undefined);
+  const [primaryPreviewLoading, setPrimaryPreviewLoading] = useState(false);
   const [carCompany, setCarCompany] = useState("");
   const [carModel, setCarModel] = useState("");
   const [notes, setNotes] = useState("");
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   const signInEmail =
     clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
@@ -56,6 +62,28 @@ export default function ProfileScreen() {
     setCarModel(me.customerOnboarding?.carModel ?? "");
     setNotes(me.customerOnboarding?.notes ?? "");
   }, [me, clerkUser?.firstName, clerkUser?.lastName]);
+
+  useEffect(() => {
+    const query = primaryLocation.trim();
+    if (!googleMapsApiKey || query.length < 3) {
+      setPrimaryPreviewLatitude(undefined);
+      setPrimaryPreviewLongitude(undefined);
+      setPrimaryPreviewLoading(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setPrimaryPreviewLoading(true);
+      void (async () => {
+        const coords = await fetchGoogleGeocodeLocation(query, googleMapsApiKey);
+        setPrimaryPreviewLatitude(coords?.latitude);
+        setPrimaryPreviewLongitude(coords?.longitude);
+        setPrimaryPreviewLoading(false);
+      })();
+    }, 450);
+
+    return () => clearTimeout(timeout);
+  }, [primaryLocation, googleMapsApiKey]);
 
   function updateLocation(index: number, key: "label" | "address", value: string) {
     setSavedLocations((prev) =>
@@ -285,6 +313,18 @@ export default function ProfileScreen() {
             placeholder="e.g. California, USA"
             placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
+          />
+          <LocationPreviewMap
+            title="Location preview"
+            description="Verify your primary location pin is correct."
+            latitude={primaryPreviewLatitude}
+            longitude={primaryPreviewLongitude}
+            isLoading={primaryPreviewLoading}
+            emptyMessage={
+              googleMapsApiKey
+                ? "Type at least 3 characters to preview your location."
+                : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview location on map."
+            }
           />
 
           <Text className="text-ink text-sm font-medium mb-2">Car company</Text>
