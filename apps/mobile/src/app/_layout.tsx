@@ -1,7 +1,13 @@
 import "../globals.css";
 import { useEffect, useLayoutEffect } from "react";
 import { Platform } from "react-native";
-import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import {
+  Stack,
+  useGlobalSearchParams,
+  useRouter,
+  useSegments,
+  useRootNavigationState,
+} from "expo-router";
 import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
@@ -74,11 +80,13 @@ function RootNavigator() {
   const { user } = useUser();
   const router   = useRouter();
   const segments = useSegments();
+  const params = useGlobalSearchParams<{ allowRoleChange?: string }>();
   const navState = useRootNavigationState();
 
   const roleFromClaims = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
   const roleFromUser = (user?.publicMetadata as { role?: string } | undefined)?.role;
   const role = roleFromClaims ?? roleFromUser;
+  const allowRoleChange = params.allowRoleChange === "1";
 
   const meQuery = useMe({ enabled: Boolean(isLoaded && isSignedIn && role) });
 
@@ -128,6 +136,9 @@ function RootNavigator() {
       meQuery.isSuccess &&
       !meQuery.data.onboardingCompleted
     ) {
+      if (inAuthGroup && authSegment === "role-select" && allowRoleChange) {
+        return;
+      }
       if (role === "CUSTOMER" && segments[0] === "(customer)") {
         router.replace("/(auth)/customer-onboarding");
         return;
@@ -140,6 +151,9 @@ function RootNavigator() {
 
     // Signed in — leave auth stack only when role + onboarding (or /me failure) are resolved.
     if (inAuthGroup) {
+      if (authSegment === "role-select" && allowRoleChange) {
+        return;
+      }
       if (!role) {
         if (authSegment !== "role-select") router.replace("/(auth)/role-select");
         return;
@@ -164,7 +178,7 @@ function RootNavigator() {
         router.replace("/(customer)/(tabs)/home");
       }
     }
-  }, [isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isPending, meQuery.isSuccess, meQuery.data, role]);
+  }, [allowRoleChange, isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isPending, meQuery.isSuccess, meQuery.data, role]);
 
   return null;
 }

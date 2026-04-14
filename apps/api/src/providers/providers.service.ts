@@ -38,10 +38,27 @@ type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{
 type ServiceForSearch = {
   title: string;
   description: string | null;
+  priceCurrency: string;
   category: { name: string };
 };
 
 type ProviderLocation = { latitude: number; longitude: number };
+
+function toServiceCurrency(
+  value: string | undefined
+): ProviderPublicSummary["startingPriceCurrency"] {
+  if (
+    value === "USD" ||
+    value === "EUR" ||
+    value === "GBP" ||
+    value === "AED" ||
+    value === "SAR" ||
+    value === "PKR"
+  ) {
+    return value;
+  }
+  return undefined;
+}
 
 @Injectable()
 export class ProvidersService {
@@ -89,8 +106,10 @@ export class ProvidersService {
       latitude: row.latitude ?? undefined,
       longitude: row.longitude ?? undefined,
       startingPrice: firstService ? firstService.price : undefined,
+      startingPriceCurrency: firstService ? toServiceCurrency(firstService.priceCurrency) : undefined,
       primaryServiceTitle: firstService ? firstService.title : undefined,
       primaryServiceId: firstService ? firstService.id : undefined,
+      activeServiceCount: row.services.length,
       serviceSearchText: this.buildServiceSearchText(row.services),
     };
   }

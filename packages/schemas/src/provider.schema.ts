@@ -95,9 +95,12 @@ export const ProviderPublicSummarySchema = z.object({
   /** DRIVING = `distanceKm` from Distance Matrix. STRAIGHT_LINE = Haversine fallback. */
   distanceKind: z.enum(["DRIVING", "STRAIGHT_LINE"]).optional(),
   startingPrice: z.number().optional(),
+  startingPriceCurrency: ServiceCurrencySchema.default("USD").optional(),
   primaryServiceTitle: z.string().optional(),
   /** Cheapest active service id (same ordering as startingPrice / primaryServiceTitle). */
   primaryServiceId: z.string().uuid().optional(),
+  /** Number of active services currently bookable for this provider. */
+  activeServiceCount: z.number().int().nonnegative(),
   /** Lowercase blob of all active service titles, descriptions, and category names (for client search/filter). */
   serviceSearchText: z.string().optional(),
 });

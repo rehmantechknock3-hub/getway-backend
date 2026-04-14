@@ -99,11 +99,11 @@ function providerMatchesCategoryLabel(p: ProviderPublicSummary, categoryLabel: s
   return false;
 }
 
-function formatStartingPrice(price: number | undefined): string {
+function formatStartingPrice(price: number | undefined, currency?: string): string {
   if (price == null) return "—";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(price);
@@ -147,9 +147,11 @@ function ProviderRow({
   const serviceLine = p.serviceCategory ?? p.primaryServiceTitle ?? "Services";
   const initials = `${p.firstName[0] ?? ""}${p.lastName[0] ?? ""}`.toUpperCase();
   const available = p.isOnline;
-  const bookLabel = p.primaryServiceTitle
-    ? `Book ${p.primaryServiceTitle}`
-    : "Book service";
+  const bookLabel = p.activeServiceCount > 1
+    ? "View provider services"
+    : p.primaryServiceTitle
+      ? `Book ${p.primaryServiceTitle}`
+      : "Book service";
   const distanceLabel = formatListedDistance(p, customerCoords);
 
   const openProfile = () => {
@@ -170,6 +172,10 @@ function ProviderRow({
           { text: "View profile", onPress: openProfile },
         ]
       );
+      return;
+    }
+    if (p.activeServiceCount > 1) {
+      openProfile();
       return;
     }
     router.push(`/(customer)/provider/${p.id}/book/${p.primaryServiceId}` as const);
@@ -228,7 +234,9 @@ function ProviderRow({
       <View className="w-px bg-ink-faint my-3" />
 
       <View className="justify-center items-center px-3 py-3 gap-2 min-w-[88px]">
-        <Text className="text-primary-600 font-bold text-sm text-center">{formatStartingPrice(p.startingPrice)}</Text>
+        <Text className="text-primary-600 font-bold text-sm text-center">
+          {formatStartingPrice(p.startingPrice, p.startingPriceCurrency)}
+        </Text>
         <View className={`px-2 py-0.5 rounded-full ${available ? "bg-green-100" : "bg-ink-faint"}`}>
           <Text className={`text-xs font-medium ${available ? "text-green-700" : "text-ink-subtle"}`}>
             {available ? "Available" : "Offline"}

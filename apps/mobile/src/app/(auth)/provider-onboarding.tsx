@@ -11,12 +11,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { router } from "expo-router";
+import { useAuth, useClerk } from "@clerk/expo";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
+import { apiClient, useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
@@ -26,6 +27,9 @@ import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
 export default function ProviderOnboardingScreen() {
+  const params = useLocalSearchParams<{ allowRoleChange?: string }>();
+  const { getToken } = useAuth();
+  const clerk = useClerk();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitProviderOnboarding();
@@ -40,6 +44,7 @@ export default function ProviderOnboardingScreen() {
   const [hasTools, setHasTools] = useState(true);
   const [serviceDescription, setServiceDescription] = useState("");
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const allowRoleChange = params.allowRoleChange === "1";
 
   async function handleContinue() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
@@ -67,6 +72,14 @@ export default function ProviderOnboardingScreen() {
     }
 
     try {
+      const token = await getToken();
+      await apiClient.post(
+        "/api/v1/auth/set-role",
+        { role: "PROVIDER" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await clerk.session?.reload();
+
       let locationsToSave = normalizedLocations;
       if (googleMapsApiKey) {
         locationsToSave = await enrichShopLocationsWithCoordinates(normalizedLocations, googleMapsApiKey);
@@ -103,6 +116,10 @@ export default function ProviderOnboardingScreen() {
     }
   }
 
+  function handleChangeRole() {
+    router.replace("/(auth)/role-select?allowRoleChange=1");
+  }
+
   return (
     <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
       <StatusBar barStyle="dark-content" />
@@ -112,6 +129,17 @@ export default function ProviderOnboardingScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {allowRoleChange ? (
+          <TouchableOpacity
+            className="self-start flex-row items-center gap-2 mb-4"
+            onPress={handleChangeRole}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-back" size={18} color={appColors.ink.DEFAULT} />
+            <Text className="text-ink font-medium">I am not a provider</Text>
+          </TouchableOpacity>
+        ) : null}
+
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
             <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">

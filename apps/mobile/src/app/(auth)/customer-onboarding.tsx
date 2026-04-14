@@ -12,12 +12,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth, useClerk } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import { apiClient, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
 import { fetchGoogleGeocodeLocation } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
@@ -42,6 +43,9 @@ const CAR_COMPANIES = [
 ];
 
 export default function CustomerOnboardingScreen() {
+  const params = useLocalSearchParams<{ allowRoleChange?: string }>();
+  const { getToken } = useAuth();
+  const clerk = useClerk();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitCustomerOnboarding();
@@ -54,6 +58,7 @@ export default function CustomerOnboardingScreen() {
   const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
   const [previewLoading, setPreviewLoading] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const allowRoleChange = params.allowRoleChange === "1";
 
   useEffect(() => {
     const query = primaryLocation.trim();
@@ -84,6 +89,14 @@ export default function CustomerOnboardingScreen() {
     }
 
     try {
+      const token = await getToken();
+      await apiClient.post(
+        "/api/v1/auth/set-role",
+        { role: "CUSTOMER" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await clerk.session?.reload();
+
       await submitOnboarding.mutateAsync({
         primaryLocation: primaryLocation.trim(),
         carCompany: carCompany.trim(),
@@ -97,6 +110,10 @@ export default function CustomerOnboardingScreen() {
     }
   }
 
+  function handleChangeRole() {
+    router.replace("/(auth)/role-select?allowRoleChange=1");
+  }
+
   return (
     <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
       <StatusBar barStyle="dark-content" />
@@ -107,6 +124,17 @@ export default function CustomerOnboardingScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {allowRoleChange ? (
+          <TouchableOpacity
+            className="self-start flex-row items-center gap-2 mb-4"
+            onPress={handleChangeRole}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-back" size={18} color={appColors.ink.DEFAULT} />
+            <Text className="text-ink font-medium">I am not a customer</Text>
+          </TouchableOpacity>
+        ) : null}
+
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
             <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">

@@ -217,6 +217,7 @@ model Booking {
   longitude   Float
   notes       String?
   totalAmount Float
+  totalCurrency String      @default("USD")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 

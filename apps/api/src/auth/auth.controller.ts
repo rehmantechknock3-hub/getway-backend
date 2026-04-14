@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Controller,
   Body,
-  ForbiddenException,
   Post,
   Req,
 } from "@nestjs/common";
@@ -47,10 +46,6 @@ export class AuthController {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${clerkId}))`;
 
       const current = await this.clerk.users.getUser(clerkId);
-      const existingRole = current.publicMetadata?.role;
-      if (existingRole !== undefined && existingRole !== null) {
-        throw new ForbiddenException("Role is already set");
-      }
 
       await this.clerk.users.updateUserMetadata(clerkId, {
         publicMetadata: { role },

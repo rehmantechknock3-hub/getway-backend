@@ -22,6 +22,7 @@ export const BookingSchema = z.object({
   longitude:    z.number(),
   notes:        z.string().max(500).optional(),
   totalAmount:  z.number().positive(),
+  totalCurrency: z.string().min(3).max(8).optional(),
   createdAt:    z.coerce.date(),
   updatedAt:    z.coerce.date(),
 });

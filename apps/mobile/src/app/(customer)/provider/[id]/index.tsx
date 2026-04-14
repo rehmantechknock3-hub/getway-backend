@@ -27,10 +27,10 @@ import {
 
 import { appColors } from "../../../../styles/colors";
 
-function formatUsd(amount: number): string {
+function formatServicePrice(amount: number, currency: string | undefined): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -281,7 +281,9 @@ export default function ProviderDetailScreen() {
                       <Text className="text-ink-soft text-sm mt-2">{s.description}</Text>
                     ) : null}
                   </View>
-                  <Text className="text-primary-600 font-bold">{formatUsd(s.price)}</Text>
+                  <Text className="text-primary-600 font-bold">
+                    {formatServicePrice(s.price, s.priceCurrency)}
+                  </Text>
                 </View>
                 <Text className="text-ink-subtle text-xs mt-2 mb-3">{s.duration} min</Text>
                 <TouchableOpacity

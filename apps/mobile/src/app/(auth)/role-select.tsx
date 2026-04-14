@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, ActivityIndicator,
-  Alert, StatusBar, ScrollView,
+  StatusBar, ScrollView,
 } from "react-native";
-import { useAuth, useClerk, useUser } from "@clerk/expo";
-import { router } from "expo-router";
-import { apiClient } from "@repo/api-client";
+import { useAuth, useUser } from "@clerk/expo";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -40,17 +39,19 @@ const ROLES: {
 ];
 
 export default function RoleSelectScreen() {
-  const { getToken, sessionClaims } = useAuth();
+  const params = useLocalSearchParams<{ allowRoleChange?: string }>();
+  const { sessionClaims } = useAuth();
   const { user } = useUser();
-  const clerk = useClerk();
   const insets = useSafeAreaInsets();
   const [selected, setSelected] = useState<Role | null>(null);
   const [loading,  setLoading]  = useState(false);
   const roleFromClaims = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
   const roleFromUser = (user?.publicMetadata as { role?: string } | undefined)?.role;
   const role = roleFromClaims ?? roleFromUser;
+  const allowRoleChange = params.allowRoleChange === "1";
 
   useEffect(() => {
+    if (allowRoleChange) return;
     if (role === "PROVIDER") {
       router.replace("/(provider)/(tabs)/jobs");
       return;
@@ -58,29 +59,17 @@ export default function RoleSelectScreen() {
     if (role === "CUSTOMER") {
       router.replace("/(customer)/(tabs)/home");
     }
-  }, [role]);
+  }, [allowRoleChange, role]);
 
   async function handleConfirm() {
     if (!selected) return;
     setLoading(true);
-    try {
-      const token = await getToken();
-      await apiClient.post(
-        "/api/v1/auth/set-role",
-        { role: selected },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      await clerk.session?.reload();
-      router.replace(
-        selected === "PROVIDER"
-          ? "/(auth)/provider-onboarding"
-          : "/(auth)/customer-onboarding",
-      );
-    } catch (err: unknown) {
-      Alert.alert("Error", err instanceof Error ? err.message : "Failed to set role");
-    } finally {
-      setLoading(false);
-    }
+    router.replace(
+      selected === "PROVIDER"
+        ? "/(auth)/provider-onboarding?allowRoleChange=1"
+        : "/(auth)/customer-onboarding?allowRoleChange=1",
+    );
+    setLoading(false);
   }
 
   return (
@@ -97,7 +86,7 @@ export default function RoleSelectScreen() {
             How will you use{"\n"}Marketplace?
           </Text>
           <Text className="text-ink-muted text-base">
-            Choose your role — you can't change this later
+            Choose your role. You can change this before finishing onboarding.
           </Text>
         </View>
 

@@ -110,6 +110,7 @@ export class BookingsService {
     longitude: number;
     notes: string | null;
     totalAmount: number;
+    totalCurrency?: string | null;
     createdAt: Date;
     updatedAt: Date;
   }): BookingDto {
@@ -125,6 +126,7 @@ export class BookingsService {
       longitude: row.longitude,
       notes: row.notes ?? undefined,
       totalAmount: row.totalAmount,
+      totalCurrency: row.totalCurrency ?? "USD",
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -187,6 +189,7 @@ export class BookingsService {
         id: true,
         providerId: true,
         price: true,
+        priceCurrency: true,
         title: true,
         provider: { select: { isOnline: true } },
       },
@@ -214,6 +217,7 @@ export class BookingsService {
         longitude: input.longitude,
         notes: input.notes ?? null,
         totalAmount: service.price,
+        totalCurrency: service.priceCurrency,
       },
     });
 
@@ -249,6 +253,7 @@ export class BookingsService {
         id: true,
         providerId: true,
         price: true,
+        priceCurrency: true,
         provider: { select: { isOnline: true } },
       },
     });
@@ -275,6 +280,7 @@ export class BookingsService {
         longitude: input.longitude,
         notes: input.notes ?? null,
         totalAmount: service.price,
+        totalCurrency: service.priceCurrency,
       },
     });
 

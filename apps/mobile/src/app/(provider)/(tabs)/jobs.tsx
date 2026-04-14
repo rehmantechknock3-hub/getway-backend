@@ -37,10 +37,10 @@ function formatWhen(d: Date): string {
   }).format(d instanceof Date ? d : new Date(d));
 }
 
-function formatMoney(n: number): string {
+function formatMoney(n: number, currency?: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
@@ -112,7 +112,9 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
               {formatWhen(job.scheduledAt instanceof Date ? job.scheduledAt : new Date(job.scheduledAt))}
             </Text>
           </View>
-          <Text className="text-primary-600 font-bold text-base">{formatMoney(job.totalAmount)}</Text>
+          <Text className="text-primary-600 font-bold text-base">
+            {formatMoney(job.totalAmount, job.totalCurrency)}
+          </Text>
         </View>
         <View className="flex-row items-center justify-end gap-1 px-4 pb-3">
           <Text className="text-primary-600 text-xs font-semibold">Track status</Text>

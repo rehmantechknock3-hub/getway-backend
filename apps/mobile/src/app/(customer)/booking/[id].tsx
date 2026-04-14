@@ -31,10 +31,10 @@ function formatWhen(d: Date): string {
   }).format(d instanceof Date ? d : new Date(d));
 }
 
-function formatMoney(n: number): string {
+function formatMoney(n: number, currency?: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
@@ -248,7 +248,9 @@ export default function BookingDetailScreen() {
             ) : null}
             <View className="flex-row items-center justify-between mt-4 pt-4 border-t border-ink-faint">
               <Text className="text-ink-subtle text-sm">Total</Text>
-              <Text className="text-primary-600 font-bold text-xl">{formatMoney(booking.totalAmount)}</Text>
+              <Text className="text-primary-600 font-bold text-xl">
+                {formatMoney(booking.totalAmount, booking.totalCurrency)}
+              </Text>
             </View>
           </View>
 

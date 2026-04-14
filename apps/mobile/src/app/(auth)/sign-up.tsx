@@ -17,6 +17,21 @@ import { textInputBaselineStyle } from "../../styles/text-input";
 
 type Step = "details" | "verify";
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isExpectedSignUpInputError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return (
+    message.includes("taken") ||
+    message.includes("already") ||
+    message.includes("exists") ||
+    message.includes("email address is invalid") ||
+    message.includes("password")
+  );
+}
+
 export default function SignUpScreen() {
   const { signUp } = useSignUp();
   const clerk = useClerk();
@@ -68,12 +83,14 @@ export default function SignUpScreen() {
 
       setStep("verify");
     } catch (error: unknown) {
-      reportError(error, {
-        screen: "SignUpScreen",
-        action: "handleCreate",
-        extra: { identifier: email.trim() },
-      });
-      showToast("error", error instanceof Error ? error.message : "Sign up failed");
+      if (!isExpectedSignUpInputError(error)) {
+        reportError(error, {
+          screen: "SignUpScreen",
+          action: "handleCreate",
+          extra: { identifier: email.trim() },
+        });
+      }
+      showToast("error", getErrorMessage(error) || "Sign up failed");
     } finally {
       setLoading(false);
     }
