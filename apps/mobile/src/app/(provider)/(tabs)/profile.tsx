@@ -25,14 +25,9 @@ import {
   useUpdateProviderPresence,
 } from "@repo/api-client";
 import { showToast } from "@repo/ui";
-import {
-  enrichShopLocationsWithCoordinates,
-  fetchGoogleGeocodeLocation,
-  fetchGooglePlaceDetailsLocation,
-  reportError,
-} from "@repo/utils";
+import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
-import { LocationPreviewMap } from "../../../components/LocationPreviewMap";
+import { ShopAddressField } from "../../../components/ShopAddressField";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 import { normalizeProviderServiceCategories } from "../../../utils/provider-onboarding";
@@ -82,14 +77,6 @@ export default function ProviderProfileScreen() {
   const [shopLocations, setShopLocations] = useState<
     Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>
   >([]);
-  const [shopPreviewLatitude, setShopPreviewLatitude] = useState<number | undefined>(undefined);
-  const [shopPreviewLongitude, setShopPreviewLongitude] = useState<number | undefined>(undefined);
-  const [shopPreviewLoading, setShopPreviewLoading] = useState(false);
-  const [placeSuggestions, setPlaceSuggestions] = useState<
-    Array<{ description: string; placeId: string }>
-  >([]);
-  const [placesLoading, setPlacesLoading] = useState(false);
-  const [shopAddressFocusTick, setShopAddressFocusTick] = useState(0);
   const [isOnline, setIsOnline] = useState(false);
   const [hasTools, setHasTools] = useState(true);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
@@ -124,78 +111,6 @@ export default function ProviderProfileScreen() {
     setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
   }, [me, clerkUser?.firstName, clerkUser?.lastName]);
 
-  useEffect(() => {
-    const q = shopAddress.trim();
-    if (!googleMapsApiKey || q.length < 3) {
-      setPlaceSuggestions([]);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setPlacesLoading(true);
-      void (async () => {
-        try {
-          const url =
-            "https://maps.googleapis.com/maps/api/place/autocomplete/json" +
-            `?input=${encodeURIComponent(q)}` +
-            "&types=establishment" +
-            `&key=${encodeURIComponent(googleMapsApiKey)}`;
-          const res = await fetch(url);
-          const json = (await res.json()) as {
-            status?: string;
-            predictions?: Array<{ description?: string; place_id?: string }>;
-          };
-          if (json.status !== "OK" || !Array.isArray(json.predictions)) {
-            setPlaceSuggestions([]);
-            return;
-          }
-          setPlaceSuggestions(
-            json.predictions
-              .filter(
-                (item): item is { description: string; place_id: string } =>
-                  typeof item.description === "string" && typeof item.place_id === "string"
-              )
-              .slice(0, 5)
-              .map((item) => ({ description: item.description, placeId: item.place_id }))
-          );
-        } catch {
-          setPlaceSuggestions([]);
-        } finally {
-          setPlacesLoading(false);
-        }
-      })();
-    }, 300);
-
-    return () => clearTimeout(timeout);
-  }, [shopAddress, googleMapsApiKey, shopAddressFocusTick]);
-
-  useEffect(() => {
-    const query = shopAddress.trim();
-    if (!googleMapsApiKey || query.length < 3) {
-      setShopPreviewLatitude(undefined);
-      setShopPreviewLongitude(undefined);
-      setShopPreviewLoading(false);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setShopPreviewLoading(true);
-      void (async () => {
-        let coords =
-          shopPlaceId != null
-            ? await fetchGooglePlaceDetailsLocation(shopPlaceId, googleMapsApiKey)
-            : null;
-        if (!coords) {
-          coords = await fetchGoogleGeocodeLocation(query, googleMapsApiKey);
-        }
-        setShopPreviewLatitude(coords?.latitude);
-        setShopPreviewLongitude(coords?.longitude);
-        setShopPreviewLoading(false);
-      })();
-    }, 450);
-
-    return () => clearTimeout(timeout);
-  }, [shopAddress, shopPlaceId, googleMapsApiKey]);
 
   async function handleSaveProfile() {
     const emailToSave = accountEmail.trim();
@@ -278,28 +193,6 @@ export default function ProviderProfileScreen() {
       Alert.alert("Error", error instanceof Error ? error.message : "Failed to update availability");
     }
   }
-
-  const shopPreviewMarkers = [
-    ...(typeof shopPreviewLatitude === "number" && typeof shopPreviewLongitude === "number"
-      ? [
-          {
-            id: "draft-input",
-            latitude: shopPreviewLatitude,
-            longitude: shopPreviewLongitude,
-          },
-        ]
-      : []),
-    ...shopLocations
-      .filter(
-        (location) =>
-          typeof location.latitude === "number" && typeof location.longitude === "number"
-      )
-      .map((location, index) => ({
-        id: `${location.placeId ?? location.address}-${String(index)}`,
-        latitude: location.latitude as number,
-        longitude: location.longitude as number,
-      })),
-  ];
 
   return (
     <ScrollView
@@ -447,97 +340,17 @@ export default function ProviderProfileScreen() {
         onChangeText={setServiceArea}
       />
 
-      <Text className="text-ink text-sm font-medium mb-2">Shop address</Text>
-      <View className="flex-row gap-2 items-center mb-2">
-        <TextInput
-          className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base"
-          placeholder="Shop/office address"
-          placeholderTextColor={appColors.ink.subtle}
-          style={textInputBaselineStyle}
-          value={shopAddress}
-          onFocus={() => setShopAddressFocusTick((v) => v + 1)}
-          onChangeText={(value) => {
-            setShopAddress(value);
-            setShopPlaceId(undefined);
-          }}
-        />
-        <TouchableOpacity
-          className="bg-primary-600 rounded-xl px-3 py-2.5"
-          onPress={() => {
-            const trimmed = shopAddress.trim();
-            if (!trimmed) return;
-            const duplicate = shopLocations.some(
-              (location) => location.address.toLowerCase() === trimmed.toLowerCase()
-            );
-            if (duplicate) return;
-            setShopLocations((prev) => [...prev, { address: trimmed, placeId: shopPlaceId }]);
-            setShopAddress("");
-            setShopPlaceId(undefined);
-            setPlaceSuggestions([]);
-          }}
-        >
-          <Text className="text-white text-xs font-semibold">Add</Text>
-        </TouchableOpacity>
-      </View>
-      {placesLoading ? (
-        <View className="py-2">
-          <ActivityIndicator size="small" color={appColors.primary[600]} />
-        </View>
-      ) : null}
-      {placeSuggestions.length > 0 ? (
-        <View className="bg-canvas-raised border border-ink-faint rounded-2xl mt-2 mb-3 overflow-hidden">
-          {placeSuggestions.map((item) => (
-            <TouchableOpacity
-              key={item.placeId}
-              className="px-4 py-3 border-b border-ink-faint"
-              onPress={() => {
-                setShopAddress(item.description);
-                setShopPlaceId(item.placeId);
-                setPlaceSuggestions([]);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Use address ${item.description}`}
-            >
-              <Text className="text-ink text-sm">{item.description}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-      {shopLocations.length > 0 ? (
-        <View className="mb-4 gap-2">
-          {shopLocations.map((location, index) => (
-            <TouchableOpacity
-              key={`${location.address}-${index}`}
-              activeOpacity={0.85}
-              onPress={() => {
-                setShopAddress(location.address);
-                setShopPlaceId(location.placeId);
-                if (typeof location.latitude === "number" && typeof location.longitude === "number") {
-                  setShopPreviewLatitude(location.latitude);
-                  setShopPreviewLongitude(location.longitude);
-                  setShopPreviewLoading(false);
-                }
-              }}
-              className="bg-canvas-raised rounded-xl border border-ink-faint px-3 py-2 flex-row items-center justify-between"
-            >
-              <Text className="text-ink text-xs flex-1 mr-2">{location.address}</Text>
-              <TouchableOpacity
-                onPress={() =>
-                  setShopLocations((prev) => prev.filter((_, locationIndex) => locationIndex !== index))
-                }
-              >
-                <Text className="text-red-600 text-xs font-semibold">Remove</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-      <LocationPreviewMap
-        title="Shop pin preview"
-        description="Confirm these pins match your shop locations."
-        markers={shopPreviewMarkers}
-        isLoading={shopPreviewLoading}
-        emptyMessage={
+      <ShopAddressField
+        shopAddress={shopAddress}
+        setShopAddress={setShopAddress}
+        shopPlaceId={shopPlaceId}
+        setShopPlaceId={setShopPlaceId}
+        shopLocations={shopLocations}
+        setShopLocations={setShopLocations}
+        googleMapsApiKey={googleMapsApiKey}
+        inputPlaceholder="Shop/office address"
+        mapDescription="Confirm these pins match your shop locations."
+        mapEmptyMessage={
           googleMapsApiKey
             ? "Enter at least 3 characters in shop address to preview on map."
             : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview shop location."

@@ -30,6 +30,7 @@ import {
   useNotifications,
   usePublicProviders,
 } from "@repo/api-client";
+import { haversineDistance } from "@repo/utils";
 
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
@@ -108,19 +109,6 @@ function formatStartingPrice(price: number | undefined): string {
   }).format(price);
 }
 
-function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const earthRadiusKm = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
-}
-
 function formatDistance(distanceKm: number | undefined): string | null {
   if (distanceKm == null || Number.isNaN(distanceKm)) return null;
   if (distanceKm < 1) return `${Math.round(distanceKm * 1000)} m away`;
@@ -141,7 +129,9 @@ function formatListedDistance(
     return formatDistance(p.distanceKm);
   }
   if (customerCoords && p.latitude != null && p.longitude != null) {
-    return formatDistance(distanceKm(customerCoords.lat, customerCoords.lon, p.latitude, p.longitude));
+    return formatDistance(
+      haversineDistance(customerCoords.lat, customerCoords.lon, p.latitude, p.longitude)
+    );
   }
   return null;
 }

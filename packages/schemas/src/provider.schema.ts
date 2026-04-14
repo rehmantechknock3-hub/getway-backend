@@ -39,6 +39,9 @@ export const CreateServiceCategorySchema = z.object({
   name: z.string().min(1).max(80),
 });
 
+export const ServiceCurrencySchema = z.enum(["USD", "EUR", "GBP", "AED", "SAR", "PKR"]);
+export type ServiceCurrency = z.infer<typeof ServiceCurrencySchema>;
+
 export const ServiceSchema = z.object({
   id:          z.string().uuid(),
   providerId:  z.string().uuid(),
@@ -46,6 +49,7 @@ export const ServiceSchema = z.object({
   title:       z.string().min(1),
   description: z.string().optional(),
   price:       z.number().positive(),
+  priceCurrency: ServiceCurrencySchema.default("USD"),
   duration:    z.number().int().positive(), // minutes
   isActive:    z.boolean().default(true),
   createdAt:   z.coerce.date(),
@@ -57,6 +61,7 @@ export const CreateServiceSchema = ServiceSchema.pick({
   title:       true,
   description: true,
   price:       true,
+  priceCurrency: true,
   duration:    true,
 });
 
@@ -110,6 +115,7 @@ export const ProviderServiceOfferSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   price: z.number(),
+  priceCurrency: ServiceCurrencySchema.default("USD"),
   duration: z.number().int().positive(),
   categoryName: z.string(),
   isActive: z.boolean(),

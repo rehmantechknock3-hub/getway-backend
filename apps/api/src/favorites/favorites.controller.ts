@@ -9,9 +9,15 @@ import {
   Req,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { z } from "zod";
 
 import { Roles } from "../auth/roles.decorator";
 import { FavoritesService } from "./favorites.service";
+
+const FavoritesGeoQuerySchema = z.object({
+  lat: z.coerce.number().optional(),
+  lon: z.coerce.number().optional(),
+});
 
 @Controller("favorites")
 @Roles("CUSTOMER")
@@ -21,13 +27,13 @@ export class FavoritesController {
   @Get()
   async list(
     @Req() req: Request,
-    @Query("lat") latRaw?: string,
-    @Query("lon") lonRaw?: string
+    @Query() rawQuery: Record<string, string | undefined>
   ) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    const lat = latRaw != null ? Number.parseFloat(latRaw) : undefined;
-    const lon = lonRaw != null ? Number.parseFloat(lonRaw) : undefined;
+    const parsed = FavoritesGeoQuerySchema.safeParse(rawQuery);
+    const lat = parsed.success ? parsed.data.lat : undefined;
+    const lon = parsed.success ? parsed.data.lon : undefined;
     const hasGeo =
       lat != null &&
       lon != null &&

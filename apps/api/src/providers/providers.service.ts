@@ -148,13 +148,7 @@ export class ProvidersService {
       orderBy: { averageRating: "desc" },
     });
 
-    const enrichedRows: ProviderWithRelations[] = [];
-    for (const row of rows) {
-      const enriched = await this.googleMaps.backfillProviderCoordinatesIfNeeded(row, requestId);
-      enrichedRows.push(enriched);
-    }
-
-    let summaries = enrichedRows.map((r) => this.toSummary(r));
+    let summaries = rows.map((r) => this.toSummary(r));
 
     if (lat != null && lon != null && !Number.isNaN(lat) && !Number.isNaN(lon)) {
       type NearEntry = {
@@ -164,7 +158,7 @@ export class ProvidersService {
         destLon: number;
       };
       const near: NearEntry[] = [];
-      for (const row of enrichedRows) {
+      for (const row of rows) {
         const s = this.toSummary(row);
         const locations = this.extractProviderLocations(row);
         if (locations.length === 0) {
@@ -278,6 +272,7 @@ export class ProvidersService {
       title: s.title,
       description: s.description ?? undefined,
       price: s.price,
+      priceCurrency: s.priceCurrency as ProviderServiceOffer["priceCurrency"],
       duration: s.duration,
       categoryName: s.category.name,
       isActive: s.isActive,
@@ -327,11 +322,7 @@ export class ProvidersService {
       where: { id: { in: ids } },
       include: this.providerSummaryInclude,
     });
-    const enrichedRows: ProviderWithRelations[] = [];
-    for (const row of rows) {
-      enrichedRows.push(await this.googleMaps.backfillProviderCoordinatesIfNeeded(row, requestId));
-    }
-    const byId = new Map(enrichedRows.map((r) => [r.id, r]));
+    const byId = new Map(rows.map((r) => [r.id, r]));
 
     type NearEntry = {
       summary: ProviderPublicSummary;

@@ -117,6 +117,7 @@ export class ProviderServicesService {
     title: string;
     description: string | null;
     price: number;
+    priceCurrency: string;
     duration: number;
     categoryId: string;
     isActive: boolean;
@@ -127,6 +128,7 @@ export class ProviderServicesService {
       title: row.title,
       description: row.description ?? undefined,
       price: row.price,
+      priceCurrency: row.priceCurrency as ProviderMyService["priceCurrency"],
       duration: row.duration,
       categoryName: row.category.name,
       categoryId: row.categoryId,
@@ -287,6 +289,7 @@ export class ProviderServicesService {
         title: input.title.trim(),
         description: input.description?.trim() ? input.description.trim() : null,
         price: input.price,
+        priceCurrency: input.priceCurrency,
         duration: input.duration,
         isActive: true,
       },
@@ -325,6 +328,7 @@ export class ProviderServicesService {
       data.description = input.description?.trim() ? input.description.trim() : null;
     }
     if (input.price !== undefined) data.price = input.price;
+    if (input.priceCurrency !== undefined) data.priceCurrency = input.priceCurrency;
     if (input.duration !== undefined) data.duration = input.duration;
     if (input.categoryId !== undefined) {
       data.category = { connect: { id: input.categoryId } };

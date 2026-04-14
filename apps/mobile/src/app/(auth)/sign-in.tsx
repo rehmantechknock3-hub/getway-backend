@@ -25,6 +25,18 @@ export default function SignInScreen() {
   const [loading,  setLoading]  = useState(false);
   const [showPw,   setShowPw]   = useState(false);
 
+  function resolveCreatedSessionId(value: unknown): string | null {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "createdSessionId" in value &&
+      typeof value.createdSessionId === "string"
+    ) {
+      return value.createdSessionId;
+    }
+    return null;
+  }
+
   async function handleSignIn() {
     if (!email.trim()) {
       showToast("error", "Please enter your email address.");
@@ -49,8 +61,14 @@ export default function SignInScreen() {
         throw finalizeResult.error;
       }
 
-      const createdSessionId = (signIn as { createdSessionId?: string | null }).createdSessionId;
+      const createdSessionId =
+        resolveCreatedSessionId(finalizeResult) ?? resolveCreatedSessionId(signIn);
       if (!createdSessionId) {
+        reportError(new Error("Sign in finalize did not return createdSessionId"), {
+          screen: "SignInScreen",
+          action: "handleSignIn",
+          extra: { identifier: email.trim() },
+        });
         showToast("error", "Could not complete sign in. Please try again.");
         return;
       }

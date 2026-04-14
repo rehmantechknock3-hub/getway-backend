@@ -62,7 +62,7 @@ export class GoogleMapsService {
     return value.toFixed(decimals);
   }
 
-  private async geocodeAddress(input: {
+  async geocodeAddress(input: {
     shopAddress: string;
     shopPlaceId?: string;
     requestId?: string;
@@ -325,8 +325,14 @@ export class GoogleMapsService {
       return out;
     }
 
+    const chunks: Array<
+      Array<{ providerId: string; destLat: number; destLon: number; fallbackKm: number }>
+    > = [];
     for (let i = 0; i < pending.length; i += DISTANCE_MATRIX_DESTINATION_LIMIT) {
-      const chunk = pending.slice(i, i + DISTANCE_MATRIX_DESTINATION_LIMIT);
+      chunks.push(pending.slice(i, i + DISTANCE_MATRIX_DESTINATION_LIMIT));
+    }
+
+    const chunkJobs = chunks.map(async (chunk) => {
       const destParam = chunk.map((e) => `${e.destLat},${e.destLon}`).join("|");
       const matrixUrl = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
       matrixUrl.searchParams.set("origins", `${customerLat},${customerLon}`);
@@ -335,93 +341,96 @@ export class GoogleMapsService {
       matrixUrl.searchParams.set("units", "metric");
       matrixUrl.searchParams.set("key", apiKey);
 
-      try {
-        const res = await fetch(matrixUrl.toString());
-        const json = (await res.json()) as {
-          status?: string;
-          error_message?: string;
-          rows?: Array<{
-            elements?: Array<{
-              status?: string;
-              distance?: { value?: number };
-              duration?: { value?: number };
-            }>;
+      const res = await fetch(matrixUrl.toString());
+      const json = (await res.json()) as {
+        status?: string;
+        error_message?: string;
+        rows?: Array<{
+          elements?: Array<{
+            status?: string;
+            distance?: { value?: number };
+            duration?: { value?: number };
           }>;
-        };
+        }>;
+      };
 
-        if (json.status !== "OK" || !json.rows?.[0]?.elements) {
-          this.logger.warn(
-            `Distance Matrix non-OK: ${json.status ?? "?"} ${json.error_message ?? ""} [rid:${requestId}]`
-          );
-          continue;
-        }
+      if (json.status !== "OK" || !json.rows?.[0]?.elements) {
+        this.logger.warn(
+          `Distance Matrix non-OK: ${json.status ?? "?"} ${json.error_message ?? ""} [rid:${requestId}]`
+        );
+        return;
+      }
 
-        const elements = json.rows[0].elements ?? [];
-        for (let j = 0; j < chunk.length; j++) {
-          const entry = chunk[j];
-          const el = elements[j];
-          const meters =
-            el?.status === "OK" && typeof el.distance?.value === "number" ? el.distance.value : null;
-          const durationSec =
-            el?.status === "OK" && typeof el.duration?.value === "number" ? el.duration.value : null;
+      const elements = json.rows[0].elements ?? [];
+      for (let j = 0; j < chunk.length; j++) {
+        const entry = chunk[j];
+        const el = elements[j];
+        const meters =
+          el?.status === "OK" && typeof el.distance?.value === "number" ? el.distance.value : null;
+        const durationSec =
+          el?.status === "OK" && typeof el.duration?.value === "number" ? el.duration.value : null;
 
-          const d = destKey(entry.destLat, entry.destLon);
+        const d = destKey(entry.destLat, entry.destLon);
 
-          if (meters != null && meters >= 0) {
-            const metersInt = Math.round(meters);
-            const km = metersInt / 1000;
-            try {
-              await this.prisma.providerDrivingDistanceCache.upsert({
-                where: {
-                  originLatKey_originLngKey_providerProfileId_destLatKey_destLngKey: {
-                    originLatKey,
-                    originLngKey,
-                    providerProfileId: entry.providerId,
-                    destLatKey: d.destLatKey,
-                    destLngKey: d.destLngKey,
-                  },
-                },
-                create: {
+        if (meters != null && meters >= 0) {
+          const metersInt = Math.round(meters);
+          const km = metersInt / 1000;
+          try {
+            await this.prisma.providerDrivingDistanceCache.upsert({
+              where: {
+                originLatKey_originLngKey_providerProfileId_destLatKey_destLngKey: {
                   originLatKey,
                   originLngKey,
                   providerProfileId: entry.providerId,
                   destLatKey: d.destLatKey,
                   destLngKey: d.destLngKey,
-                  drivingDistanceMeters: metersInt,
-                  drivingDurationSeconds: durationSec != null ? Math.round(durationSec) : null,
                 },
-                update: {
-                  drivingDistanceMeters: metersInt,
-                  drivingDurationSeconds: durationSec != null ? Math.round(durationSec) : null,
-                },
-              });
-            } catch (persistError: unknown) {
-              const isMissingTable =
-                persistError instanceof Prisma.PrismaClientKnownRequestError &&
-                persistError.code === "P2021";
-              if (isMissingTable) {
-                this.logger.warn(
-                  `provider_driving_distance_caches table missing; skipping cache write [rid:${requestId}]`
-                );
-              } else {
-                this.logger.error(
-                  `Driving distance cache write failed [rid:${requestId}]`,
-                  persistError instanceof Error ? persistError.stack : undefined
-                );
-              }
-            }
-
-            out.set(entry.providerId, {
-              km,
-              meters: metersInt,
-              kind: "DRIVING",
+              },
+              create: {
+                originLatKey,
+                originLngKey,
+                providerProfileId: entry.providerId,
+                destLatKey: d.destLatKey,
+                destLngKey: d.destLngKey,
+                drivingDistanceMeters: metersInt,
+                drivingDurationSeconds: durationSec != null ? Math.round(durationSec) : null,
+              },
+              update: {
+                drivingDistanceMeters: metersInt,
+                drivingDurationSeconds: durationSec != null ? Math.round(durationSec) : null,
+              },
             });
+          } catch (persistError: unknown) {
+            const isMissingTable =
+              persistError instanceof Prisma.PrismaClientKnownRequestError &&
+              persistError.code === "P2021";
+            if (isMissingTable) {
+              this.logger.warn(
+                `provider_driving_distance_caches table missing; skipping cache write [rid:${requestId}]`
+              );
+            } else {
+              this.logger.error(
+                `Driving distance cache write failed [rid:${requestId}]`,
+                persistError instanceof Error ? persistError.stack : undefined
+              );
+            }
           }
+
+          out.set(entry.providerId, {
+            km,
+            meters: metersInt,
+            kind: "DRIVING",
+          });
         }
-      } catch (error: unknown) {
+      }
+    });
+
+    const chunkResults = await Promise.allSettled(chunkJobs);
+    for (const result of chunkResults) {
+      if (result.status === "rejected") {
         this.logger.error(
           `Distance Matrix request failed [rid:${requestId}]`,
-          error instanceof Error ? error.stack : undefined
+          result.reason instanceof Error ? result.reason.stack : undefined
         );
       }
     }

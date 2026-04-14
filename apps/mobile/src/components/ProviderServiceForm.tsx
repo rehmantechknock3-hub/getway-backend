@@ -27,6 +27,9 @@ import {
 import { textInputBaselineStyle } from "../styles/text-input";
 import { appColors } from "../styles/colors";
 
+const SERVICE_CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "PKR"] as const;
+type ServiceCurrency = (typeof SERVICE_CURRENCIES)[number];
+
 function apiErrorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("response" in error)) return undefined;
   const res = (error as { response?: { data?: unknown } }).response;
@@ -55,6 +58,8 @@ export function ProviderServiceForm(props: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [priceCurrency, setPriceCurrency] = useState<ServiceCurrency>("USD");
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [duration, setDuration] = useState("");
   const [isActive, setIsActive] = useState(true);
 
@@ -69,6 +74,7 @@ export function ProviderServiceForm(props: Props) {
     setTitle(s.title);
     setDescription(s.description ?? "");
     setPrice(String(s.price));
+    setPriceCurrency(s.priceCurrency ?? "USD");
     setDuration(String(s.duration));
     setIsActive(s.isActive);
   }, [props.mode, props.mode === "edit" ? props.initial.id : ""]);
@@ -157,6 +163,7 @@ export function ProviderServiceForm(props: Props) {
           title: title.trim(),
           description: description.trim() ? description.trim() : undefined,
           price: priceNum,
+          priceCurrency,
           duration: durNum,
         });
       } else {
@@ -170,6 +177,7 @@ export function ProviderServiceForm(props: Props) {
             title: title.trim(),
             description: description.trim() ? description.trim() : undefined,
             price: priceNum,
+            priceCurrency,
             duration: durNum,
             isActive: resolvedActive,
           },
@@ -369,7 +377,41 @@ export function ProviderServiceForm(props: Props) {
         multiline
       />
 
-      <Text className="text-ink text-sm font-medium mb-2">Price (USD)</Text>
+      <Text className="text-ink text-sm font-medium mb-2">Price currency</Text>
+      <View className="mb-4">
+        <TouchableOpacity
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 flex-row items-center justify-between"
+          onPress={() => setShowCurrencyMenu((v) => !v)}
+          activeOpacity={0.85}
+        >
+          <Text className="text-ink text-base">{priceCurrency}</Text>
+          <Ionicons
+            name={showCurrencyMenu ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={appColors.ink.subtle}
+          />
+        </TouchableOpacity>
+        {showCurrencyMenu ? (
+          <View className="mt-2 bg-canvas-raised border border-ink-faint rounded-2xl overflow-hidden">
+            {SERVICE_CURRENCIES.map((currency) => (
+              <Pressable
+                key={currency}
+                className="px-4 py-3 border-b border-ink-faint active:opacity-80"
+                onPress={() => {
+                  setPriceCurrency(currency);
+                  setShowCurrencyMenu(false);
+                }}
+              >
+                <Text className={`text-sm ${currency === priceCurrency ? "text-primary-700 font-semibold" : "text-ink"}`}>
+                  {currency}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <Text className="text-ink text-sm font-medium mb-2">Price ({priceCurrency})</Text>
       <TextInput
         className={`bg-canvas-raised border ${priceFieldBorder} rounded-2xl px-4 py-3.5 text-ink text-base mb-4`}
         style={textInputBaselineStyle}

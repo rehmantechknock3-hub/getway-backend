@@ -176,6 +176,7 @@ model Service {
   title       String
   description String?
   price       Float
+  priceCurrency String        @default("USD")
   duration    Int             // minutes
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())

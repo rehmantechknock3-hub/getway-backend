@@ -25,10 +25,10 @@ import {
 } from "@repo/api-client";
 import { appColors } from "../../../styles/colors";
 
-function formatUsd(amount: number): string {
+function formatPrice(amount: number, currency: string | undefined): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -236,7 +236,7 @@ export default function ProviderServicesScreen() {
                   <Text
                     className={`font-bold shrink-0 ${incomplete ? "text-red-600" : "text-primary-600"}`}
                   >
-                    {s.price > 0 ? formatUsd(s.price) : "Set price"}
+                    {s.price > 0 ? formatPrice(s.price, s.priceCurrency) : "Set price"}
                   </Text>
                 </View>
                 <View className="flex-row items-center justify-between mt-3">

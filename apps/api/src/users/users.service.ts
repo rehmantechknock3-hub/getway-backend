@@ -5,7 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import type { Prisma } from "@prisma/client";
 import type {
   CustomerOnboarding,
@@ -17,6 +16,7 @@ import type {
 import { safeParseProviderOnboardingJson } from "@repo/schemas";
 
 import type { ClerkUserPayload } from "../auth/webhook.controller";
+import { GoogleMapsService } from "../maps/google-maps.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 /** Clerk lists multiple emails; sync must use the user's primary, not `email_addresses[0]`. */
@@ -38,79 +38,8 @@ export class UsersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService
+    private readonly googleMaps: GoogleMapsService
   ) {}
-
-  private getGoogleMapsApiKey(): string | undefined {
-    return (
-      this.configService.get<string>("GOOGLE_MAPS_API_KEY") ??
-      this.configService.get<string>("EXPO_PUBLIC_GOOGLE_MAPS_API_KEY")
-    );
-  }
-
-  private async geocodeProviderAddress(input: {
-    shopAddress: string;
-    shopPlaceId?: string;
-    requestId?: string;
-  }): Promise<{ latitude: number; longitude: number } | null> {
-    const apiKey = this.getGoogleMapsApiKey();
-    if (!apiKey) {
-      this.logger.warn(`Google Maps API key missing, skipping geocode [rid:${input.requestId}]`);
-      return null;
-    }
-
-    try {
-      if (input.shopPlaceId) {
-        const detailsUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-        detailsUrl.searchParams.set("place_id", input.shopPlaceId);
-        detailsUrl.searchParams.set("fields", "geometry/location");
-        detailsUrl.searchParams.set("key", apiKey);
-
-        const detailsResponse = await fetch(detailsUrl.toString());
-        const detailsJson = (await detailsResponse.json()) as {
-          status?: string;
-          result?: { geometry?: { location?: { lat?: number; lng?: number } } };
-        };
-        const placeLocation = detailsJson.result?.geometry?.location;
-        if (
-          detailsJson.status === "OK" &&
-          typeof placeLocation?.lat === "number" &&
-          typeof placeLocation?.lng === "number"
-        ) {
-          return { latitude: placeLocation.lat, longitude: placeLocation.lng };
-        }
-      }
-
-      const geocodeUrl = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-      geocodeUrl.searchParams.set("address", input.shopAddress);
-      geocodeUrl.searchParams.set("key", apiKey);
-
-      const geocodeResponse = await fetch(geocodeUrl.toString());
-      const geocodeJson = (await geocodeResponse.json()) as {
-        status?: string;
-        results?: Array<{ geometry?: { location?: { lat?: number; lng?: number } } }>;
-      };
-      const location = geocodeJson.results?.[0]?.geometry?.location;
-      if (
-        geocodeJson.status === "OK" &&
-        typeof location?.lat === "number" &&
-        typeof location?.lng === "number"
-      ) {
-        return { latitude: location.lat, longitude: location.lng };
-      }
-
-      this.logger.warn(
-        `Google geocode failed for provider address: ${input.shopAddress} [rid:${input.requestId}]`
-      );
-      return null;
-    } catch (error: unknown) {
-      this.logger.error(
-        `Failed to geocode provider address [rid:${input.requestId}]`,
-        error instanceof Error ? error.stack : undefined
-      );
-      return null;
-    }
-  }
 
   private async geocodeProviderLocations(
     locations: Array<{
@@ -138,7 +67,7 @@ export class UsersService {
         continue;
       }
 
-      const coords = await this.geocodeProviderAddress({
+      const coords = await this.googleMaps.geocodeAddress({
         shopAddress: location.address,
         shopPlaceId: location.placeId,
         requestId,
@@ -439,7 +368,7 @@ export class UsersService {
     const prevLat = typeof prev?.primaryLatitude === "number" ? prev.primaryLatitude : undefined;
     const prevLng = typeof prev?.primaryLongitude === "number" ? prev.primaryLongitude : undefined;
 
-    const coords = await this.geocodeProviderAddress({
+    const coords = await this.googleMaps.geocodeAddress({
       shopAddress: data.primaryLocation.trim(),
       requestId,
     });
