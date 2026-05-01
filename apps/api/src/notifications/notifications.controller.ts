@@ -34,7 +34,7 @@ export class NotificationsController {
     const parsed = ListNotificationsQuerySchema.safeParse(rawQuery);
     const q = parsed.success ? parsed.data : { page: 1, limit: 20 };
 
-    return this.notificationsService.listForUser(clerkId, q.page, q.limit);
+    return this.notificationsService.listForUser(clerkId, q.page, q.limit, req.requestId);
   }
 
   @Patch(":id/read")
@@ -42,7 +42,7 @@ export class NotificationsController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    return this.notificationsService.markRead(clerkId, id);
+    return this.notificationsService.markRead(clerkId, id, req.requestId);
   }
 
   @Delete(":id")
@@ -51,7 +51,7 @@ export class NotificationsController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    await this.notificationsService.remove(clerkId, id);
+    await this.notificationsService.remove(clerkId, id, req.requestId);
   }
 
   @Delete()
@@ -60,6 +60,6 @@ export class NotificationsController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    await this.notificationsService.clearAll(clerkId);
+    await this.notificationsService.clearAll(clerkId, req.requestId);
   }
 }

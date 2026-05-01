@@ -1,15 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, AppState, ScrollView, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { io, type Socket } from "socket.io-client";
+import * as Location from "expo-location";
 
-import { setAuthToken, useProviderBooking } from "@repo/api-client";
+import { useProviderBooking } from "@repo/api-client";
+import { useBookingTracking } from "@repo/hooks";
+import { reportError } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
+import { LiveTrackingMapCard } from "../../../components/LiveTrackingMapCard";
 import { appColors } from "../../../styles/colors";
 
 function formatWhen(d: Date): string {
@@ -36,7 +41,7 @@ function statusLabel(status: string): string {
     case "PENDING":
       return "Awaiting your response";
     case "ACCEPTED":
-      return "Accepted — scheduled";
+      return "On the way";
     case "IN_PROGRESS":
       return "In progress";
     case "COMPLETED":
@@ -55,26 +60,40 @@ export default function ProviderBookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = typeof id === "string" ? id : "";
   const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const getTokenRef = useRef(getToken);
+  const reconnectingRef = useRef(false);
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
+  const [localProviderLocation, setLocalProviderLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [lastLiveProviderLocation, setLastLiveProviderLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  const enabled = isLoaded && isSignedIn && !!bookingId;
+  const { data: booking, isLoading, isError, refetch } = useProviderBooking(bookingId, { enabled });
+  const tracking = useBookingTracking(enabled ? bookingId : null, socketInstance);
+  const effectiveStatus = tracking.status ?? booking?.status ?? null;
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
+    getTokenRef.current = getToken;
+  }, [getToken]);
 
-  const enabled = isLoaded && isSignedIn && apiReady && !!bookingId;
-  const { data: booking, isLoading, isError, refetch } = useProviderBooking(bookingId, { enabled });
+  useEffect(() => {
+    if (!tracking.providerLocation) return;
+    setLastLiveProviderLocation({
+      latitude: tracking.providerLocation.latitude,
+      longitude: tracking.providerLocation.longitude,
+    });
+  }, [tracking.providerLocation]);
+
+  useEffect(() => {
+    setLocalProviderLocation(null);
+    setLastLiveProviderLocation(null);
+  }, [bookingId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -82,9 +101,159 @@ export default function ProviderBookingDetailScreen() {
     }, [enabled, refetch])
   );
 
+  useEffect(() => {
+    if (!enabled || !bookingId) {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
+      return;
+    }
+
+    if (socketRef.current != null) return;
+
+    let cancelled = false;
+    const rawBaseUrl =
+      process.env.EXPO_PUBLIC_SOCKET_URL ??
+      process.env.EXPO_PUBLIC_API_URL ??
+      "http://localhost:3001";
+    const normalized = rawBaseUrl.trim().replace(/\/$/, "");
+    const client = io(`${normalized}/bookings`, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 5_000,
+      query: { bookingId },
+      auth: (cb) => {
+        void getTokenRef.current({ skipCache: true }).then((token) => {
+          cb({ token: token ?? "" });
+        });
+      },
+    });
+    const reconnectWithFreshToken = () => {
+      if (reconnectingRef.current) return;
+      reconnectingRef.current = true;
+      void getTokenRef.current({ skipCache: true })
+        .then((token) => {
+          client.auth = { token: token ?? "" };
+          if (!client.connected) client.connect();
+        })
+        .catch((error: unknown) => {
+          reportError(error, { screen: "ProviderBookingDetail", action: "socketReconnectToken" });
+        })
+        .finally(() => {
+          reconnectingRef.current = false;
+        });
+    };
+
+    client.on("connect_error", reconnectWithFreshToken);
+    client.on("disconnect", (reason) => {
+      if (reason !== "io client disconnect") reconnectWithFreshToken();
+    });
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && !client.connected) {
+        reconnectWithFreshToken();
+      }
+    });
+
+    if (cancelled) {
+      client.disconnect();
+      return;
+    }
+    socketRef.current = client;
+    setSocketInstance(client);
+
+    return () => {
+      cancelled = true;
+      appStateSub.remove();
+      client.off("connect_error", reconnectWithFreshToken);
+      client.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
+    };
+  }, [enabled, bookingId]);
+
+  useEffect(() => {
+    if (!socketInstance || !bookingId) return;
+    if (effectiveStatus !== "IN_PROGRESS") return;
+
+    let subscription: Location.LocationSubscription | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+    let lastEmitAt = 0;
+    let mounted = true;
+
+    const emitCurrentLocation = async () => {
+      try {
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        if (!mounted) return;
+        const nextLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        setLocalProviderLocation(nextLocation);
+        const now = Date.now();
+        // Keep at least 1.2s gap to align with backend websocket throttle.
+        if (now - lastEmitAt < 1_200) return;
+        lastEmitAt = now;
+        socketInstance.emit("location:broadcast", {
+          bookingId,
+          latitude: nextLocation.latitude,
+          longitude: nextLocation.longitude,
+        });
+      } catch (error: unknown) {
+        reportError(error, { screen: "ProviderBookingDetail", action: "emitCurrentLocation" });
+      }
+    };
+
+    void (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || !mounted) return;
+
+      await emitCurrentLocation();
+
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          distanceInterval: 1,
+          timeInterval: 1_000,
+        },
+        (position) => {
+          const nextLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          setLocalProviderLocation(nextLocation);
+          const now = Date.now();
+          if (now - lastEmitAt < 1_200) return;
+          lastEmitAt = now;
+          socketInstance.emit("location:broadcast", {
+            bookingId,
+            latitude: nextLocation.latitude,
+            longitude: nextLocation.longitude,
+          });
+        }
+      );
+
+      // Backup heartbeat in case watch callbacks pause after app resume.
+      pollInterval = setInterval(() => {
+        void emitCurrentLocation();
+      }, 4_000);
+    })();
+
+    return () => {
+      mounted = false;
+      subscription?.remove();
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [bookingId, effectiveStatus, socketInstance]);
+
   const customerName = booking
     ? `${booking.customerFirstName} ${booking.customerLastName}`.trim()
     : "";
+  const providerDisplayLocation =
+    localProviderLocation ?? tracking.providerLocation ?? lastLiveProviderLocation;
 
   return (
     <ScrollView
@@ -100,7 +269,7 @@ export default function ProviderBookingDetailScreen() {
         Job details
       </Text>
       {booking ? (
-        <Text className="text-ink-muted text-sm mb-6">{statusLabel(booking.status)}</Text>
+        <Text className="text-ink-muted text-sm mb-6">{statusLabel(effectiveStatus ?? booking.status)}</Text>
       ) : (
         <View className="mb-6 h-[18px]" />
       )}
@@ -117,7 +286,18 @@ export default function ProviderBookingDetailScreen() {
         </View>
       ) : (
         <>
-          <BookingStatusTimeline status={booking.status} audience="provider" />
+          <BookingStatusTimeline status={effectiveStatus ?? booking.status} audience="provider" />
+
+          {effectiveStatus === "IN_PROGRESS" ? (
+            <LiveTrackingMapCard
+              title="Navigate to customer"
+              subtitle="Live navigation is available once the job is started."
+              customerLocation={{ latitude: booking.latitude, longitude: booking.longitude }}
+              providerLocation={providerDisplayLocation}
+              providerLocationIsLive={providerDisplayLocation != null}
+              isConnected={tracking.isConnected}
+            />
+          ) : null}
 
           <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
             <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2">Service</Text>

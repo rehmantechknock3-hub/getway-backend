@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -19,7 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { apiClient, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
-import { fetchGoogleGeocodeLocation } from "@repo/utils";
+import { showToast } from "@repo/ui";
+import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { appColors } from "../../styles/colors";
@@ -84,7 +84,7 @@ export default function CustomerOnboardingScreen() {
 
   async function handleContinue() {
     if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
-      Alert.alert("Required", "Please provide location, car company, and model.");
+      showToast("error", "Please provide location, car company, and model.");
       return;
     }
 
@@ -106,7 +106,8 @@ export default function CustomerOnboardingScreen() {
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(customer)/(tabs)/home");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save onboarding");
+      reportError(error, { screen: "CustomerOnboarding", action: "handleContinue" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save onboarding");
     }
   }
 

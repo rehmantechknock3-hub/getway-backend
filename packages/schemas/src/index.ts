@@ -9,6 +9,7 @@ export * from "./favorite.schema";
 
 // Bookings & Reviews
 export * from "./booking.schema";
+export * from "./review.schema";
 
 // Notifications
 export * from "./notification.schema";
@@ -18,3 +19,6 @@ export * from "./payment.schema";
 
 // Messaging
 export * from "./message.schema";
+
+// Maps
+export * from "./maps.schema";

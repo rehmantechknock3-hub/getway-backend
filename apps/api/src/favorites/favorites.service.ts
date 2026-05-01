@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import type { FavoriteProviderListResponse } from "@repo/schemas";
@@ -10,6 +11,8 @@ import { ProvidersService } from "../providers/providers.service";
 
 @Injectable()
 export class FavoritesService {
+  private readonly logger = new Logger(FavoritesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly providersService: ProvidersService,
@@ -22,7 +25,12 @@ export class FavoritesService {
     requestId?: string
   ): Promise<FavoriteProviderListResponse> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(
+        `Favorites list user not found for clerkId=${clerkId} [rid:${requestId}]`
+      );
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "CUSTOMER") {
       throw new ForbiddenException("Only customers can list favorites");
     }
@@ -46,9 +54,14 @@ export class FavoritesService {
     return { data };
   }
 
-  async add(clerkId: string, providerId: string): Promise<void> {
+  async add(clerkId: string, providerId: string, requestId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(
+        `Favorites add user not found for clerkId=${clerkId} [rid:${requestId}]`
+      );
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "CUSTOMER") {
       throw new ForbiddenException("Only customers can save favorites");
     }
@@ -68,9 +81,14 @@ export class FavoritesService {
     });
   }
 
-  async remove(clerkId: string, providerId: string): Promise<void> {
+  async remove(clerkId: string, providerId: string, requestId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(
+        `Favorites remove user not found for clerkId=${clerkId} [rid:${requestId}]`
+      );
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "CUSTOMER") {
       throw new ForbiddenException("Only customers can remove favorites");
     }

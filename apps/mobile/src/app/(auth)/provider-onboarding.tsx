@@ -2,7 +2,6 @@ import { useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StatusBar,
   Switch,
@@ -60,14 +59,11 @@ export default function ProviderOnboardingScreen() {
       normalizedLocations.length === 0 ||
       !serviceDescription.trim()
     ) {
-      Alert.alert(
-        "Required",
-        "Pick categories, add at least one shop location, and complete service details."
-      );
+      showToast("error", "Pick categories, add at least one shop location, and complete service details.");
       return;
     }
     if (Number.isNaN(parsedExperience) || parsedExperience < 0) {
-      Alert.alert("Required", "Please enter valid years of experience.");
+      showToast("error", "Please enter valid years of experience.");
       return;
     }
 
@@ -112,7 +108,8 @@ export default function ProviderOnboardingScreen() {
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(provider)/(tabs)/services");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save onboarding");
+      reportError(error, { screen: "ProviderOnboarding", action: "handleContinue" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save onboarding");
     }
   }
 

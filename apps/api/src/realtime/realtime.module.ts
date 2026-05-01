@@ -4,5 +4,6 @@ import { ChatGateway }     from "./chat.gateway";
 
 @Module({
   providers: [BookingGateway, ChatGateway],
+  exports: [BookingGateway, ChatGateway],
 })
 export class RealtimeModule {}

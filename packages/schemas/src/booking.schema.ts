@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ReviewSchema } from "./review.schema";
 
 export const BookingStatus = z.enum([
   "PENDING",
@@ -23,6 +24,9 @@ export const BookingSchema = z.object({
   notes:        z.string().max(500).optional(),
   totalAmount:  z.number().positive(),
   totalCurrency: z.string().min(3).max(8).optional(),
+  /** Provider profile coordinates used as initial tracking fallback before live GPS updates arrive. */
+  providerLatitude: z.number().optional(),
+  providerLongitude: z.number().optional(),
   createdAt:    z.coerce.date(),
   updatedAt:    z.coerce.date(),
 });
@@ -43,20 +47,6 @@ export const AdminCreateBookingSchema = CreateBookingSchema.extend({
 
 export const UpdateBookingStatusSchema = z.object({
   status: BookingStatus,
-});
-
-export const ReviewSchema = z.object({
-  id:        z.string().uuid(),
-  bookingId: z.string().uuid(),
-  rating:    z.number().int().min(1).max(5),
-  comment:   z.string().max(1000).optional(),
-  createdAt: z.coerce.date(),
-});
-
-export const CreateReviewSchema = ReviewSchema.pick({
-  bookingId: true,
-  rating:    true,
-  comment:   true,
 });
 
 /** Customer booking payload including an existing review, if any. */
@@ -83,6 +73,7 @@ export const ProviderJobQueueStatsSchema = z.object({
   pending:   z.number().int(),
   active:    z.number().int(),
   completed: z.number().int(),
+  totalEarnings: z.number().nonnegative(),
 });
 
 export const ProviderBookingListResponseSchema = z.object({
@@ -123,5 +114,3 @@ export type ProviderBookingListResponse = z.infer<typeof ProviderBookingListResp
 export type ProviderJobQueueStats = z.infer<typeof ProviderJobQueueStatsSchema>;
 export type ProviderReviewListItem = z.infer<typeof ProviderReviewListItemSchema>;
 export type ProviderReviewListResponse = z.infer<typeof ProviderReviewListResponseSchema>;
-export type Review                   = z.infer<typeof ReviewSchema>;
-export type CreateReviewInput        = z.infer<typeof CreateReviewSchema>;

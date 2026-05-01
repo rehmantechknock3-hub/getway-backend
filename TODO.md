@@ -6,28 +6,29 @@ Items carried forward from the PR#3/PR#4 review cycle. None are merge-blockers, 
 
 ## Schema & Type Hygiene
 
-- [ ] Extract `ReviewSchema` from `packages/schemas/src/booking.schema.ts` into its own `review.schema.ts` file
-- [ ] Audit remaining `@prisma/client` imports — `BookingStatus` in `bookings.service.ts` and `Prisma` utility types in `providers.service.ts` / `reviews.service.ts` — and evaluate whether these can be re-exported or aliased through `@repo/schemas`
+- [x] Extract `ReviewSchema` from `packages/schemas/src/booking.schema.ts` into its own `review.schema.ts` file
+- [x] Audit remaining `@prisma/client` imports — narrowed usage to necessary Prisma-only layers (`prisma.service.ts` + runtime/error handling in `google-maps.service.ts`, typed utility usage where needed)
 
 ## Security Hardening
 
-- [ ] **🔴 BLOCKER (PR#4 review)** Tighten WebSocket CORS — both gateways (`booking.gateway.ts`, `chat.gateway.ts`) currently use `cors: { origin: true }` (allow all origins). Must lock down to match the HTTP CORS config (`WEB_URL` + mobile origins) **before production deployment**. Fine locally but a deployment blocker. Use a custom `IoAdapter` or `afterInit` hook to read from `ConfigService` since `@WebSocketGateway` decorator options are evaluated before DI.
-- [ ] Add rate limiting to `location:broadcast` WebSocket event to prevent DoS via GPS spam
+- [x] **🔴 BLOCKER (PR#4 review)** Tighten WebSocket CORS — both gateways (`booking.gateway.ts`, `chat.gateway.ts`) currently use `cors: { origin: true }` (allow all origins). Must lock down to match the HTTP CORS config (`WEB_URL` + mobile origins) **before production deployment**. Fine locally but a deployment blocker. Use a custom `IoAdapter` or `afterInit` hook to read from `ConfigService` since `@WebSocketGateway` decorator options are evaluated before DI.
+- [x] Add rate limiting to `location:broadcast` WebSocket event to prevent DoS via GPS spam
 
 ## Mobile UI Polish
 
-- [ ] Verify all screens consistently use `appColors` tokens from `styles/colors.ts` rather than inline values — do a full sweep of `(customer)` and `(provider)` screen directories
-- [ ] Ensure `SafeAreaView` is imported from `react-native-safe-area-context` across all screens (not the deprecated `react-native` export)
+- [x] Verify all screens consistently use `appColors` tokens from `styles/colors.ts` rather than inline values — do a full sweep of `(customer)` and `(provider)` screen directories
+- [x] Ensure `SafeAreaView` is imported from `react-native-safe-area-context` across all screens (not the deprecated `react-native` export)
 
 ## Backend Quality
 
-- [ ] Add `Logger` usage to any remaining services that may still lack it (quick audit of all `*.service.ts` files)
-- [ ] Review `notification.catch(() => undefined)` fire-and-forget pattern in `bookings.service.ts` — consider logging the swallowed error at `warn` level so failed notifications are visible in ops
+- [x] Add `Logger` usage to any remaining services that may still lack it (quick audit of all `*.service.ts` files)
+- [x] Review `notification.catch(() => undefined)` fire-and-forget pattern in `bookings.service.ts` — consider logging the swallowed error at `warn` level so failed notifications are visible in ops
+- [x] Swap backend Haversine duplication in `providers.service.ts` to `haversineDistance()` from `@repo/utils`
 
 ## Testing
 
-- [ ] Add boundary/edge-case tests for the booking state machine (e.g., customer-initiated cancellation flow, double-accept race condition)
-- [ ] Add integration test for WebSocket auth rejection (connect without token → expect disconnect)
+- [x] Add boundary/edge-case tests for the booking state machine (e.g., customer-initiated cancellation flow, double-accept race condition)
+- [x] Add integration test for WebSocket auth rejection (connect without token → expect disconnect)
 
 ## M3 — Error Handling & Observability
 
@@ -44,20 +45,20 @@ Items carried forward from the PR#3/PR#4 review cycle. None are merge-blockers, 
 
 ### Infrastructure — Requires App-Specific Integration
 
-- [ ] Install packages: `pnpm --filter @repo/mobile add @sentry/react-native react-native-toast-message` and `pnpm --filter @repo/web add sonner`
-- [ ] Initialize Sentry in mobile `_layout.tsx` with DSN
-- [ ] Add `<Toast />` component from `react-native-toast-message` in mobile root layout (`_layout.tsx`)
-- [ ] Add `<Toaster />` component from `sonner` in web root layout (`apps/web/src/app/layout.tsx`)
-- [ ] Update NestJS services to accept and log `requestId` in error paths
-- [ ] Validate `reportError()` Sentry detection against real `@sentry/react-native` — `globalThis.__SENTRY__` may not expose `captureException` directly. If not, switch to dynamic `require('@sentry/react-native')` in try-catch.
+- [x] Install packages: `pnpm --filter @repo/mobile add @sentry/react-native react-native-toast-message` and `pnpm --filter @repo/web add sonner`
+- [x] Initialize Sentry in mobile `_layout.tsx` with DSN
+- [x] Add `<Toast />` component from `react-native-toast-message` in mobile root layout (`_layout.tsx`)
+- [x] Add `<Toaster />` component from `sonner` in web root layout (`apps/web/src/app/layout.tsx`)
+- [x] Update NestJS services to accept and log `requestId` in error paths
+- [x] Validate `reportError()` Sentry detection against real `@sentry/react-native` — `globalThis.__SENTRY__` may not expose `captureException` directly. If not, switch to dynamic `require('@sentry/react-native')` in try-catch.
 
 ### UI Polish
 
-- [ ] Add fade-out animation to service categories modal overlay (`ProviderServiceCategoriesField.tsx`) — currently fades in but snaps off instantly on close
+- [x] Add fade-out animation to service categories modal overlay (`ProviderServiceCategoriesField.tsx`) — currently fades in but snaps off instantly on close
 
 ### Retrofit Existing Screens
 
-- [ ] Retrofit sign-in/sign-up screens to use `safeClerkCall()` + `showToast()` + `reportError()` (currently has raw try-catch)
-- [ ] Audit all mobile screens for missing try-catch on async action handlers (button presses, form submits)
-- [ ] Replace `Alert.alert('Error', ...)` with `showToast('error', ...)` for recoverable errors across all screens
-- [ ] Ensure every `setLoading(true)` has a corresponding reset in `finally` block
+- [x] Retrofit sign-in/sign-up screens to use `safeClerkCall()` + `showToast()` + `reportError()` (currently has raw try-catch)
+- [x] Audit all mobile screens for missing try-catch on async action handlers (button presses, form submits)
+- [x] Replace `Alert.alert('Error', ...)` with `showToast('error', ...)` for recoverable errors across all screens
+- [x] Ensure every `setLoading(true)` has a corresponding reset in `finally` block

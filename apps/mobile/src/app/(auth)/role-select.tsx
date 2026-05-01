@@ -61,15 +61,18 @@ export default function RoleSelectScreen() {
     }
   }, [allowRoleChange, role]);
 
-  async function handleConfirm() {
+  function handleConfirm() {
     if (!selected) return;
     setLoading(true);
-    router.replace(
-      selected === "PROVIDER"
-        ? "/(auth)/provider-onboarding?allowRoleChange=1"
-        : "/(auth)/customer-onboarding?allowRoleChange=1",
-    );
-    setLoading(false);
+    try {
+      router.replace(
+        selected === "PROVIDER"
+          ? "/(auth)/provider-onboarding?allowRoleChange=1"
+          : "/(auth)/customer-onboarding?allowRoleChange=1",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

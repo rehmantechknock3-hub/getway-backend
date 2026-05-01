@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Image,
   RefreshControl,
   ScrollView,
@@ -22,7 +21,6 @@ import {
   useMe,
   useSubmitProviderOnboarding,
   useUpdateProfile,
-  useUpdateProviderPresence,
 } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
@@ -63,7 +61,6 @@ export default function ProviderProfileScreen() {
   );
   const updateProfile = useUpdateProfile();
   const updateProviderOnboarding = useSubmitProviderOnboarding();
-  const updateProviderPresence = useUpdateProviderPresence();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
@@ -77,7 +74,6 @@ export default function ProviderProfileScreen() {
   const [shopLocations, setShopLocations] = useState<
     Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>
   >([]);
-  const [isOnline, setIsOnline] = useState(false);
   const [hasTools, setHasTools] = useState(true);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const serviceDescription = me?.providerOnboarding?.serviceDescription ?? "";
@@ -106,7 +102,6 @@ export default function ProviderProfileScreen() {
         longitude: location.longitude,
       }))
     );
-    setIsOnline(me.providerMetrics?.isOnline ?? false);
     setHasTools(me.providerOnboarding?.hasTools ?? true);
     setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
   }, [me, clerkUser?.firstName, clerkUser?.lastName]);
@@ -115,7 +110,7 @@ export default function ProviderProfileScreen() {
   async function handleSaveProfile() {
     const emailToSave = accountEmail.trim();
     if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
-      Alert.alert("Required", "Name, email and phone are required.");
+      showToast("error", "Name, email and phone are required.");
       return;
     }
     try {
@@ -125,9 +120,10 @@ export default function ProviderProfileScreen() {
         email: emailToSave,
         phone: phone.trim(),
       });
-      Alert.alert("Saved", "Profile updated successfully.");
+      showToast("success", "Profile updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save profile");
+      reportError(error, { screen: "ProviderProfile", action: "handleSaveProfile" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save profile");
     }
   }
 
@@ -144,7 +140,7 @@ export default function ProviderProfileScreen() {
       normalizedLocations.length === 0 ||
       Number.isNaN(parsedExperience)
     ) {
-      Alert.alert("Required", "Complete provider details before saving.");
+      showToast("error", "Complete provider details before saving.");
       return;
     }
     try {
@@ -178,19 +174,10 @@ export default function ProviderProfileScreen() {
         serviceDescription: serviceDescription.trim(),
         profilePhotoUrl: profilePhotoUrl.trim() ? profilePhotoUrl.trim() : undefined,
       });
-      Alert.alert("Saved", "Provider details updated successfully.");
+      showToast("success", "Provider details updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save provider details");
-    }
-  }
-
-  async function handlePresenceToggle(nextValue: boolean) {
-    setIsOnline(nextValue);
-    try {
-      await updateProviderPresence.mutateAsync(nextValue);
-    } catch (error: unknown) {
-      setIsOnline(!nextValue);
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to update availability");
+      reportError(error, { screen: "ProviderProfile", action: "handleSaveProviderInfo" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save provider details");
     }
   }
 
@@ -360,14 +347,6 @@ export default function ProviderProfileScreen() {
       <Text className="text-ink-muted text-xs mb-4 leading-5">
         Set price and duration for each offering under <Text className="font-semibold text-ink-soft">My services</Text>.
       </Text>
-
-      <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-6 flex-row items-center justify-between">
-        <View className="flex-1 pr-3">
-          <Text className="text-ink font-semibold">Availability</Text>
-          <Text className="text-ink-muted text-sm">Customers see this as online/offline status.</Text>
-        </View>
-        <Switch value={isOnline} onValueChange={(value) => void handlePresenceToggle(value)} />
-      </View>
 
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-6 flex-row items-center justify-between">
         <View className="flex-1 pr-3">

@@ -53,7 +53,7 @@ export class FavoritesController {
   async add(@Req() req: Request, @Param("providerId") providerId: string) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    await this.favoritesService.add(clerkId, providerId);
+    await this.favoritesService.add(clerkId, providerId, req.requestId);
     return { ok: true as const };
   }
 
@@ -61,7 +61,7 @@ export class FavoritesController {
   async remove(@Req() req: Request, @Param("providerId") providerId: string) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    await this.favoritesService.remove(clerkId, providerId);
+    await this.favoritesService.remove(clerkId, providerId, req.requestId);
     return { ok: true as const };
   }
 }

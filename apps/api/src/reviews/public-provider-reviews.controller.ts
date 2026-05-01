@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Param, Query, Req } from "@nestjs/common";
+import type { Request } from "express";
 import { z } from "zod";
 
 import { Public } from "../auth/public.decorator";
@@ -17,11 +18,12 @@ export class PublicProviderReviewsController {
   @Get()
   async list(
     @Param("providerId") providerId: string,
-    @Query() rawQuery: Record<string, string | undefined>
+    @Query() rawQuery: Record<string, string | undefined>,
+    @Req() req: Request
   ) {
     const parsed = ListPublicProviderReviewsQuerySchema.safeParse(rawQuery);
     const q = parsed.success ? parsed.data : { page: 1, limit: 20 };
 
-    return this.reviewsService.listForPublicProvider(providerId, q.page, q.limit);
+    return this.reviewsService.listForPublicProvider(providerId, q.page, q.limit, req.requestId);
   }
 }

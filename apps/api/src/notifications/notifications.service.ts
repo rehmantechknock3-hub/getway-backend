@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import type { Notification as NotificationDto, NotificationType } from "@repo/schemas";
 
 import { PrismaService } from "../prisma/prisma.service";
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   private toDto(row: {
@@ -120,7 +122,10 @@ export class NotificationsService {
     };
 
     const cfg = map[status];
-    if (!cfg) return;
+    if (!cfg) {
+      this.logger.warn(`Unknown booking status for notification: ${status}`);
+      return;
+    }
 
     await this.createForUser(customerUserId, {
       type: cfg.type,
@@ -153,7 +158,8 @@ export class NotificationsService {
   async listForUser(
     clerkId: string,
     page: number,
-    limit: number
+    limit: number,
+    requestId?: string
   ): Promise<{
     data: NotificationDto[];
     total: number;
@@ -162,7 +168,10 @@ export class NotificationsService {
     limit: number;
   }> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Notifications list user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
 
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
@@ -190,9 +199,16 @@ export class NotificationsService {
     };
   }
 
-  async markRead(clerkId: string, notificationId: string): Promise<NotificationDto> {
+  async markRead(
+    clerkId: string,
+    notificationId: string,
+    requestId?: string
+  ): Promise<NotificationDto> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Notifications markRead user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
 
     const row = await this.prisma.notification.findFirst({
       where: { id: notificationId, userId: user.id },
@@ -207,9 +223,12 @@ export class NotificationsService {
     return this.toDto(updated);
   }
 
-  async remove(clerkId: string, notificationId: string): Promise<void> {
+  async remove(clerkId: string, notificationId: string, requestId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Notifications remove user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
 
     const row = await this.prisma.notification.findFirst({
       where: { id: notificationId, userId: user.id },
@@ -220,9 +239,12 @@ export class NotificationsService {
     await this.prisma.notification.delete({ where: { id: notificationId } });
   }
 
-  async clearAll(clerkId: string): Promise<void> {
+  async clearAll(clerkId: string, requestId?: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Notifications clearAll user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
 
     await this.prisma.notification.deleteMany({ where: { userId: user.id } });
   }

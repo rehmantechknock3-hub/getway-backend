@@ -56,7 +56,7 @@ describe("GoogleMapsService", () => {
     const out = await svc.resolveDrivingDistances(10, 20, [
       { providerId: "p1", destLat: 10.1, destLon: 20.1, fallbackKm: 3.3 },
     ]);
-    expect(out.get("p1")).toEqual({ km: 3.3, meters: 3300, kind: "STRAIGHT_LINE" });
+    expect(out.get("p1")).toEqual({ km: 3.3, meters: 3300, durationSeconds: null, kind: "STRAIGHT_LINE" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -65,6 +65,7 @@ describe("GoogleMapsService", () => {
       {
         providerProfileId: "p1",
         drivingDistanceMeters: 12_500,
+        drivingDurationSeconds: 600,
         destLatKey: service.coordKey(40.7129, 5),
         destLngKey: service.coordKey(-74.0061, 5),
       },
@@ -74,7 +75,7 @@ describe("GoogleMapsService", () => {
       { providerId: "p1", destLat: 40.7129, destLon: -74.0061, fallbackKm: 0.5 },
     ]);
 
-    expect(out.get("p1")).toEqual({ km: 12.5, meters: 12_500, kind: "DRIVING" });
+    expect(out.get("p1")).toEqual({ km: 12.5, meters: 12_500, durationSeconds: 600, kind: "DRIVING" });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -106,7 +107,7 @@ describe("GoogleMapsService", () => {
       { providerId: "p1", destLat: 1.01, destLon: 2.01, fallbackKm: 0.9 },
     ]);
 
-    expect(out.get("p1")).toEqual({ km: 1, meters: 1000, kind: "DRIVING" });
+    expect(out.get("p1")).toEqual({ km: 1, meters: 1000, durationSeconds: 120, kind: "DRIVING" });
   });
 
   it("resolveDrivingDistances calls Distance Matrix and upserts on cache miss", async () => {
@@ -125,9 +126,57 @@ describe("GoogleMapsService", () => {
       { providerId: "p1", destLat: 40.72, destLon: -74.01, fallbackKm: 1.2 },
     ]);
 
-    expect(out.get("p1")).toEqual({ km: 8.8, meters: 8800, kind: "DRIVING" });
+    expect(out.get("p1")).toEqual({ km: 8.8, meters: 8800, durationSeconds: 720, kind: "DRIVING" });
     expect(upsert).toHaveBeenCalledTimes(1);
     expect(upsert.mock.calls[0]?.[0]?.create?.drivingDistanceMeters).toBe(8800);
+  });
+
+  it("resolveDrivingLeg returns driving distance + duration from Distance Matrix", async () => {
+    fetchSpy.mockResolvedValue({
+      json: async () => ({
+        status: "OK",
+        rows: [
+          {
+            elements: [{ status: "OK", distance: { value: 2500 }, duration: { value: 300 } }],
+          },
+        ],
+      }),
+    } as Response);
+
+    const out = await service.resolveDrivingLeg(1, 2, 1.02, 2.02, "rid-leg");
+
+    expect(out).toEqual({
+      distanceMeters: 2500,
+      distanceKm: 2.5,
+      durationSeconds: 300,
+      kind: "DRIVING",
+    });
+  });
+
+  it("resolveDrivingRoute returns decoded route polyline", async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        json: async () => ({
+          status: "OK",
+          rows: [
+            {
+              elements: [{ status: "OK", distance: { value: 2500 }, duration: { value: 300 } }],
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        json: async () => ({
+          status: "OK",
+          routes: [{ overview_polyline: { points: "_p~iF~ps|U_ulLnnqC_mqNvxq`@" } }],
+        }),
+      } as Response);
+
+    const out = await service.resolveDrivingRoute(38.5, -120.2, 43.252, -126.453, "rid-route");
+
+    expect(out.kind).toBe("DRIVING");
+    expect(out.path.length).toBeGreaterThan(1);
+    expect(out.path[0]).toMatchObject({ latitude: 38.5, longitude: -120.2 });
   });
 
   it("backfillProviderCoordinatesIfNeeded returns row when profile or shop already has coords", async () => {

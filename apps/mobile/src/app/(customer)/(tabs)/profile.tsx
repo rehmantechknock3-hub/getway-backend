@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
-import { ActivityIndicator, Alert, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, ScrollView, StatusBar, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
-import { fetchGoogleGeocodeLocation } from "@repo/utils";
+import { showToast } from "@repo/ui";
+import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../../components/LocationPreviewMap";
 import { appColors } from "../../../styles/colors";
@@ -102,7 +103,7 @@ export default function ProfileScreen() {
   async function handleSaveProfile() {
     const emailToSave = accountEmail.trim();
     if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
-      Alert.alert("Required", "Name, email and phone are required.");
+      showToast("error", "Name, email and phone are required.");
       return;
     }
     try {
@@ -112,9 +113,10 @@ export default function ProfileScreen() {
         email: emailToSave,
         phone: phone.trim(),
       });
-      Alert.alert("Saved", "Profile updated successfully.");
+      showToast("success", "Profile updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save profile");
+      reportError(error, { screen: "CustomerProfile", action: "handleSaveProfile" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save profile");
     }
   }
 
@@ -124,15 +126,16 @@ export default function ProfileScreen() {
       .filter((location) => location.label && location.address);
     try {
       await updateSavedLocations.mutateAsync(cleanLocations);
-      Alert.alert("Saved", "Locations updated successfully.");
+      showToast("success", "Locations updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save locations");
+      reportError(error, { screen: "CustomerProfile", action: "handleSaveLocations" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save locations");
     }
   }
 
   async function handleSaveVehiclePreferences() {
     if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
-      Alert.alert("Required", "Location, car company and model are required.");
+      showToast("error", "Location, car company and model are required.");
       return;
     }
     try {
@@ -142,9 +145,10 @@ export default function ProfileScreen() {
         carModel: carModel.trim(),
         notes: notes.trim() ? notes.trim() : undefined,
       });
-      Alert.alert("Saved", "Vehicle preferences updated successfully.");
+      showToast("success", "Vehicle preferences updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save vehicle preferences");
+      reportError(error, { screen: "CustomerProfile", action: "handleSaveVehiclePreferences" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save vehicle preferences");
     }
   }
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Prisma } from "@prisma/client";
 import { safeParseProviderOnboardingJson, type ProviderOnboarding } from "@repo/schemas";
+import { haversineDistance } from "@repo/utils";
 
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -13,6 +14,43 @@ const DISTANCE_MATRIX_DESTINATION_LIMIT = 25;
 
 function normalizeAddress(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function decodeGooglePolyline(encoded: string): Array<{ latitude: number; longitude: number }> {
+  let index = 0;
+  let lat = 0;
+  let lon = 0;
+  const coordinates: Array<{ latitude: number; longitude: number }> = [];
+
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    const dLat = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lat += dLat;
+
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    const dLon = (result & 1) !== 0 ? ~(result >> 1) : result >> 1;
+    lon += dLon;
+
+    coordinates.push({
+      latitude: lat / 1e5,
+      longitude: lon / 1e5,
+    });
+  }
+
+  return coordinates;
 }
 
 export type ProviderRowForGeocode = {
@@ -31,6 +69,8 @@ export type DrivingDistanceResult = {
   km: number;
   /** Integer metres (exact from Distance Matrix when driving). */
   meters: number;
+  /** Present for Distance Matrix results when Google returns a duration. */
+  durationSeconds?: number | null;
   kind: "DRIVING" | "STRAIGHT_LINE";
 };
 
@@ -266,7 +306,7 @@ export class GoogleMapsService {
 
     for (const e of entries) {
       const meters = Math.max(0, Math.round(e.fallbackKm * 1000));
-      out.set(e.providerId, { km: meters / 1000, meters, kind: "STRAIGHT_LINE" });
+      out.set(e.providerId, { km: meters / 1000, meters, durationSeconds: null, kind: "STRAIGHT_LINE" });
     }
 
     if (!apiKey) {
@@ -316,6 +356,7 @@ export class GoogleMapsService {
       out.set(c.providerProfileId, {
         km: meters / 1000,
         meters,
+        durationSeconds: c.drivingDurationSeconds ?? null,
         kind: "DRIVING",
       });
     }
@@ -419,6 +460,7 @@ export class GoogleMapsService {
           out.set(entry.providerId, {
             km,
             meters: metersInt,
+            durationSeconds: durationSec != null ? Math.round(durationSec) : null,
             kind: "DRIVING",
           });
         }
@@ -436,5 +478,159 @@ export class GoogleMapsService {
     }
 
     return out;
+  }
+
+  /**
+   * One-to-one driving leg via Distance Matrix (no DB cache; cheap + accurate enough for live tracking UI).
+   * Falls back to straight-line distance when API key is missing or Matrix is non-OK.
+   */
+  async resolveDrivingLeg(
+    originLat: number,
+    originLon: number,
+    destLat: number,
+    destLon: number,
+    requestId?: string
+  ): Promise<{
+    distanceMeters: number;
+    distanceKm: number;
+    durationSeconds: number | null;
+    kind: "DRIVING" | "STRAIGHT_LINE";
+  }> {
+    const fallbackKm = haversineDistance(originLat, originLon, destLat, destLon);
+    const fallbackMeters = Math.max(0, Math.round(fallbackKm * 1000));
+
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      this.logger.warn(`Google Maps API key missing; using straight-line leg [rid:${requestId}]`);
+      return {
+        distanceMeters: fallbackMeters,
+        distanceKm: fallbackMeters / 1000,
+        durationSeconds: null,
+        kind: "STRAIGHT_LINE",
+      };
+    }
+
+    const matrixUrl = new URL("https://maps.googleapis.com/maps/api/distancematrix/json");
+    matrixUrl.searchParams.set("origins", `${originLat},${originLon}`);
+    matrixUrl.searchParams.set("destinations", `${destLat},${destLon}`);
+    matrixUrl.searchParams.set("mode", "driving");
+    matrixUrl.searchParams.set("units", "metric");
+    matrixUrl.searchParams.set("key", apiKey);
+
+    try {
+      const res = await fetch(matrixUrl.toString());
+      const json = (await res.json()) as {
+        status?: string;
+        error_message?: string;
+        rows?: Array<{
+          elements?: Array<{
+            status?: string;
+            distance?: { value?: number };
+            duration?: { value?: number };
+          }>;
+        }>;
+      };
+
+      const el = json.rows?.[0]?.elements?.[0];
+      const meters =
+        json.status === "OK" && el?.status === "OK" && typeof el.distance?.value === "number"
+          ? Math.round(el.distance.value)
+          : null;
+      const durationSec =
+        json.status === "OK" && el?.status === "OK" && typeof el.duration?.value === "number"
+          ? Math.round(el.duration.value)
+          : null;
+
+      if (meters == null || meters < 0) {
+        this.logger.warn(
+          `Distance Matrix leg non-OK: ${json.status ?? "?"} ${json.error_message ?? ""} [rid:${requestId}]`
+        );
+        return {
+          distanceMeters: fallbackMeters,
+          distanceKm: fallbackMeters / 1000,
+          durationSeconds: null,
+          kind: "STRAIGHT_LINE",
+        };
+      }
+
+      return {
+        distanceMeters: meters,
+        distanceKm: meters / 1000,
+        durationSeconds: durationSec,
+        kind: "DRIVING",
+      };
+    } catch (error: unknown) {
+      this.logger.error(
+        `Distance Matrix leg request failed [rid:${requestId}]`,
+        error instanceof Error ? error.stack : undefined
+      );
+      return {
+        distanceMeters: fallbackMeters,
+        distanceKm: fallbackMeters / 1000,
+        durationSeconds: null,
+        kind: "STRAIGHT_LINE",
+      };
+    }
+  }
+
+  async resolveDrivingRoute(
+    originLat: number,
+    originLon: number,
+    destLat: number,
+    destLon: number,
+    requestId?: string
+  ): Promise<{
+    distanceMeters: number;
+    distanceKm: number;
+    durationSeconds: number | null;
+    kind: "DRIVING" | "STRAIGHT_LINE";
+    path: Array<{ latitude: number; longitude: number }>;
+  }> {
+    const fallbackLeg = await this.resolveDrivingLeg(originLat, originLon, destLat, destLon, requestId);
+    const fallbackPath = [
+      { latitude: originLat, longitude: originLon },
+      { latitude: destLat, longitude: destLon },
+    ];
+
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      return { ...fallbackLeg, path: fallbackPath };
+    }
+
+    const directionsUrl = new URL("https://maps.googleapis.com/maps/api/directions/json");
+    directionsUrl.searchParams.set("origin", `${originLat},${originLon}`);
+    directionsUrl.searchParams.set("destination", `${destLat},${destLon}`);
+    directionsUrl.searchParams.set("mode", "driving");
+    directionsUrl.searchParams.set("key", apiKey);
+
+    try {
+      const res = await fetch(directionsUrl.toString());
+      const json = (await res.json()) as {
+        status?: string;
+        error_message?: string;
+        routes?: Array<{ overview_polyline?: { points?: string } }>;
+      };
+
+      const encoded = json.routes?.[0]?.overview_polyline?.points;
+      if (json.status !== "OK" || typeof encoded !== "string" || encoded.length === 0) {
+        this.logger.warn(
+          `Directions non-OK: ${json.status ?? "?"} ${json.error_message ?? ""} [rid:${requestId}]`
+        );
+        return { ...fallbackLeg, path: fallbackPath };
+      }
+
+      const decoded = decodeGooglePolyline(encoded);
+      if (decoded.length < 2) {
+        return { ...fallbackLeg, path: fallbackPath };
+      }
+
+      return { ...fallbackLeg, path: decoded };
+    } catch (error: unknown) {
+      this.logger.error(
+        `Directions request failed [rid:${requestId}]`,
+        error instanceof Error ? error.stack : undefined
+      );
+      return { ...fallbackLeg, path: fallbackPath };
+    }
   }
 }

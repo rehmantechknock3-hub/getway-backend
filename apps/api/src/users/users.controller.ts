@@ -173,7 +173,7 @@ export class UsersController {
     if (parsed.data.role === "CUSTOMER") {
       return this.usersService.updateCustomerOnboarding(clerkId, parsed.data.data, req.requestId);
     }
-    return this.usersService.updateProviderOnboarding(clerkId, parsed.data.data);
+    return this.usersService.updateProviderOnboarding(clerkId, parsed.data.data, req.requestId);
   }
 
   @Get(":id")

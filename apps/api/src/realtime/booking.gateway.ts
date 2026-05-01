@@ -14,13 +14,14 @@ import { Server, Socket } from "socket.io";
 import { authenticateSocket } from "./ws-auth.helper";
 
 @WebSocketGateway({
-  cors: { origin: true },
   namespace: "/bookings",
 })
 export class BookingGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(BookingGateway.name);
+  private readonly locationBroadcastThrottleMs = 1_000;
+  private readonly lastLocationBroadcastAtBySocketId = new Map<string, number>();
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -34,6 +35,7 @@ export class BookingGateway
   }
 
   handleDisconnect(client: Socket) {
+    this.lastLocationBroadcastAtBySocketId.delete(client.id);
     client.rooms.forEach((room) => client.leave(room));
   }
 
@@ -57,6 +59,15 @@ export class BookingGateway
     @ConnectedSocket() client: Socket
   ) {
     if (!client.data?.clerkId) return;
+
+    const now = Date.now();
+    const last = this.lastLocationBroadcastAtBySocketId.get(client.id);
+    if (last != null && now - last < this.locationBroadcastThrottleMs) {
+      this.logger.warn(`Rate-limited location:broadcast for socket ${client.id}`);
+      return;
+    }
+    this.lastLocationBroadcastAtBySocketId.set(client.id, now);
+
     this.emitLocationUpdate(data.bookingId, data.latitude, data.longitude);
   }
 }

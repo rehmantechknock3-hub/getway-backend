@@ -22,12 +22,12 @@ export class ProvidersController {
   }
 
   @Get(":id/services")
-  async listServices(@Param("id") id: string) {
-    return this.providersService.listActiveServices(id);
+  async listServices(@Param("id") id: string, @Req() req: Request) {
+    return this.providersService.listActiveServices(id, req.requestId);
   }
 
   @Get(":id")
-  async getOne(@Param("id") id: string) {
-    return this.providersService.findPublicDetail(id);
+  async getOne(@Param("id") id: string, @Req() req: Request) {
+    return this.providersService.findPublicDetail(id, req.requestId);
   }
 }

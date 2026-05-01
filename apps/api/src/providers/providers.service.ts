@@ -1,28 +1,16 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+
 import {
   safeParseProviderOnboardingJson,
   type ProviderPublicDetail,
   type ProviderPublicSummary,
   type ProviderServiceOffer,
 } from "@repo/schemas";
+import { haversineDistance } from "@repo/utils";
 
 import { GoogleMapsService, type DrivingDistanceResult } from "../maps/google-maps.service";
 import { PrismaService } from "../prisma/prisma.service";
-
-function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const earthRadiusKm = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
-}
 
 type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{
   include: {
@@ -62,6 +50,8 @@ function toServiceCurrency(
 
 @Injectable()
 export class ProvidersService {
+  private readonly logger = new Logger(ProvidersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly googleMaps: GoogleMapsService
@@ -185,7 +175,7 @@ export class ProvidersService {
         }
         let best = { distance: Number.POSITIVE_INFINITY, lat: 0, lon: 0 };
         for (const location of locations) {
-          const d = distanceKm(lat, lon, location.latitude, location.longitude);
+          const d = haversineDistance(lat, lon, location.latitude, location.longitude);
           if (d < best.distance) {
             best = { distance: d, lat: location.latitude, lon: location.longitude };
           }
@@ -247,7 +237,10 @@ export class ProvidersService {
     return summaries;
   }
 
-  async findPublicDetail(providerProfileId: string): Promise<ProviderPublicDetail> {
+  async findPublicDetail(
+    providerProfileId: string,
+    requestId?: string
+  ): Promise<ProviderPublicDetail> {
     const row = await this.prisma.providerProfile.findFirst({
       where: { id: providerProfileId },
       include: {
@@ -268,17 +261,23 @@ export class ProvidersService {
       },
     });
 
-    if (!row) throw new NotFoundException("Provider not found");
+    if (!row) {
+      this.logger.warn(`Provider profile not found: ${providerProfileId} [rid:${requestId}]`);
+      throw new NotFoundException("Provider not found");
+    }
 
     return this.toDetail(row);
   }
 
-  async listActiveServices(providerProfileId: string): Promise<ProviderServiceOffer[]> {
+  async listActiveServices(providerProfileId: string, requestId?: string): Promise<ProviderServiceOffer[]> {
     const exists = await this.prisma.providerProfile.findFirst({
       where: { id: providerProfileId },
       select: { id: true },
     });
-    if (!exists) throw new NotFoundException("Provider not found");
+    if (!exists) {
+      this.logger.warn(`Provider services not found profileId=${providerProfileId} [rid:${requestId}]`);
+      throw new NotFoundException("Provider not found");
+    }
 
     const services = await this.prisma.service.findMany({
       where: { providerId: providerProfileId, isActive: true },
@@ -358,7 +357,7 @@ export class ProvidersService {
       if (locations.length === 0) continue;
       let best = { distance: Number.POSITIVE_INFINITY, destLat: 0, destLon: 0 };
       for (const location of locations) {
-        const d = distanceKm(lat, lon, location.latitude, location.longitude);
+        const d = haversineDistance(lat, lon, location.latitude, location.longitude);
         if (d < best.distance) {
           best = { distance: d, destLat: location.latitude, destLon: location.longitude };
         }

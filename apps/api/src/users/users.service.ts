@@ -402,14 +402,15 @@ export class UsersService {
     });
   }
 
-  async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding) {
+  async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding, requestId?: string) {
     const geocodedLocations = await this.geocodeProviderLocations(
       data.shopLocations.map((location) => ({
         address: location.address,
         placeId: location.placeId,
         latitude: location.latitude,
         longitude: location.longitude,
-      }))
+      })),
+      requestId
     );
     const primaryLocation = geocodedLocations[0];
     const onboardingPayload: ProviderOnboarding = {

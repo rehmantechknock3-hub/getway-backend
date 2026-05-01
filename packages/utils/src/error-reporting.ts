@@ -47,6 +47,7 @@ function getSentry(): SentryLike | null {
         return s as unknown as SentryLike;
       }
     }
+
   } catch {
     // Running in an environment where globalThis access throws — silently skip.
   }

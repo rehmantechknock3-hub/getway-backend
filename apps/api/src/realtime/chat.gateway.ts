@@ -13,7 +13,6 @@ import { Server, Socket } from "socket.io";
 import { authenticateSocket } from "./ws-auth.helper";
 
 @WebSocketGateway({
-  cors: { origin: true },
   namespace: "/chat",
 })
 export class ChatGateway implements OnGatewayConnection {

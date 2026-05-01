@@ -40,9 +40,16 @@ export class ReviewsService {
     };
   }
 
-  async create(clerkId: string, input: CreateReviewInput): Promise<ReviewDto> {
+  async create(
+    clerkId: string,
+    input: CreateReviewInput,
+    requestId?: string
+  ): Promise<ReviewDto> {
     const user = await this.prisma.user.findUnique({ where: { clerkId } });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Review create user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "CUSTOMER") {
       throw new ForbiddenException("Only customers can submit reviews");
     }
@@ -103,13 +110,17 @@ export class ReviewsService {
   async listForProvider(
     clerkId: string,
     page: number,
-    limit: number
+    limit: number,
+    requestId?: string
   ): Promise<ProviderReviewListResponse> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId },
       include: { providerProfile: true },
     });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(`Provider reviews user not found for clerkId=${clerkId} [rid:${requestId}]`);
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "PROVIDER") {
       throw new ForbiddenException("Only providers can list reviews");
     }
@@ -162,13 +173,17 @@ export class ReviewsService {
   async listForPublicProvider(
     providerProfileId: string,
     page: number,
-    limit: number
+    limit: number,
+    requestId?: string
   ): Promise<ProviderReviewListResponse> {
     const provider = await this.prisma.providerProfile.findFirst({
       where: { id: providerProfileId },
       select: { id: true },
     });
-    if (!provider) throw new NotFoundException("Provider not found");
+    if (!provider) {
+      this.logger.warn(`Public provider reviews not found profileId=${providerProfileId} [rid:${requestId}]`);
+      throw new NotFoundException("Provider not found");
+    }
 
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));

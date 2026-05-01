@@ -16,6 +16,8 @@ export * from "./queries/provider-reviews.queries";
 export * from "./queries/provider-my-services.queries";
 export * from "./queries/notifications.queries";
 export * from "./queries/favorites.queries";
+export * from "./queries/maps.queries";
+export * from "./queries/payments.queries";
 export * from "./queries/providers.queries";
 export * from "./queries/users.queries";
 

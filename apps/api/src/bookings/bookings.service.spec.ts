@@ -20,8 +20,10 @@ describe("BookingsService", () => {
       create: vi.fn(),
       findMany: vi.fn(),
       count: vi.fn(),
+      aggregate: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
   };
 
@@ -29,13 +31,21 @@ describe("BookingsService", () => {
     notifyProviderNewBooking: vi.fn().mockResolvedValue(undefined),
     notifyCustomerBookingStatus: vi.fn().mockResolvedValue(undefined),
   };
+  const bookingGateway = {
+    emitStatusChange: vi.fn(),
+  };
 
   let service: BookingsService;
 
   beforeEach(() => {
     vi.clearAllMocks();
     cache.get.mockResolvedValue(undefined);
-    service = new BookingsService(prisma as never, notificationsService as never, cache as never);
+    service = new BookingsService(
+      prisma as never,
+      notificationsService as never,
+      cache as never,
+      bookingGateway as never
+    );
   });
 
   it("create rejects non-customers", async () => {
@@ -59,6 +69,8 @@ describe("BookingsService", () => {
     prisma.user.findUnique.mockResolvedValue({
       id: "u-1",
       role: "CUSTOMER",
+      savedLocations: [],
+      customerOnboarding: null,
     });
     prisma.service.findFirst.mockResolvedValue({
       id: "svc-1",
@@ -107,6 +119,62 @@ describe("BookingsService", () => {
     expect(result.status).toBe("PENDING");
   });
 
+  it("create prefers customer profile location over request payload", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "CUSTOMER",
+      savedLocations: [
+        {
+          address: "Profile Home Address",
+          latitude: 25.2,
+          longitude: 55.3,
+        },
+      ],
+      customerOnboarding: null,
+    });
+    prisma.service.findFirst.mockResolvedValue({
+      id: "svc-1",
+      providerId: "pp-1",
+      price: 99.5,
+      title: "Test service",
+      provider: { isOnline: true },
+    });
+    const createdAt = new Date();
+    prisma.booking.create.mockResolvedValue({
+      id: "b-1",
+      customerId: "u-1",
+      providerId: "pp-1",
+      serviceId: "svc-1",
+      status: "PENDING",
+      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      address: "Profile Home Address",
+      latitude: 25.2,
+      longitude: 55.3,
+      notes: null,
+      totalAmount: 99.5,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await service.create("clerk-1", {
+      serviceId: "svc-1",
+      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      address: "Typed Address",
+      latitude: 1,
+      longitude: 2,
+    });
+
+    expect(prisma.booking.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          address: "Profile Home Address",
+          latitude: 25.2,
+          longitude: 55.3,
+        }),
+      })
+    );
+  });
+
   it("createForCustomer rejects non-customer user", async () => {
     prisma.user.findUnique.mockResolvedValue({
       id: "u-prov",
@@ -128,6 +196,8 @@ describe("BookingsService", () => {
     prisma.user.findUnique.mockResolvedValue({
       id: "cust-1",
       role: "CUSTOMER",
+      savedLocations: [],
+      customerOnboarding: null,
     });
     prisma.service.findFirst.mockResolvedValue({
       id: "svc-2",
@@ -252,7 +322,7 @@ describe("BookingsService", () => {
 
     expect(result.data).toEqual([]);
     expect(result.total).toBe(0);
-    expect(result.stats).toEqual({ pending: 0, active: 0, completed: 0 });
+    expect(result.stats).toEqual({ pending: 0, active: 0, completed: 0, totalEarnings: 0 });
     expect(prisma.booking.findMany).not.toHaveBeenCalled();
   });
 
@@ -287,6 +357,7 @@ describe("BookingsService", () => {
       .mockResolvedValueOnce(1)
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0);
+    prisma.booking.aggregate.mockResolvedValue({ _sum: { totalAmount: 235 } });
 
     const result = await service.listForProvider("clerk-p", 1, 20, "queue");
 
@@ -297,7 +368,7 @@ describe("BookingsService", () => {
       customerLastName: "Bee",
       serviceTitle: "Deep clean",
     });
-    expect(result.stats).toEqual({ pending: 1, active: 0, completed: 0 });
+    expect(result.stats).toEqual({ pending: 1, active: 0, completed: 0, totalEarnings: 235 });
     expect(prisma.booking.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
@@ -317,6 +388,7 @@ describe("BookingsService", () => {
     });
     prisma.booking.findMany.mockResolvedValue([]);
     prisma.booking.count.mockResolvedValue(0);
+    prisma.booking.aggregate.mockResolvedValue({ _sum: { totalAmount: 0 } });
 
     await service.listForProvider("clerk-p", 1, 20, "history");
 
@@ -359,6 +431,92 @@ describe("BookingsService", () => {
     await expect(
       service.updateStatusForProvider("clerk-p", "b-1", { status: "ACCEPTED" })
     ).rejects.toMatchObject({ status: 400 });
-    expect(prisma.booking.update).not.toHaveBeenCalled();
+    expect(prisma.booking.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("updateStatusForProvider allows ACCEPTED to CANCELLED", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "PROVIDER",
+      providerProfile: { id: "pp-1" },
+    });
+    const t = new Date();
+    prisma.booking.findFirst
+      .mockResolvedValueOnce({
+        id: "b-1",
+        customerId: "c",
+        providerId: "pp-1",
+        serviceId: "s",
+        status: "ACCEPTED",
+        scheduledAt: t,
+        address: "a",
+        latitude: 0,
+        longitude: 0,
+        notes: null,
+        totalAmount: 10,
+        createdAt: t,
+        updatedAt: t,
+        customer: { firstName: "A", lastName: "B" },
+        service: { title: "X" },
+      })
+      .mockResolvedValueOnce({
+        id: "b-1",
+        customerId: "c",
+        providerId: "pp-1",
+        serviceId: "s",
+        status: "CANCELLED",
+        scheduledAt: t,
+        address: "a",
+        latitude: 0,
+        longitude: 0,
+        notes: null,
+        totalAmount: 10,
+        createdAt: t,
+        updatedAt: t,
+        customer: { firstName: "A", lastName: "B" },
+        service: { title: "X" },
+      });
+    prisma.booking.updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await service.updateStatusForProvider("clerk-p", "b-1", {
+      status: "CANCELLED",
+    });
+
+    expect(prisma.booking.updateMany).toHaveBeenCalledWith({
+      where: { id: "b-1", status: "ACCEPTED" },
+      data: { status: "CANCELLED" },
+    });
+    expect(result.status).toBe("CANCELLED");
+  });
+
+  it("updateStatusForProvider rejects stale updates (double-accept race)", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "PROVIDER",
+      providerProfile: { id: "pp-1" },
+    });
+    const t = new Date();
+    prisma.booking.findFirst.mockResolvedValue({
+      id: "b-1",
+      customerId: "c",
+      providerId: "pp-1",
+      serviceId: "s",
+      status: "PENDING",
+      scheduledAt: t,
+      address: "a",
+      latitude: 0,
+      longitude: 0,
+      notes: null,
+      totalAmount: 10,
+      createdAt: t,
+      updatedAt: t,
+      customer: { firstName: "A", lastName: "B" },
+      service: { title: "X" },
+    });
+    prisma.booking.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(
+      service.updateStatusForProvider("clerk-p", "b-1", { status: "ACCEPTED" })
+    ).rejects.toMatchObject({ status: 409 });
   });
 });

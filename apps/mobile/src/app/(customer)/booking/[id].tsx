@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   ScrollView,
   Text,
   TextInput,
@@ -13,11 +14,15 @@ import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { io, type Socket } from "socket.io-client";
 
-import { setAuthToken, useBooking, useCreateReview } from "@repo/api-client";
+import { useBooking, useCreateReview } from "@repo/api-client";
+import { useBookingTracking } from "@repo/hooks";
 import type { BookingWithReview } from "@repo/schemas";
+import { reportError } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
+import { LiveTrackingMapCard } from "../../../components/LiveTrackingMapCard";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
@@ -45,7 +50,7 @@ function statusLabel(status: string): string {
     case "PENDING":
       return "Pending provider response";
     case "ACCEPTED":
-      return "Accepted — visit scheduled";
+      return "Provider on the way";
     case "IN_PROGRESS":
       return "In progress";
     case "COMPLETED":
@@ -178,26 +183,125 @@ export default function BookingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = typeof id === "string" ? id : "";
   const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const getTokenRef = useRef(getToken);
+  const reconnectingRef = useRef(false);
+  const [socketInstance, setSocketInstance] = useState<Socket | null>(null);
+  const [lastLiveProviderLocation, setLastLiveProviderLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
+  const enabled = isLoaded && isSignedIn && !!bookingId;
+  const { data: booking, isLoading, isError } = useBooking(bookingId, { enabled });
+  const tracking = useBookingTracking(enabled ? bookingId : null, socketInstance);
+  const effectiveStatus = tracking.status ?? booking?.status ?? null;
+  const providerFallbackLocation =
+    booking &&
+    typeof booking.providerLatitude === "number" &&
+    typeof booking.providerLongitude === "number"
+      ? {
+          latitude: booking.providerLatitude,
+          longitude: booking.providerLongitude,
+        }
+      : null;
+  const shouldUseProfileFallback =
+    effectiveStatus !== "IN_PROGRESS" && effectiveStatus !== "COMPLETED";
+  const providerDisplayLocation =
+    tracking.providerLocation ??
+    lastLiveProviderLocation ??
+    (shouldUseProfileFallback ? providerFallbackLocation : null);
+  const providerLocationFromLiveTracking =
+    tracking.providerLocation != null || lastLiveProviderLocation != null;
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
+    setLastLiveProviderLocation(null);
+  }, [bookingId]);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  }, [getToken]);
+
+  useEffect(() => {
+    if (!tracking.providerLocation) return;
+    setLastLiveProviderLocation({
+      latitude: tracking.providerLocation.latitude,
+      longitude: tracking.providerLocation.longitude,
+    });
+  }, [tracking.providerLocation]);
+
+  useEffect(() => {
+    if (!enabled || !bookingId) {
+      socketRef.current?.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
       return;
     }
+
+    if (socketRef.current != null) return;
+
     let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
+    const rawBaseUrl =
+      process.env.EXPO_PUBLIC_SOCKET_URL ??
+      process.env.EXPO_PUBLIC_API_URL ??
+      "http://localhost:3001";
+    const normalized = rawBaseUrl.trim().replace(/\/$/, "");
+    const client = io(`${normalized}/bookings`, {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 5_000,
+      query: { bookingId },
+      auth: (cb) => {
+        void getTokenRef.current({ skipCache: true }).then((token) => {
+          cb({ token: token ?? "" });
+        });
+      },
     });
+    const reconnectWithFreshToken = () => {
+      if (reconnectingRef.current) return;
+      reconnectingRef.current = true;
+      void getTokenRef.current({ skipCache: true })
+        .then((token) => {
+          client.auth = { token: token ?? "" };
+          if (!client.connected) client.connect();
+        })
+        .catch((error: unknown) => {
+          reportError(error, { screen: "CustomerBookingDetail", action: "socketReconnectToken" });
+        })
+        .finally(() => {
+          reconnectingRef.current = false;
+        });
+    };
+
+    client.on("connect_error", reconnectWithFreshToken);
+    client.on("disconnect", (reason) => {
+      if (reason !== "io client disconnect") reconnectWithFreshToken();
+    });
+
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active" && !client.connected) {
+        reconnectWithFreshToken();
+      }
+    });
+
+    if (cancelled) {
+      client.disconnect();
+      return;
+    }
+    socketRef.current = client;
+    setSocketInstance(client);
+
     return () => {
       cancelled = true;
+      appStateSub.remove();
+      client.off("connect_error", reconnectWithFreshToken);
+      client.disconnect();
+      socketRef.current = null;
+      setSocketInstance(null);
     };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady && !!bookingId;
-  const { data: booking, isLoading, isError } = useBooking(bookingId, { enabled });
+  }, [enabled, bookingId]);
 
   return (
     <ScrollView
@@ -213,7 +317,7 @@ export default function BookingDetailScreen() {
         Booking details
       </Text>
       {booking ? (
-        <Text className="text-ink-muted text-sm mb-6">{statusLabel(booking.status)}</Text>
+        <Text className="text-ink-muted text-sm mb-6">{statusLabel(effectiveStatus ?? booking.status)}</Text>
       ) : (
         <View className="mb-6 h-[18px]" />
       )}
@@ -230,7 +334,19 @@ export default function BookingDetailScreen() {
         </View>
       ) : (
         <>
-          <BookingStatusTimeline status={booking.status} />
+          <BookingStatusTimeline status={effectiveStatus ?? booking.status} />
+
+          {(effectiveStatus === "IN_PROGRESS" || effectiveStatus === "COMPLETED") ? (
+            <LiveTrackingMapCard
+              title="Track provider on map"
+              subtitle="Live updates are visible once the provider starts the job."
+              customerLocation={{ latitude: booking.latitude, longitude: booking.longitude }}
+              providerLocation={providerDisplayLocation}
+              providerLocationIsLive={providerLocationFromLiveTracking}
+              isConnected={tracking.isConnected}
+              showNavigationAction={false}
+            />
+          ) : null}
 
           <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
             <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2">

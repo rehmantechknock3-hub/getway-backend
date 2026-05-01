@@ -55,6 +55,9 @@ if (SHOULD_INIT_SENTRY) {
       dsn: SENTRY_DSN,
       enabled: true,
     });
+    // Register explicit global handle so shared utils can discover Sentry safely
+    // without importing react-native-only modules in non-RN runtimes.
+    (globalThis as Record<string, unknown>)["Sentry"] = Sentry;
   } catch {
     // Keep app boot resilient if Sentry init fails unexpectedly.
   }
