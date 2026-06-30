@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { ProviderBookingView } from "@repo/schemas";
 import {
-  setAuthToken,
   useNotifications,
   useProviderBookings,
   useUpdateProviderBookingStatus,
@@ -37,10 +36,10 @@ function formatWhen(d: Date): string {
   }).format(d instanceof Date ? d : new Date(d));
 }
 
-function formatMoney(n: number): string {
+function formatMoney(n: number, currency?: string): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: "USD",
+    currency: currency ?? "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(n);
@@ -112,7 +111,9 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
               {formatWhen(job.scheduledAt instanceof Date ? job.scheduledAt : new Date(job.scheduledAt))}
             </Text>
           </View>
-          <Text className="text-primary-600 font-bold text-base">{formatMoney(job.totalAmount)}</Text>
+          <Text className="text-primary-600 font-bold text-base">
+            {formatMoney(job.totalAmount, job.totalCurrency)}
+          </Text>
         </View>
         <View className="flex-row items-center justify-end gap-1 px-4 pb-3">
           <Text className="text-primary-600 text-xs font-semibold">Track status</Text>
@@ -172,27 +173,10 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
 
 export default function JobsScreen() {
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn, sessionClaims } = useAuth();
+  const { isLoaded, isSignedIn, sessionClaims } = useAuth();
   const firstName = (sessionClaims?.firstName as string) ?? "there";
-  const [apiReady, setApiReady] = useState(false);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const queueQuery = useProviderBookings(1, { enabled, scope: "queue" });
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
   const { data: notificationPayload, refetch: refetchNotifications } = useNotifications(1, { enabled });

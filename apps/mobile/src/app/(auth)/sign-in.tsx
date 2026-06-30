@@ -2,18 +2,22 @@ import { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, KeyboardAvoidingView, Platform,
-  Alert, StatusBar, ScrollView,
+  StatusBar, ScrollView,
 } from "react-native";
-import { useSignIn } from "@clerk/expo";
-import { Link, router } from "expo-router";
+import { useClerk, useSignIn } from "@clerk/expo";
+import { Link } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
+import { showToast } from "@repo/ui";
+import { reportError, safeClerkCall } from "@repo/utils";
 
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
 export default function SignInScreen() {
   const { signIn } = useSignIn();
+  const clerk = useClerk();
   const insets = useSafeAreaInsets();
 
   const [email,    setEmail]    = useState("");
@@ -21,35 +25,85 @@ export default function SignInScreen() {
   const [loading,  setLoading]  = useState(false);
   const [showPw,   setShowPw]   = useState(false);
 
+  function resolveCreatedSessionId(value: unknown): string | null {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      "createdSessionId" in value &&
+      typeof value.createdSessionId === "string"
+    ) {
+      return value.createdSessionId;
+    }
+    return null;
+  }
+
+  function isExpectedSignInError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
+    return (
+      message.includes("identifier is invalid") ||
+      message.includes("password") ||
+      message.includes("invalid") ||
+      message.includes("couldn't find")
+    );
+  }
+
   async function handleSignIn() {
-    if (!email.trim())  return Alert.alert("Required", "Please enter your email address.");
-    if (!password)      return Alert.alert("Required", "Please enter your password.");
-
-    setLoading(true);
-
-    try {
-      const { error: signInError } = await signIn.password({ identifier: email.trim(), password });
-
-      if (signInError) {
-        setLoading(false);
-        Alert.alert("Error", signInError.message ?? "Sign in failed");
-        return;
-      }
-
-      const { error: finalError } = await signIn.finalize();
-
-      setLoading(false);
-
-      if (finalError) {
-        Alert.alert("Error", finalError.message ?? "Failed to complete sign in");
-        return;
-      }
-    } catch (error: unknown) {
-      setLoading(false);
-      Alert.alert("Error", error instanceof Error ? error.message : "Sign in failed. Please try again.");
+    if (!email.trim()) {
+      showToast("error", "Please enter your email address.");
+      return;
+    }
+    if (!password) {
+      showToast("error", "Please enter your password.");
+      return;
     }
 
-    // RootNavigator in _layout.tsx detects isSignedIn and redirects to the correct tab
+    setLoading(true);
+    try {
+      const passwordResult = await safeClerkCall(() =>
+        signIn.password({ identifier: email.trim(), password })
+      );
+      if ("error" in passwordResult && passwordResult.error) {
+        throw passwordResult.error;
+      }
+
+      const finalizeResult = await safeClerkCall(() => signIn.finalize());
+      if ("error" in finalizeResult && finalizeResult.error) {
+        throw finalizeResult.error;
+      }
+
+      const createdSessionId =
+        resolveCreatedSessionId(finalizeResult) ?? resolveCreatedSessionId(signIn);
+      if (!createdSessionId) {
+        reportError(new Error("Sign in finalize did not return createdSessionId"), {
+          screen: "SignInScreen",
+          action: "handleSignIn",
+        });
+        showToast("error", "Could not complete sign in. Please try again.");
+        return;
+      }
+
+      const activateResult = await safeClerkCall(() =>
+        clerk.setActive({ session: createdSessionId })
+      );
+      if (
+        typeof activateResult === "object" &&
+        activateResult !== null &&
+        "error" in activateResult &&
+        activateResult.error
+      ) {
+        throw activateResult.error;
+      }
+    } catch (error: unknown) {
+      if (!isExpectedSignInError(error)) {
+        reportError(error, {
+          screen: "SignInScreen",
+          action: "handleSignIn",
+        });
+      }
+      showToast("error", error instanceof Error ? error.message : "Sign in failed");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

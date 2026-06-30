@@ -13,11 +13,29 @@ describe("ProvidersService", () => {
     },
   };
 
+  const googleMaps = {
+    backfillProviderCoordinatesIfNeeded: vi.fn((row: unknown) => Promise.resolve(row)),
+    resolveDrivingDistances: vi.fn(
+      async (
+        _customerLat: number,
+        _customerLon: number,
+        entries: Array<{ providerId: string; destLat: number; destLon: number; fallbackKm: number }>
+      ) => {
+        const m = new Map<string, { km: number; meters: number; kind: "DRIVING" }>();
+        for (const e of entries) {
+          const meters = Math.round(e.fallbackKm * 1000);
+          m.set(e.providerId, { km: meters / 1000, meters, kind: "DRIVING" });
+        }
+        return m;
+      }
+    ),
+  };
+
   let service: ProvidersService;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new ProvidersService(prisma as never);
+    service = new ProvidersService(prisma as never, googleMaps as never);
   });
 
   it("listPublicSummaries maps rows with onboarding and first service", async () => {
@@ -44,6 +62,7 @@ describe("ProvidersService", () => {
             serviceCategory: "Car Wash",
             experienceYears: 3,
             serviceArea: "Downtown",
+            shopAddress: "Downtown Service Hub",
             hasTools: true,
             serviceDescription: "Full detail",
           },
@@ -191,9 +210,233 @@ describe("ProvidersService", () => {
       },
     ]);
 
+    const result = await service.listPublicSummaries(40.7128, -74.006, 50, "rid-1");
+
+    expect(result.map((r) => r.id)).toEqual(["near"]);
+    expect(result[0]?.distanceKm).toBe(0);
+    expect(result[0]?.distanceMeters).toBe(0);
+    expect(result[0]?.nearestLocationLatitude).toBe(40.7128);
+    expect(result[0]?.nearestLocationLongitude).toBe(-74.006);
+    expect(result[0]?.distanceKind).toBe("DRIVING");
+    expect(googleMaps.resolveDrivingDistances).toHaveBeenCalledWith(
+      40.7128,
+      -74.006,
+      expect.arrayContaining([
+        expect.objectContaining({ providerId: "near", fallbackKm: expect.any(Number) as number }),
+      ]),
+      "rid-1"
+    );
+  });
+
+  it("listPublicSummaries drops providers when driving distance exceeds radius even if Haversine is inside", async () => {
+    prisma.providerProfile.findMany.mockResolvedValue([
+      {
+        id: "road-longer",
+        userId: "u-1",
+        verificationStatus: "APPROVED",
+        isOnline: true,
+        averageRating: 4,
+        totalReviews: 1,
+        totalEarnings: 0,
+        latitude: 40.7848,
+        longitude: -74.006,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-1",
+          firstName: "Zac",
+          lastName: "Far",
+          avatarUrl: null,
+          providerOnboarding: null,
+        },
+        services: [],
+      },
+    ]);
+    googleMaps.resolveDrivingDistances.mockImplementationOnce(
+      async (
+        _customerLat: number,
+        _customerLon: number,
+        entries: Array<{ providerId: string }>
+      ) => {
+        const m = new Map<string, { km: number; meters: number; kind: "DRIVING" }>();
+        for (const e of entries) {
+          m.set(e.providerId, { km: 11.3, meters: 11_300, kind: "DRIVING" });
+        }
+        return m;
+      }
+    );
+
+    const result = await service.listPublicSummaries(40.7128, -74.006, 10, "rid-long");
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("listPublicSummaries uses nearest provider shop location from onboarding", async () => {
+    prisma.providerProfile.findMany.mockResolvedValue([
+      {
+        id: "multi",
+        userId: "u-1",
+        verificationStatus: "APPROVED",
+        isOnline: true,
+        averageRating: 4.9,
+        totalReviews: 14,
+        totalEarnings: 0,
+        latitude: 34.05,
+        longitude: -118.25,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-1",
+          firstName: "M",
+          lastName: "L",
+          avatarUrl: null,
+          providerOnboarding: {
+            serviceCategories: ["Cleaning"],
+            serviceArea: "Downtown",
+            shopAddress: "Primary far location",
+            shopLocations: [
+              { address: "Primary far location", latitude: 34.05, longitude: -118.25 },
+              { address: "Branch near customer", latitude: 40.713, longitude: -74.006 },
+            ],
+            experienceYears: 4,
+            hasTools: true,
+            serviceDescription: "Test",
+          },
+        },
+        services: [],
+      },
+    ]);
+
+    const result = await service.listPublicSummaries(40.7128, -74.006, 5);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("multi");
+    expect((result[0]?.distanceKm ?? 999) < 1).toBe(true);
+    expect(result[0]?.nearestLocationLatitude).toBe(40.713);
+    expect(result[0]?.nearestLocationLongitude).toBe(-74.006);
+  });
+
+  it("listPublicSummaries omits providers with no coordinates when lat and lon are provided", async () => {
+    prisma.providerProfile.findMany.mockResolvedValue([
+      {
+        id: "near",
+        userId: "u-1",
+        verificationStatus: "APPROVED",
+        isOnline: false,
+        averageRating: 3,
+        totalReviews: 1,
+        totalEarnings: 0,
+        latitude: 40.7128,
+        longitude: -74.006,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-1",
+          firstName: "N",
+          lastName: "ear",
+          avatarUrl: null,
+          providerOnboarding: null,
+        },
+        services: [],
+      },
+      {
+        id: "no_pin",
+        userId: "u-2",
+        verificationStatus: "APPROVED",
+        isOnline: false,
+        averageRating: 5,
+        totalReviews: 2,
+        totalEarnings: 0,
+        latitude: null,
+        longitude: null,
+        bio: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-2",
+          firstName: "No",
+          lastName: "Coords",
+          avatarUrl: null,
+          providerOnboarding: {
+            serviceCategories: ["Paint"],
+            serviceArea: "Somewhere",
+            shopAddress: "123 Main Street",
+            shopLocations: [{ address: "123 Main Street", placeId: "ChIJnolanglng00" }],
+            experienceYears: 1,
+            hasTools: true,
+            serviceDescription: "Interior paint",
+          },
+        },
+        services: [],
+      },
+    ]);
+
     const result = await service.listPublicSummaries(40.7128, -74.006, 50);
 
     expect(result.map((r) => r.id)).toEqual(["near"]);
+  });
+
+  it("findPublicSummariesByIdsWithDrivingDistances preserves id order and calls Matrix", async () => {
+    prisma.providerProfile.findMany.mockResolvedValue([
+      {
+        id: "pp-a",
+        userId: "u-1",
+        bio: null,
+        verificationStatus: "APPROVED",
+        isOnline: true,
+        averageRating: 4,
+        totalReviews: 1,
+        totalEarnings: 0,
+        latitude: 31.52,
+        longitude: 74.35,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: "u-1",
+          firstName: "John",
+          lastName: "Cena",
+          avatarUrl: null,
+          providerOnboarding: {
+            serviceCategories: ["Detail"],
+            serviceArea: "Lahore",
+            shopAddress: "Lake City",
+            experienceYears: 2,
+            hasTools: true,
+            serviceDescription: "Detailing",
+          },
+        },
+        services: [
+          {
+            id: "s-1",
+            providerId: "pp-a",
+            categoryId: "c-1",
+            title: "Car Detailing",
+            description: null,
+            price: 100,
+            duration: 28,
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            category: { name: "Auto" },
+          },
+        ],
+      },
+    ]);
+
+    const result = await service.findPublicSummariesByIdsWithDrivingDistances(
+      ["pp-a"],
+      31.5,
+      74.3,
+      "rid-fav"
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]?.id).toBe("pp-a");
+    expect(result[0]?.distanceMeters).toBeDefined();
+    expect(googleMaps.resolveDrivingDistances).toHaveBeenCalled();
   });
 
   it("findPublicDetail throws when missing", async () => {

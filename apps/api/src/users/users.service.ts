@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import type { Prisma } from "@prisma/client";
@@ -15,6 +16,7 @@ import type {
 import { safeParseProviderOnboardingJson } from "@repo/schemas";
 
 import type { ClerkUserPayload } from "../auth/webhook.controller";
+import { GoogleMapsService } from "../maps/google-maps.service";
 import { PrismaService } from "../prisma/prisma.service";
 
 /** Clerk lists multiple emails; sync must use the user's primary, not `email_addresses[0]`. */
@@ -32,7 +34,53 @@ type ListingDb = Pick<PrismaService, "service" | "serviceCategory">;
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(UsersService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly googleMaps: GoogleMapsService
+  ) {}
+
+  private async geocodeProviderLocations(
+    locations: Array<{
+      address: string;
+      placeId?: string;
+      latitude?: number;
+      longitude?: number;
+    }>,
+    requestId?: string
+  ): Promise<Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>> {
+    const output: Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }> = [];
+    for (const location of locations) {
+      const hasClientCoords =
+        typeof location.latitude === "number" &&
+        typeof location.longitude === "number" &&
+        Number.isFinite(location.latitude) &&
+        Number.isFinite(location.longitude);
+      if (hasClientCoords) {
+        output.push({
+          address: location.address,
+          placeId: location.placeId,
+          latitude: location.latitude,
+          longitude: location.longitude,
+        });
+        continue;
+      }
+
+      const coords = await this.googleMaps.geocodeAddress({
+        shopAddress: location.address,
+        shopPlaceId: location.placeId,
+        requestId,
+      });
+      output.push({
+        address: location.address,
+        placeId: location.placeId,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
+      });
+    }
+    return output;
+  }
 
   /**
    * Creates one Service per onboarding category when the profile has none.
@@ -195,6 +243,7 @@ export class UsersService {
             id: true,
             averageRating: true,
             totalReviews: true,
+            isOnline: true,
           },
         },
       },
@@ -211,6 +260,7 @@ export class UsersService {
         ? {
             averageRating: providerProfile.averageRating,
             totalReviews: providerProfile.totalReviews,
+            isOnline: providerProfile.isOnline,
           }
         : undefined,
     };
@@ -239,6 +289,7 @@ export class UsersService {
             id: true,
             averageRating: true,
             totalReviews: true,
+            isOnline: true,
           },
         },
       },
@@ -253,9 +304,28 @@ export class UsersService {
         ? {
             averageRating: providerProfile.averageRating,
             totalReviews: providerProfile.totalReviews,
+            isOnline: providerProfile.isOnline,
           }
         : undefined,
     };
+  }
+
+  async updateProviderPresence(clerkId: string, isOnline: boolean) {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true, role: true, providerProfile: { select: { id: true } } },
+    });
+    if (!user) throw new NotFoundException("User not found");
+    if (user.role !== "PROVIDER" || !user.providerProfile) {
+      throw new ForbiddenException("Only providers can update availability");
+    }
+
+    await this.prisma.providerProfile.update({
+      where: { id: user.providerProfile.id },
+      data: { isOnline },
+    });
+
+    return this.findByClerkId(clerkId);
   }
 
   async updateProfile(clerkId: string, input: UpdateUserProfileInput) {
@@ -286,30 +356,97 @@ export class UsersService {
     });
   }
 
-  async updateCustomerOnboarding(clerkId: string, data: CustomerOnboarding) {
+  async updateCustomerOnboarding(clerkId: string, data: CustomerOnboarding, requestId?: string) {
+    const existing = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { customerOnboarding: true },
+    });
+    const prev = existing?.customerOnboarding as Record<string, unknown> | null;
+    const prevLocation =
+      typeof prev?.primaryLocation === "string" ? prev.primaryLocation.trim() : "";
+    const locationUnchanged = prevLocation === data.primaryLocation.trim();
+    const prevLat = typeof prev?.primaryLatitude === "number" ? prev.primaryLatitude : undefined;
+    const prevLng = typeof prev?.primaryLongitude === "number" ? prev.primaryLongitude : undefined;
+
+    const coords = await this.googleMaps.geocodeAddress({
+      shopAddress: data.primaryLocation.trim(),
+      requestId,
+    });
+
+    let primaryLatitude: number | undefined;
+    let primaryLongitude: number | undefined;
+    if (coords) {
+      primaryLatitude = coords.latitude;
+      primaryLongitude = coords.longitude;
+    } else if (locationUnchanged && prevLat != null && prevLng != null) {
+      primaryLatitude = prevLat;
+      primaryLongitude = prevLng;
+    }
+
+    const customerOnboarding: CustomerOnboarding = {
+      primaryLocation: data.primaryLocation,
+      carCompany: data.carCompany,
+      carModel: data.carModel,
+      notes: data.notes,
+      ...(primaryLatitude != null && primaryLongitude != null
+        ? { primaryLatitude, primaryLongitude }
+        : {}),
+    };
+
     return this.prisma.user.update({
       where: { clerkId },
       data: {
         onboardingCompleted: true,
-        customerOnboarding: data as Prisma.InputJsonValue,
+        customerOnboarding: customerOnboarding as Prisma.InputJsonValue,
       },
     });
   }
 
-  async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding) {
+  async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding, requestId?: string) {
+    const geocodedLocations = await this.geocodeProviderLocations(
+      data.shopLocations.map((location) => ({
+        address: location.address,
+        placeId: location.placeId,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      })),
+      requestId
+    );
+    const primaryLocation = geocodedLocations[0];
+    const onboardingPayload: ProviderOnboarding = {
+      ...data,
+      shopAddress: primaryLocation?.address ?? data.shopAddress,
+      shopPlaceId: primaryLocation?.placeId ?? data.shopPlaceId,
+      shopLocations: geocodedLocations,
+    };
+
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { clerkId },
         data: {
           onboardingCompleted: true,
-          providerOnboarding: data as Prisma.InputJsonValue,
-          avatarUrl: data.profilePhotoUrl ?? undefined,
+          providerOnboarding: onboardingPayload as Prisma.InputJsonValue,
+          avatarUrl: onboardingPayload.profilePhotoUrl ?? undefined,
         },
       });
       const profile = await tx.providerProfile.findUnique({
         where: { userId: user.id },
       });
       if (!profile) return user;
+
+      if (
+        typeof primaryLocation?.latitude === "number" &&
+        typeof primaryLocation?.longitude === "number"
+      ) {
+        await tx.providerProfile.update({
+          where: { id: profile.id },
+          data: {
+            latitude: primaryLocation.latitude,
+            longitude: primaryLocation.longitude,
+          },
+        });
+      }
+
       const existing = await tx.service.count({ where: { providerId: profile.id } });
       if (existing === 0) {
         await this.seedStarterListing(profile.id, data, tx);

@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query } from "@nestjs/common";
+import { Controller, Get, Param, Query, Req } from "@nestjs/common";
+import type { Request } from "express";
 import { z } from "zod";
 
 import { ProvidersService } from "./providers.service";
@@ -14,19 +15,19 @@ export class ProvidersController {
   constructor(private readonly providersService: ProvidersService) {}
 
   @Get()
-  async list(@Query() rawQuery: Record<string, string | undefined>) {
+  async list(@Query() rawQuery: Record<string, string | undefined>, @Req() req: Request) {
     const parsed = ListProvidersQuerySchema.safeParse(rawQuery);
     const q = parsed.success ? parsed.data : { lat: undefined, lon: undefined, radius: 25 };
-    return this.providersService.listPublicSummaries(q.lat, q.lon, q.radius);
+    return this.providersService.listPublicSummaries(q.lat, q.lon, q.radius, req.requestId);
   }
 
   @Get(":id/services")
-  async listServices(@Param("id") id: string) {
-    return this.providersService.listActiveServices(id);
+  async listServices(@Param("id") id: string, @Req() req: Request) {
+    return this.providersService.listActiveServices(id, req.requestId);
   }
 
   @Get(":id")
-  async getOne(@Param("id") id: string) {
-    return this.providersService.findPublicDetail(id);
+  async getOne(@Param("id") id: string, @Req() req: Request) {
+    return this.providersService.findPublicDetail(id, req.requestId);
   }
 }

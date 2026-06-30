@@ -50,13 +50,18 @@ export function useCreateReview() {
       const { data } = await apiClient.post<Review>("/api/v1/reviews", input);
       return data;
     },
-    onSuccess: (review) => {
-      queryClient.invalidateQueries({ queryKey: bookingKeys.detail(review.bookingId) });
-      queryClient.invalidateQueries({ queryKey: bookingKeys.all() });
-      queryClient.invalidateQueries({ queryKey: providerKeys.all() });
-      queryClient.invalidateQueries({ queryKey: favoriteKeys.all() });
-      queryClient.invalidateQueries({ queryKey: providerReviewKeys.all() });
-      queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: async (review) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: bookingKeys.detail(review.bookingId),
+          refetchType: "all",
+        }),
+        queryClient.invalidateQueries({ queryKey: bookingKeys.all(), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: providerKeys.all(), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: favoriteKeys.all(), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: providerReviewKeys.all(), refetchType: "all" }),
+        queryClient.invalidateQueries({ queryKey: userKeys.me(), refetchType: "all" }),
+      ]);
     },
   });
 }

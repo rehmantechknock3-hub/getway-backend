@@ -18,6 +18,6 @@ export class ReviewsController {
     const parsed = CreateReviewSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid review payload");
 
-    return this.reviewsService.create(clerkId, parsed.data);
+    return this.reviewsService.create(clerkId, parsed.data, req.requestId);
   }
 }

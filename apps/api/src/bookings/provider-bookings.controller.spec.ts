@@ -12,7 +12,7 @@ describe("ProviderBookingsController", () => {
           total: 0,
           page: 1,
           limit: 20,
-          stats: { pending: 0, active: 0, completed: 0 },
+          stats: { pending: 0, active: 0, completed: 0, totalEarnings: 0 },
         }),
     };
     const controller = new ProviderBookingsController(bookingsService as never);
@@ -26,7 +26,7 @@ describe("ProviderBookingsController", () => {
       total: 0,
       page: 1,
       limit: 20,
-      stats: { pending: 0, active: 0, completed: 0 },
+      stats: { pending: 0, active: 0, completed: 0, totalEarnings: 0 },
     });
   });
 
@@ -37,7 +37,7 @@ describe("ProviderBookingsController", () => {
         total: 0,
         page: 1,
         limit: 20,
-        stats: { pending: 0, active: 0, completed: 0 },
+        stats: { pending: 0, active: 0, completed: 0, totalEarnings: 0 },
       }),
     };
     const controller = new ProviderBookingsController(bookingsService as never);

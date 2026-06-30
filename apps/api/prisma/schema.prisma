@@ -115,9 +115,29 @@ model ProviderProfile {
   favoritedByCustomers FavoriteProvider[]
   /** Custom service categories created by this provider (shared catalog rows use `providerId` null). */
   ownedServiceCategories ServiceCategory[]
+  drivingDistanceCaches  ProviderDrivingDistanceCache[]
 
   @@index([verificationStatus])
   @@map("provider_profiles")
+}
+
+/** Cached driving distance (Google Distance Matrix) from a rounded customer cell to a provider shop pin. */
+model ProviderDrivingDistanceCache {
+  id                     String          @id @default(uuid())
+  originLatKey           String
+  originLngKey           String
+  providerProfileId      String
+  destLatKey             String
+  destLngKey             String
+  drivingDistanceMeters  Int
+  drivingDurationSeconds Int?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  provider               ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([originLatKey, originLngKey, providerProfileId, destLatKey, destLngKey])
+  @@index([providerProfileId])
+  @@map("provider_driving_distance_caches")
 }
 
 model ProviderDocument {
@@ -156,6 +176,7 @@ model Service {
   title       String
   description String?
   price       Float
+  priceCurrency String        @default("USD")
   duration    Int             // minutes
   isActive    Boolean         @default(true)
   createdAt   DateTime        @default(now())
@@ -196,6 +217,7 @@ model Booking {
   longitude   Float
   notes       String?
   totalAmount Float
+  totalCurrency String      @default("USD")
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 

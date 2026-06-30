@@ -1,13 +1,15 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from "cache-manager";
-import type { BookingStatus } from "@prisma/client";
+import { z } from "zod";
 import type {
   Booking as BookingDto,
   BookingWithReview,
@@ -17,11 +19,18 @@ import type {
   Review as ReviewDto,
   UpdateBookingStatusInput,
 } from "@repo/schemas";
+import { CustomerOnboardingSchema } from "@repo/schemas";
 
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
+import { BookingGateway } from "../realtime/booking.gateway";
 
 const TTL_PROVIDER_BOOKING_LIST_MS = 15_000;
+const SavedLocationWithCoordinatesSchema = z.object({
+  address: z.string().min(1),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+});
 
 type CachedProviderBookingList = {
   data: ProviderBookingView[];
@@ -43,12 +52,14 @@ function providerBookingListCacheKey(
 
 @Injectable()
 export class BookingsService {
+  private readonly logger = new Logger(BookingsService.name);
   private readonly providerBookingListEpochByProfileId = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
-    @Inject(CACHE_MANAGER) private readonly cache: Cache
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly bookingGateway: BookingGateway
   ) {}
 
   private bumpProviderBookingListCache(providerProfileId: string): void {
@@ -83,6 +94,49 @@ export class BookingsService {
     };
   }
 
+  private resolveCustomerBookingLocation(
+    user: {
+      savedLocations?: unknown;
+      customerOnboarding?: unknown;
+    },
+    fallback: Pick<CreateBookingInput, "address" | "latitude" | "longitude">
+  ): { address: string; latitude: number; longitude: number } {
+    const onboarding = CustomerOnboardingSchema.safeParse(user.customerOnboarding);
+    if (
+      onboarding.success &&
+      typeof onboarding.data.primaryLatitude === "number" &&
+      typeof onboarding.data.primaryLongitude === "number"
+    ) {
+      return {
+        address: onboarding.data.primaryLocation,
+        latitude: onboarding.data.primaryLatitude,
+        longitude: onboarding.data.primaryLongitude,
+      };
+    }
+
+    const parsedLocations = z.array(SavedLocationWithCoordinatesSchema).safeParse(user.savedLocations);
+    const locationWithCoordinates =
+      parsedLocations.success
+        ? parsedLocations.data.find(
+            (location) =>
+              typeof location.latitude === "number" &&
+              typeof location.longitude === "number" &&
+              Number.isFinite(location.latitude) &&
+              Number.isFinite(location.longitude)
+          )
+        : undefined;
+
+    if (locationWithCoordinates) {
+      return {
+        address: locationWithCoordinates.address,
+        latitude: locationWithCoordinates.latitude as number,
+        longitude: locationWithCoordinates.longitude as number,
+      };
+    }
+
+    return fallback;
+  }
+
   private allowedProviderNextStatuses(
     current: BookingDto["status"]
   ): BookingDto["status"][] {
@@ -110,6 +164,9 @@ export class BookingsService {
     longitude: number;
     notes: string | null;
     totalAmount: number;
+    totalCurrency?: string | null;
+    providerLatitude?: number | null;
+    providerLongitude?: number | null;
     createdAt: Date;
     updatedAt: Date;
   }): BookingDto {
@@ -125,6 +182,9 @@ export class BookingsService {
       longitude: row.longitude,
       notes: row.notes ?? undefined,
       totalAmount: row.totalAmount,
+      totalCurrency: row.totalCurrency ?? "USD",
+      providerLatitude: row.providerLatitude ?? undefined,
+      providerLongitude: row.providerLongitude ?? undefined,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -160,6 +220,10 @@ export class BookingsService {
     totalAmount: number;
     createdAt: Date;
     updatedAt: Date;
+    provider: {
+      latitude: number | null;
+      longitude: number | null;
+    };
     review: {
       id: string;
       bookingId: string;
@@ -169,7 +233,11 @@ export class BookingsService {
     } | null;
   }): BookingWithReview {
     return {
-      ...this.toDto(row),
+      ...this.toDto({
+        ...row,
+        providerLatitude: row.provider.latitude,
+        providerLongitude: row.provider.longitude,
+      }),
       review: row.review ? this.reviewToDto(row.review) : null,
     };
   }
@@ -183,16 +251,31 @@ export class BookingsService {
 
     const service = await this.prisma.service.findFirst({
       where: { id: input.serviceId, isActive: true },
-      select: { id: true, providerId: true, price: true, title: true },
+      select: {
+        id: true,
+        providerId: true,
+        price: true,
+        priceCurrency: true,
+        title: true,
+        provider: { select: { isOnline: true } },
+      },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (!service.provider.isOnline) {
+      throw new ForbiddenException("Provider is offline");
     }
 
     const scheduledAt =
       input.scheduledAt instanceof Date
         ? input.scheduledAt
         : new Date(input.scheduledAt);
+    const serviceLocation = this.resolveCustomerBookingLocation(user, {
+      address: input.address,
+      latitude: input.latitude,
+      longitude: input.longitude,
+    });
 
     const row = await this.prisma.booking.create({
       data: {
@@ -200,11 +283,12 @@ export class BookingsService {
         providerId: service.providerId,
         serviceId: service.id,
         scheduledAt,
-        address: input.address,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        address: serviceLocation.address,
+        latitude: serviceLocation.latitude,
+        longitude: serviceLocation.longitude,
         notes: input.notes ?? null,
         totalAmount: service.price,
+        totalCurrency: service.priceCurrency,
       },
     });
 
@@ -219,7 +303,13 @@ export class BookingsService {
         serviceTitle: service.title,
         scheduledAt,
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        this.logger.warn(
+          `Failed to notify provider for new booking ${row.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      });
 
     return this.toDto(row);
   }
@@ -236,16 +326,30 @@ export class BookingsService {
 
     const service = await this.prisma.service.findFirst({
       where: { id: input.serviceId, isActive: true },
-      select: { id: true, providerId: true, price: true },
+      select: {
+        id: true,
+        providerId: true,
+        price: true,
+        priceCurrency: true,
+        provider: { select: { isOnline: true } },
+      },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (!service.provider.isOnline) {
+      throw new ForbiddenException("Provider is offline");
     }
 
     const scheduledAt =
       input.scheduledAt instanceof Date
         ? input.scheduledAt
         : new Date(input.scheduledAt);
+    const serviceLocation = this.resolveCustomerBookingLocation(user, {
+      address: input.address,
+      latitude: input.latitude,
+      longitude: input.longitude,
+    });
 
     const row = await this.prisma.booking.create({
       data: {
@@ -253,11 +357,12 @@ export class BookingsService {
         providerId: service.providerId,
         serviceId: service.id,
         scheduledAt,
-        address: input.address,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        address: serviceLocation.address,
+        latitude: serviceLocation.latitude,
+        longitude: serviceLocation.longitude,
         notes: input.notes ?? null,
         totalAmount: service.price,
+        totalCurrency: service.priceCurrency,
       },
     });
 
@@ -312,7 +417,7 @@ export class BookingsService {
         orderBy: { createdAt: "desc" },
         skip,
         take: safeLimit,
-        include: { review: true },
+        include: { review: true, provider: { select: { latitude: true, longitude: true } } },
       }),
       this.prisma.booking.count({ where: { customerId: user.id } }),
     ]);
@@ -334,7 +439,7 @@ export class BookingsService {
 
     const row = await this.prisma.booking.findFirst({
       where: { id, customerId: user.id },
-      include: { review: true },
+      include: { review: true, provider: { select: { latitude: true, longitude: true } } },
     });
     if (!row) throw new NotFoundException("Booking not found");
 
@@ -342,7 +447,7 @@ export class BookingsService {
   }
 
   private emptyProviderJobStats(): ProviderJobQueueStats {
-    return { pending: 0, active: 0, completed: 0 };
+    return { pending: 0, active: 0, completed: 0, totalEarnings: 0 };
   }
 
   async listForProvider(
@@ -388,9 +493,9 @@ export class BookingsService {
 
     const baseWhere = { providerId: profileId };
 
-    const queueStatuses: BookingStatus[] = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
-    const historyStatuses: BookingStatus[] = ["COMPLETED", "REJECTED", "CANCELLED"];
-    const activeStatuses: BookingStatus[] = ["ACCEPTED", "IN_PROGRESS"];
+    const queueStatuses: BookingDto["status"][] = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
+    const historyStatuses: BookingDto["status"][] = ["COMPLETED", "REJECTED", "CANCELLED"];
+    const activeStatuses: BookingDto["status"][] = ["ACCEPTED", "IN_PROGRESS"];
 
     const listWhere =
       scope === "queue"
@@ -404,7 +509,7 @@ export class BookingsService {
         ? [{ updatedAt: "desc" as const }, { createdAt: "desc" as const }]
         : [{ scheduledAt: "asc" as const }, { createdAt: "desc" as const }];
 
-    const [rows, total, pending, active, completed] = await Promise.all([
+    const [rows, total, pending, active, completed, completedEarnings] = await Promise.all([
       this.prisma.booking.findMany({
         where: listWhere,
         orderBy,
@@ -421,6 +526,10 @@ export class BookingsService {
         where: { ...baseWhere, status: { in: activeStatuses } },
       }),
       this.prisma.booking.count({ where: { ...baseWhere, status: "COMPLETED" } }),
+      this.prisma.booking.aggregate({
+        where: { ...baseWhere, status: "COMPLETED" },
+        _sum: { totalAmount: true },
+      }),
     ]);
 
     const payload: CachedProviderBookingList = {
@@ -432,6 +541,7 @@ export class BookingsService {
         pending,
         active,
         completed,
+        totalEarnings: completedEarnings._sum.totalAmount ?? 0,
       },
     };
 
@@ -496,16 +606,25 @@ export class BookingsService {
       );
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
+    const { count } = await this.prisma.booking.updateMany({
+      where: { id: bookingId, status: row.status },
       data: { status: next },
+    });
+    if (count === 0) {
+      throw new ConflictException("Booking status was updated by another request");
+    }
+
+    const updated = await this.prisma.booking.findFirst({
+      where: { id: bookingId, providerId: user.providerProfile.id },
       include: {
         customer: { select: { firstName: true, lastName: true } },
         service: { select: { title: true } },
       },
     });
+    if (!updated) throw new NotFoundException("Booking not found");
 
     this.bumpProviderBookingListCache(user.providerProfile.id);
+    this.bookingGateway.emitStatusChange(updated.id, next);
 
     void this.notificationsService
       .notifyCustomerBookingStatus({
@@ -514,7 +633,13 @@ export class BookingsService {
         status: next,
         serviceTitle: updated.service.title,
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        this.logger.warn(
+          `Failed to notify customer for booking status update ${updated.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      });
 
     return this.toProviderViewDto(updated);
   }

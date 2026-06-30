@@ -1,17 +1,67 @@
 import "../globals.css";
 import { useEffect, useLayoutEffect } from "react";
-import { Stack, useRouter, useSegments, useRootNavigationState } from "expo-router";
+import { Platform } from "react-native";
+import {
+  Stack,
+  useGlobalSearchParams,
+  useRouter,
+  useSegments,
+  useRootNavigationState,
+} from "expo-router";
 import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Toast from "react-native-toast-message";
 
-import { setApiBaseUrl, setAuthToken, useMe } from "@repo/api-client";
+import { setApiBaseUrl, setAuthToken, setAuthTokenResolver, useMe } from "@repo/api-client";
+
+/** iOS Simulator often resolves `localhost` to IPv6 first; Nest may be IPv4-only → connection fails. */
+function resolveApiUrlForDevice(raw: string): string {
+  const u = raw.trim().replace(/^["']|["']$/g, "") || "http://localhost:3001";
+  if (Platform.OS !== "ios") return u;
+  try {
+    const parsed = new URL(u);
+    if (parsed.hostname === "localhost") {
+      parsed.hostname = "127.0.0.1";
+    }
+    return `${parsed.origin}${parsed.pathname}`.replace(/\/$/, "");
+  } catch {
+    return u;
+  }
+}
 
 setApiBaseUrl(
-  process.env["EXPO_PUBLIC_API_URL"] ??
-    process.env["NEXT_PUBLIC_API_URL"] ??
-    "http://localhost:3001"
+  resolveApiUrlForDevice(
+    process.env["EXPO_PUBLIC_API_URL"] ??
+      process.env["NEXT_PUBLIC_API_URL"] ??
+      "http://localhost:3001"
+  )
 );
+
+const SENTRY_DSN = process.env["EXPO_PUBLIC_SENTRY_DSN"];
+const SHOULD_INIT_SENTRY =
+  Boolean(SENTRY_DSN) &&
+  process.env["NODE_ENV"] === "production" &&
+  Constants.appOwnership !== "expo";
+
+if (SHOULD_INIT_SENTRY) {
+  try {
+    // Lazy-load Sentry in production/dev-client builds only.
+    // This avoids Expo Go devtools conflicts during local development.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Sentry = require("@sentry/react-native");
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      enabled: true,
+    });
+    // Register explicit global handle so shared utils can discover Sentry safely
+    // without importing react-native-only modules in non-RN runtimes.
+    (globalThis as Record<string, unknown>)["Sentry"] = Sentry;
+  } catch {
+    // Keep app boot resilient if Sentry init fails unexpectedly.
+  }
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,21 +83,40 @@ function RootNavigator() {
   const { user } = useUser();
   const router   = useRouter();
   const segments = useSegments();
+  const params = useGlobalSearchParams<{ allowRoleChange?: string }>();
   const navState = useRootNavigationState();
 
   const roleFromClaims = (sessionClaims?.publicMetadata as { role?: string } | undefined)?.role;
   const roleFromUser = (user?.publicMetadata as { role?: string } | undefined)?.role;
   const role = roleFromClaims ?? roleFromUser;
+  const allowRoleChange = params.allowRoleChange === "1";
 
   const meQuery = useMe({ enabled: Boolean(isLoaded && isSignedIn && role) });
 
-  // Set the axios token as early as possible so `/users/me` succeeds on the first tick after reload.
+  // Per-request Clerk JWT (avoids 401s from stale axios default headers after reload / token refresh).
+  // The resolver and the eager fetch both swallow Clerk errors: when a session is briefly
+  // inactive (sign-in/out transitions, refresh in flight) Clerk throws "Unable to authenticate
+  // the request" — we don't want that to surface as an unhandled promise rejection.
   useLayoutEffect(() => {
     if (!isSignedIn) {
+      setAuthTokenResolver(null);
       setAuthToken(null);
       return;
     }
-    void getToken().then((token) => setAuthToken(token));
+    const safeGetToken = async (): Promise<string | null> => {
+      try {
+        return await getToken({ skipCache: true });
+      } catch {
+        return null;
+      }
+    };
+    setAuthTokenResolver(safeGetToken);
+    void safeGetToken().then((token) => {
+      setAuthToken(token);
+    });
+    return () => {
+      setAuthTokenResolver(null);
+    };
   }, [isSignedIn, getToken]);
 
   // Auth-based routing — runs only when auth state or current segment changes.
@@ -80,6 +149,9 @@ function RootNavigator() {
       meQuery.isSuccess &&
       !meQuery.data.onboardingCompleted
     ) {
+      if (inAuthGroup && authSegment === "role-select" && allowRoleChange) {
+        return;
+      }
       if (role === "CUSTOMER" && segments[0] === "(customer)") {
         router.replace("/(auth)/customer-onboarding");
         return;
@@ -92,6 +164,9 @@ function RootNavigator() {
 
     // Signed in — leave auth stack only when role + onboarding (or /me failure) are resolved.
     if (inAuthGroup) {
+      if (authSegment === "role-select" && allowRoleChange) {
+        return;
+      }
       if (!role) {
         if (authSegment !== "role-select") router.replace("/(auth)/role-select");
         return;
@@ -116,7 +191,7 @@ function RootNavigator() {
         router.replace("/(customer)/(tabs)/home");
       }
     }
-  }, [isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isPending, meQuery.isSuccess, meQuery.data, role]);
+  }, [allowRoleChange, isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isPending, meQuery.isSuccess, meQuery.data, role]);
 
   return null;
 }
@@ -130,6 +205,7 @@ export default function RootLayout() {
       <QueryClientProvider client={queryClient}>
         <Stack screenOptions={{ headerShown: false }} />
         <RootNavigator />
+        <Toast />
       </QueryClientProvider>
     </ClerkProvider>
   );

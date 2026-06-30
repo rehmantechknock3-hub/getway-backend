@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -18,8 +18,8 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   bookingKeys,
-  setAuthToken,
   useCreateBooking,
+  useProvider,
   useProviderServices,
 } from "@repo/api-client";
 
@@ -71,8 +71,7 @@ export default function BookServiceScreen() {
   const svcId = typeof serviceId === "string" ? serviceId : serviceId?.[0] ?? "";
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState<Step>(1);
 
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -89,25 +88,10 @@ export default function BookServiceScreen() {
   const [locating, setLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
   const servicesQuery = useProviderServices(providerId, {
-    enabled: apiReady && !!providerId,
+    enabled: isLoaded && isSignedIn && !!providerId,
   });
+  const providerQuery = useProvider(providerId);
   const createBooking = useCreateBooking();
 
   const service = useMemo(
@@ -143,6 +127,10 @@ export default function BookServiceScreen() {
 
   const submit = useCallback(async () => {
     if (!svcId || !address.trim()) return;
+    if (providerQuery.data && !providerQuery.data.isOnline) {
+      setFormError("Provider is offline right now. Booking is unavailable.");
+      return;
+    }
     const lat = coords?.latitude ?? 0;
     const lon = coords?.longitude ?? 0;
     setFormError(null);
@@ -166,10 +154,15 @@ export default function BookServiceScreen() {
           },
         ]
       );
-    } catch {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "";
+      if (message.toLowerCase().includes("offline")) {
+        setFormError("Provider is offline right now. Booking is unavailable.");
+        return;
+      }
       setFormError("Booking failed. Check your connection and try again.");
     }
-  }, [svcId, address, coords, scheduledAt, notes, createBooking, queryClient]);
+  }, [svcId, address, providerQuery.data, coords, scheduledAt, notes, createBooking, queryClient]);
 
   if (!providerId || !svcId) {
     return (
@@ -216,6 +209,58 @@ export default function BookServiceScreen() {
     );
   }
 
+  if (providerQuery.isLoading) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center px-6">
+        <ActivityIndicator />
+        <Text className="text-ink-muted text-sm mt-4 text-center">Loading provider…</Text>
+      </View>
+    );
+  }
+
+  if (providerQuery.isError || !providerQuery.data) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center px-6">
+        <Text className="text-ink text-center font-medium mb-2">Could not load provider</Text>
+        <Text className="text-ink-muted text-sm text-center mb-6">
+          We need to confirm the provider is online before booking.
+        </Text>
+        <TouchableOpacity
+          className="bg-primary-600 rounded-2xl px-6 py-3 mb-3"
+          onPress={() => void providerQuery.refetch()}
+          activeOpacity={0.9}
+        >
+          <Text className="text-white font-bold">Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.85}>
+          <Text className="text-primary-600 font-semibold">Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!providerQuery.data.isOnline) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center px-6">
+        <Ionicons name="moon-outline" size={40} color={appColors.ink.subtle} />
+        <Text className="text-ink text-center font-semibold text-lg mt-4 mb-2">
+          Can&apos;t book — provider is offline
+        </Text>
+        <Text className="text-ink-muted text-sm text-center leading-5 mb-6">
+          Their status is <Text className="text-ink-soft font-semibold">Offline</Text>, so new bookings are blocked until
+          they go online in the Provider app. Check back later or use the heart on their profile to save them.
+        </Text>
+        <TouchableOpacity
+          className="bg-primary-600 rounded-2xl px-6 py-3"
+          onPress={() => router.back()}
+          activeOpacity={0.9}
+        >
+          <Text className="text-white font-bold">Go back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       className="flex-1 bg-canvas"
@@ -235,6 +280,15 @@ export default function BookServiceScreen() {
           {service.title}
         </Text>
         <Text className="text-ink-muted text-sm mt-1">{service.categoryName}</Text>
+        {!providerQuery.data.isOnline ? (
+          <View className="mt-3 bg-amber-100 border border-amber-200 rounded-xl px-3 py-2">
+            <Text className="text-amber-800 text-xs leading-5">
+              <Text className="font-semibold">Status: Offline</Text>
+              {" — "}
+              you can&apos;t complete a booking until this provider goes online again.
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <View className="flex-row items-center justify-between mb-6">
@@ -413,7 +467,7 @@ export default function BookServiceScreen() {
             <TouchableOpacity
               className="flex-1 bg-primary-600 rounded-2xl py-4 items-center active:opacity-90"
               onPress={() => void submit()}
-              disabled={createBooking.isPending || !address.trim()}
+              disabled={createBooking.isPending || !address.trim() || !providerQuery.data.isOnline}
               activeOpacity={0.9}
             >
               {createBooking.isPending ? (

@@ -19,5 +19,7 @@ export function useProviderReviews(page = 1, options?: { enabled?: boolean }) {
       return data;
     },
     enabled: options?.enabled ?? true,
+    /** Reviews change when customers submit feedback — avoid 60s app default hiding new rows. */
+    staleTime: 0,
   });
 }

@@ -1,6 +1,16 @@
 import axios from "axios";
+import type { InternalAxiosRequestConfig } from "axios";
 
 import { addBreadcrumb, randomUUID, reportError } from "@repo/utils";
+
+/** When set (Expo), every request awaits a fresh Clerk session JWT so calls never race stale `defaults.headers`. */
+type AuthTokenResolver = () => Promise<string | null>;
+
+let authTokenResolver: AuthTokenResolver | null = null;
+
+export function setAuthTokenResolver(resolver: AuthTokenResolver | null): void {
+  authTokenResolver = resolver;
+}
 
 const defaultBaseUrl =
   process.env["EXPO_PUBLIC_API_URL"] ??
@@ -25,7 +35,10 @@ export const apiClient = axios.create({
 
 /** Re-apply API origin from the Expo app so env vars loaded there always win. */
 export function setApiBaseUrl(url: string): void {
-  const trimmed = url.trim().replace(/\/$/, "");
+  const trimmed = url
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\/$/, "");
   if (trimmed.length > 0) {
     apiClient.defaults.baseURL = trimmed;
   }
@@ -45,11 +58,21 @@ export function setAuthToken(token: string | null): void {
   }
 }
 
-// ── Request-ID interceptor ─────────────────────────────────────────────────
-// Attaches a unique X-Request-ID to every outgoing request so the backend can
-// correlate logs and the response echoes the same ID for Sentry breadcrumbs.
+// ── Request interceptor: optional fresh Clerk token + Request-ID ────────────
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const hasExplicitAuthorization = Boolean(config.headers.Authorization);
+  if (authTokenResolver && !hasExplicitAuthorization) {
+    try {
+      const token = await authTokenResolver();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      // Preserve any explicit/default Authorization header already attached by the app.
+    }
+  }
+
   config.headers["X-Request-ID"] = randomUUID();
   return config;
 });

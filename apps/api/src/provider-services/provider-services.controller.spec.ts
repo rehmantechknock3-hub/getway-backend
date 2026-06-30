@@ -88,4 +88,17 @@ describe("ProviderServicesController", () => {
     });
     expect(result).toEqual({ id: "s-1", title: "Updated" });
   });
+
+  it("remove delegates with uuid param", async () => {
+    const providerServicesService = {
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    const controller = new ProviderServicesController(providerServicesService as never);
+
+    const req = { auth: { sub: "clerk_prov" } } as never;
+    const serviceId = "b0000000-0000-4000-8000-000000000001";
+    await controller.remove(req, serviceId);
+
+    expect(providerServicesService.remove).toHaveBeenCalledWith("clerk_prov", serviceId);
+  });
 });

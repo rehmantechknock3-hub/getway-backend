@@ -27,6 +27,9 @@ import {
 import { textInputBaselineStyle } from "../styles/text-input";
 import { appColors } from "../styles/colors";
 
+const SERVICE_CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "PKR"] as const;
+type ServiceCurrency = (typeof SERVICE_CURRENCIES)[number];
+
 function apiErrorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("response" in error)) return undefined;
   const res = (error as { response?: { data?: unknown } }).response;
@@ -55,6 +58,8 @@ export function ProviderServiceForm(props: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [priceCurrency, setPriceCurrency] = useState<ServiceCurrency>("USD");
+  const [showCurrencyMenu, setShowCurrencyMenu] = useState(false);
   const [duration, setDuration] = useState("");
   const [isActive, setIsActive] = useState(true);
 
@@ -69,6 +74,7 @@ export function ProviderServiceForm(props: Props) {
     setTitle(s.title);
     setDescription(s.description ?? "");
     setPrice(String(s.price));
+    setPriceCurrency(s.priceCurrency ?? "USD");
     setDuration(String(s.duration));
     setIsActive(s.isActive);
   }, [props.mode, props.mode === "edit" ? props.initial.id : ""]);
@@ -85,7 +91,7 @@ export function ProviderServiceForm(props: Props) {
   function promptDeleteCategory(c: { id: string; name: string }) {
     Alert.alert(
       "Delete category?",
-      `Remove “${c.name}”? You can delete categories you added, or unused shared ones, only if no service uses them.`,
+      `Remove "${c.name}"? Services using this category in your account will also be deleted.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -157,6 +163,7 @@ export function ProviderServiceForm(props: Props) {
           title: title.trim(),
           description: description.trim() ? description.trim() : undefined,
           price: priceNum,
+          priceCurrency,
           duration: durNum,
         });
       } else {
@@ -170,6 +177,7 @@ export function ProviderServiceForm(props: Props) {
             title: title.trim(),
             description: description.trim() ? description.trim() : undefined,
             price: priceNum,
+            priceCurrency,
             duration: durNum,
             isActive: resolvedActive,
           },
@@ -198,8 +206,17 @@ export function ProviderServiceForm(props: Props) {
     props.mode === "edit" && priceInvalid ? "border-red-400" : "border-ink-faint";
   const durationFieldBorder =
     props.mode === "edit" && durationInvalid ? "border-red-400" : "border-ink-faint";
+  const categoriesList = categories ?? [];
+  const categoryOptions =
+    props.mode === "edit"
+      ? categoriesList.filter((c) => c.id === props.initial.categoryId)
+      : categoriesList;
+  const selectedCategoryLabel =
+    props.mode === "edit"
+      ? categoryOptions[0]?.name ?? props.initial.categoryName
+      : undefined;
 
-  if (!categories?.length) {
+  if (!categoriesList.length) {
     return (
       <ScrollView
         className="flex-1 bg-canvas"
@@ -263,11 +280,21 @@ export function ProviderServiceForm(props: Props) {
         </View>
       ) : null}
       <Text className="text-ink text-sm font-medium mb-2">Category</Text>
-      <Text className="text-ink-muted text-xs mb-3 leading-4">
-        Tap a name to select it for this service. Trash removes a category you created (or an unused shared one) when no listing uses it—other providers keep their own labels.
-      </Text>
+      {props.mode === "new" ? (
+        <Text className="text-ink-muted text-xs mb-3 leading-4">
+          Tap a name to select it for this service. Trash removes a category you created (or an unused shared one)
+          when no listing uses it-other providers keep their own labels.
+        </Text>
+      ) : (
+        <Text className="text-ink-muted text-xs mb-3 leading-4">
+          This service stays linked to its current category.
+        </Text>
+      )}
       <View className="flex-row flex-wrap gap-2 mb-4">
-        {categories.map((c) => {
+        {(props.mode === "edit" && selectedCategoryLabel && categoryOptions.length === 0
+          ? [{ id: props.initial.categoryId, name: selectedCategoryLabel }]
+          : categoryOptions
+        ).map((c) => {
           const selected = c.id === categoryId;
           return (
             <View
@@ -287,41 +314,47 @@ export function ProviderServiceForm(props: Props) {
                   {c.name}
                 </Text>
               </Pressable>
-              <Pressable
-                onPress={() => promptDeleteCategory(c)}
-                disabled={busy}
-                hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
-                accessibilityRole="button"
-                accessibilityLabel={`Delete category ${c.name}`}
-                className="pr-2 pl-1 py-2 active:opacity-70"
-              >
-                <Ionicons name="trash-outline" size={20} color={appColors.primary[800]} />
-              </Pressable>
+              {props.mode === "new" ? (
+                <Pressable
+                  onPress={() => promptDeleteCategory(c)}
+                  disabled={busy}
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete category ${c.name}`}
+                  className="pr-2 pl-1 py-2 active:opacity-70"
+                >
+                  <Ionicons name="trash-outline" size={20} color={appColors.primary[800]} />
+                </Pressable>
+              ) : null}
             </View>
           );
         })}
       </View>
 
-      <Text className="text-ink text-sm font-medium mb-2">Add another category</Text>
-      <View className="flex-row gap-2 items-center mb-5">
-        <TextInput
-          className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 text-ink text-base"
-          style={textInputBaselineStyle}
-          value={newCategoryName}
-          onChangeText={setNewCategoryName}
-          placeholder="New category name"
-          placeholderTextColor={appColors.ink.subtle}
-          onSubmitEditing={() => void handleCreateCategory()}
-        />
-        <TouchableOpacity
-          className="bg-canvas-raised border border-primary-600 rounded-2xl px-4 py-3"
-          onPress={() => void handleCreateCategory()}
-          disabled={busy || !newCategoryName.trim()}
-          style={{ opacity: busy || !newCategoryName.trim() ? 0.5 : 1 }}
-        >
-          <Text className="text-primary-700 font-semibold text-sm">Add</Text>
-        </TouchableOpacity>
-      </View>
+      {props.mode === "new" ? (
+        <>
+          <Text className="text-ink text-sm font-medium mb-2">Add another category</Text>
+          <View className="flex-row gap-2 items-center mb-5">
+            <TextInput
+              className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 text-ink text-base"
+              style={textInputBaselineStyle}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              placeholder="New category name"
+              placeholderTextColor={appColors.ink.subtle}
+              onSubmitEditing={() => void handleCreateCategory()}
+            />
+            <TouchableOpacity
+              className="bg-canvas-raised border border-primary-600 rounded-2xl px-4 py-3"
+              onPress={() => void handleCreateCategory()}
+              disabled={busy || !newCategoryName.trim()}
+              style={{ opacity: busy || !newCategoryName.trim() ? 0.5 : 1 }}
+            >
+              <Text className="text-primary-700 font-semibold text-sm">Add</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : null}
 
       <Text className="text-ink text-sm font-medium mb-2">Title</Text>
       <TextInput
@@ -344,7 +377,41 @@ export function ProviderServiceForm(props: Props) {
         multiline
       />
 
-      <Text className="text-ink text-sm font-medium mb-2">Price (USD)</Text>
+      <Text className="text-ink text-sm font-medium mb-2">Price currency</Text>
+      <View className="mb-4">
+        <TouchableOpacity
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 flex-row items-center justify-between"
+          onPress={() => setShowCurrencyMenu((v) => !v)}
+          activeOpacity={0.85}
+        >
+          <Text className="text-ink text-base">{priceCurrency}</Text>
+          <Ionicons
+            name={showCurrencyMenu ? "chevron-up" : "chevron-down"}
+            size={18}
+            color={appColors.ink.subtle}
+          />
+        </TouchableOpacity>
+        {showCurrencyMenu ? (
+          <View className="mt-2 bg-canvas-raised border border-ink-faint rounded-2xl overflow-hidden">
+            {SERVICE_CURRENCIES.map((currency) => (
+              <Pressable
+                key={currency}
+                className="px-4 py-3 border-b border-ink-faint active:opacity-80"
+                onPress={() => {
+                  setPriceCurrency(currency);
+                  setShowCurrencyMenu(false);
+                }}
+              >
+                <Text className={`text-sm ${currency === priceCurrency ? "text-primary-700 font-semibold" : "text-ink"}`}>
+                  {currency}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <Text className="text-ink text-sm font-medium mb-2">Price ({priceCurrency})</Text>
       <TextInput
         className={`bg-canvas-raised border ${priceFieldBorder} rounded-2xl px-4 py-3.5 text-ink text-base mb-4`}
         style={textInputBaselineStyle}

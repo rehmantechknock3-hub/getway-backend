@@ -1,9 +1,9 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { CACHE_MANAGER } from "@nestjs/cache-manager";
@@ -16,6 +16,7 @@ import type {
   ServiceCategory,
   UpdateServiceInput,
 } from "@repo/schemas";
+import { safeParseProviderOnboardingJson } from "@repo/schemas";
 
 import { PrismaService } from "../prisma/prisma.service";
 
@@ -32,12 +33,16 @@ function categoriesCacheKey(clerkId: string): string {
 
 @Injectable()
 export class ProviderServicesService {
+  private readonly logger = new Logger(ProviderServicesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache
   ) {}
 
-  private async requireProviderContext(clerkId: string): Promise<{
+  private async requireProviderContext(clerkId: string, requestId?: string): Promise<{
+    userId: string;
+    providerOnboarding: Prisma.JsonValue | null;
     providerProfileId: string;
     dismissedCategoryIds: string[];
   }> {
@@ -45,20 +50,53 @@ export class ProviderServicesService {
       where: { clerkId },
       include: { providerProfile: true },
     });
-    if (!user) throw new NotFoundException("User not found");
+    if (!user) {
+      this.logger.warn(
+        `Provider context user not found for clerkId=${clerkId} [rid:${requestId}]`
+      );
+      throw new NotFoundException("User not found");
+    }
     if (user.role !== "PROVIDER") {
       throw new ForbiddenException("Only providers can manage services");
     }
     if (!user.providerProfile) throw new NotFoundException("Provider profile not found");
     return {
+      userId: user.id,
+      providerOnboarding: user.providerOnboarding as Prisma.JsonValue | null,
       providerProfileId: user.providerProfile.id,
       dismissedCategoryIds: user.providerProfile.dismissedServiceCategoryIds ?? [],
     };
   }
 
-  private async requireProviderProfileId(clerkId: string): Promise<string> {
-    const ctx = await this.requireProviderContext(clerkId);
+  private async requireProviderProfileId(clerkId: string, requestId?: string): Promise<string> {
+    const ctx = await this.requireProviderContext(clerkId, requestId);
     return ctx.providerProfileId;
+  }
+
+  private async removeOnboardingCategoryByName(
+    userId: string,
+    providerOnboarding: Prisma.JsonValue | null,
+    categoryName: string
+  ): Promise<void> {
+    const parsed = safeParseProviderOnboardingJson(providerOnboarding);
+    if (!parsed.success) return;
+
+    const lowered = categoryName.trim().toLowerCase();
+    if (!lowered.length) return;
+    const nextCategories = parsed.data.serviceCategories.filter(
+      (name) => name.trim().toLowerCase() !== lowered
+    );
+    if (nextCategories.length === parsed.data.serviceCategories.length) return;
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        providerOnboarding: {
+          ...parsed.data,
+          serviceCategories: nextCategories,
+        } as Prisma.InputJsonValue,
+      },
+    });
   }
 
   /** Category is assignable if it is shared, owned by this provider, or already used by one of their services. */
@@ -87,6 +125,7 @@ export class ProviderServicesService {
     title: string;
     description: string | null;
     price: number;
+    priceCurrency: string;
     duration: number;
     categoryId: string;
     isActive: boolean;
@@ -97,6 +136,7 @@ export class ProviderServicesService {
       title: row.title,
       description: row.description ?? undefined,
       price: row.price,
+      priceCurrency: row.priceCurrency as ProviderMyService["priceCurrency"],
       duration: row.duration,
       categoryName: row.category.name,
       categoryId: row.categoryId,
@@ -104,12 +144,12 @@ export class ProviderServicesService {
     };
   }
 
-  async listMyServices(clerkId: string): Promise<ProviderMyService[]> {
+  async listMyServices(clerkId: string, requestId?: string): Promise<ProviderMyService[]> {
     const cacheKey = myServicesCacheKey(clerkId);
     const hit = await this.cache.get<ProviderMyService[]>(cacheKey);
     if (hit) return hit;
 
-    const providerId = await this.requireProviderProfileId(clerkId);
+    const providerId = await this.requireProviderProfileId(clerkId, requestId);
     const rows = await this.prisma.service.findMany({
       where: { providerId },
       include: { category: { select: { name: true } } },
@@ -120,12 +160,15 @@ export class ProviderServicesService {
     return out;
   }
 
-  async listCategories(clerkId: string): Promise<ServiceCategory[]> {
+  async listCategories(clerkId: string, requestId?: string): Promise<ServiceCategory[]> {
     const cacheKey = categoriesCacheKey(clerkId);
     const hit = await this.cache.get<ServiceCategory[]>(cacheKey);
     if (hit) return hit;
 
-    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(clerkId);
+    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(
+      clerkId,
+      requestId
+    );
 
     const usedRows = await this.prisma.service.findMany({
       where: { providerId: providerProfileId },
@@ -161,8 +204,12 @@ export class ProviderServicesService {
     return out;
   }
 
-  async createCategory(clerkId: string, input: CreateServiceCategoryInput): Promise<ServiceCategory> {
-    const { providerProfileId } = await this.requireProviderContext(clerkId);
+  async createCategory(
+    clerkId: string,
+    input: CreateServiceCategoryInput,
+    requestId?: string
+  ): Promise<ServiceCategory> {
+    const { providerProfileId } = await this.requireProviderContext(clerkId, requestId);
     const name = input.name.trim();
     if (!name.length) throw new BadRequestException("Category name is required");
 
@@ -212,27 +259,45 @@ export class ProviderServicesService {
    * Deletes an unused category. Providers may delete their own custom rows; shared (catalog) rows may be deleted
    * only when no service references them.
    */
-  async deleteCategory(clerkId: string, categoryId: string): Promise<void> {
-    const { providerProfileId } = await this.requireProviderContext(clerkId);
+  async deleteCategory(clerkId: string, categoryId: string, requestId?: string): Promise<void> {
+    const { userId, providerOnboarding, providerProfileId, dismissedCategoryIds } =
+      await this.requireProviderContext(clerkId, requestId);
     const cat = await this.prisma.serviceCategory.findUnique({ where: { id: categoryId } });
     if (!cat) throw new NotFoundException("Category not found");
     if (cat.providerId !== null && cat.providerId !== providerProfileId) {
       throw new ForbiddenException("You can only delete categories you created");
     }
 
-    const inUse = await this.prisma.service.count({ where: { categoryId } });
-    if (inUse > 0) {
-      throw new ConflictException(
-        "This category is used by one or more services. Remove or reassign those services first."
-      );
+    await this.prisma.service.deleteMany({
+      where: { providerId: providerProfileId, categoryId },
+    });
+    if (cat.providerId === null) {
+      if (!dismissedCategoryIds.includes(categoryId)) {
+        await this.prisma.providerProfile.update({
+          where: { id: providerProfileId },
+          data: {
+            dismissedServiceCategoryIds: [...dismissedCategoryIds, categoryId],
+          },
+        });
+      }
+    } else {
+      await this.prisma.serviceCategory.delete({ where: { id: categoryId } });
     }
 
-    await this.prisma.serviceCategory.delete({ where: { id: categoryId } });
     await this.cache.del(categoriesCacheKey(clerkId));
+    await this.cache.del(myServicesCacheKey(clerkId));
+    await this.removeOnboardingCategoryByName(userId, providerOnboarding, cat.name);
   }
 
-  async create(clerkId: string, input: CreateServiceInput): Promise<ProviderMyService> {
-    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(clerkId);
+  async create(
+    clerkId: string,
+    input: CreateServiceInput,
+    requestId?: string
+  ): Promise<ProviderMyService> {
+    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(
+      clerkId,
+      requestId
+    );
     await this.requireAssignableCategory(
       input.categoryId,
       providerProfileId,
@@ -246,6 +311,7 @@ export class ProviderServicesService {
         title: input.title.trim(),
         description: input.description?.trim() ? input.description.trim() : null,
         price: input.price,
+        priceCurrency: input.priceCurrency,
         duration: input.duration,
         isActive: true,
       },
@@ -258,9 +324,13 @@ export class ProviderServicesService {
   async update(
     clerkId: string,
     serviceId: string,
-    input: UpdateServiceInput
+    input: UpdateServiceInput,
+    requestId?: string
   ): Promise<ProviderMyService> {
-    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(clerkId);
+    const { providerProfileId, dismissedCategoryIds } = await this.requireProviderContext(
+      clerkId,
+      requestId
+    );
     const existing = await this.prisma.service.findFirst({
       where: { id: serviceId, providerId: providerProfileId },
     });
@@ -284,6 +354,7 @@ export class ProviderServicesService {
       data.description = input.description?.trim() ? input.description.trim() : null;
     }
     if (input.price !== undefined) data.price = input.price;
+    if (input.priceCurrency !== undefined) data.priceCurrency = input.priceCurrency;
     if (input.duration !== undefined) data.duration = input.duration;
     if (input.categoryId !== undefined) {
       data.category = { connect: { id: input.categoryId } };
@@ -307,5 +378,42 @@ export class ProviderServicesService {
     await this.cache.del(myServicesCacheKey(clerkId));
     await this.cache.del(categoriesCacheKey(clerkId));
     return this.toMyServiceDto(row);
+  }
+
+  async remove(clerkId: string, serviceId: string, requestId?: string): Promise<void> {
+    const { userId, providerOnboarding, providerProfileId, dismissedCategoryIds } =
+      await this.requireProviderContext(clerkId, requestId);
+    const existing = await this.prisma.service.findFirst({
+      where: { id: serviceId, providerId: providerProfileId },
+      select: { id: true, categoryId: true },
+    });
+    if (!existing) throw new NotFoundException("Service not found");
+
+    await this.prisma.service.delete({ where: { id: serviceId } });
+    const stillInUse = await this.prisma.service.count({
+      where: { providerId: providerProfileId, categoryId: existing.categoryId },
+    });
+    if (stillInUse === 0) {
+      const category = await this.prisma.serviceCategory.findUnique({
+        where: { id: existing.categoryId },
+      });
+      if (category?.providerId === providerProfileId) {
+        await this.prisma.serviceCategory.delete({ where: { id: category.id } });
+        await this.removeOnboardingCategoryByName(userId, providerOnboarding, category.name);
+      } else if (
+        category?.providerId === null &&
+        !dismissedCategoryIds.includes(existing.categoryId)
+      ) {
+        await this.prisma.providerProfile.update({
+          where: { id: providerProfileId },
+          data: {
+            dismissedServiceCategoryIds: [...dismissedCategoryIds, existing.categoryId],
+          },
+        });
+        await this.removeOnboardingCategoryByName(userId, providerOnboarding, category.name);
+      }
+    }
+    await this.cache.del(myServicesCacheKey(clerkId));
+    await this.cache.del(categoriesCacheKey(clerkId));
   }
 }

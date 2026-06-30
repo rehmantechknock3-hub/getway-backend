@@ -31,14 +31,14 @@ export class ProviderServicesController {
   async list(@Req() req: Request) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    return this.providerServicesService.listMyServices(clerkId);
+    return this.providerServicesService.listMyServices(clerkId, req.requestId);
   }
 
   @Get("categories")
   async categories(@Req() req: Request) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
-    return this.providerServicesService.listCategories(clerkId);
+    return this.providerServicesService.listCategories(clerkId, req.requestId);
   }
 
   @Post("categories")
@@ -49,7 +49,7 @@ export class ProviderServicesController {
     const parsed = CreateServiceCategorySchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid category payload");
 
-    return this.providerServicesService.createCategory(clerkId, parsed.data);
+    return this.providerServicesService.createCategory(clerkId, parsed.data, req.requestId);
   }
 
   @Delete("categories/:categoryId")
@@ -58,7 +58,7 @@ export class ProviderServicesController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    await this.providerServicesService.deleteCategory(clerkId, categoryId);
+    await this.providerServicesService.deleteCategory(clerkId, categoryId, req.requestId);
   }
 
   @Post()
@@ -69,7 +69,7 @@ export class ProviderServicesController {
     const parsed = CreateServiceSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid service payload");
 
-    return this.providerServicesService.create(clerkId, parsed.data);
+    return this.providerServicesService.create(clerkId, parsed.data, req.requestId);
   }
 
   @Patch(":id")
@@ -80,6 +80,15 @@ export class ProviderServicesController {
     const parsed = UpdateServiceSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid service update payload");
 
-    return this.providerServicesService.update(clerkId, id, parsed.data);
+    return this.providerServicesService.update(clerkId, id, parsed.data, req.requestId);
+  }
+
+  @Delete(":id")
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(@Req() req: Request, @Param("id", ParseUUIDPipe) id: string) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    await this.providerServicesService.remove(clerkId, id, req.requestId);
   }
 }

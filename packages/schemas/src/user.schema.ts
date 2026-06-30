@@ -13,11 +13,27 @@ export const CustomerOnboardingSchema = z.object({
   carCompany: z.string().min(1),
   carModel: z.string().regex(/^\d+$/),
   notes: z.string().max(300).optional(),
+  /** Filled by the API after geocoding `primaryLocation`; used for provider discovery. */
+  primaryLatitude: z.number().min(-90).max(90).optional(),
+  primaryLongitude: z.number().min(-180).max(180).optional(),
 });
 
 const providerOnboardingFields = {
   experienceYears: z.number().int().min(0).max(60),
   serviceArea: z.string().min(1),
+  shopAddress: z.string().min(3).max(240),
+  shopPlaceId: z.string().min(10).max(255).optional(),
+  shopLocations: z
+    .array(
+      z.object({
+        address: z.string().min(3).max(240),
+        placeId: z.string().min(10).max(255).optional(),
+        latitude: z.number().optional(),
+        longitude: z.number().optional(),
+      })
+    )
+    .min(1)
+    .max(10),
   hasTools: z.boolean(),
   serviceDescription: z.string().min(1).max(500),
   profilePhotoUrl: z.string().url().optional(),
@@ -43,6 +59,24 @@ export const ProviderOnboardingSchema = z.preprocess((raw: unknown) => {
     Number.isNaN(o["starterListingDurationMinutes"] as number)
   ) {
     delete o["starterListingDurationMinutes"];
+  }
+  const existingLocations = o["shopLocations"];
+  if (!Array.isArray(existingLocations)) {
+    const fallbackAddress =
+      typeof o["shopAddress"] === "string" && o["shopAddress"].trim().length > 0
+        ? o["shopAddress"].trim()
+        : undefined;
+    if (fallbackAddress) {
+      o["shopLocations"] = [
+        {
+          address: fallbackAddress,
+          placeId:
+            typeof o["shopPlaceId"] === "string" && o["shopPlaceId"].trim().length > 0
+              ? o["shopPlaceId"].trim()
+              : undefined,
+        },
+      ];
+    }
   }
   return o;
 }, z.object({
@@ -79,6 +113,7 @@ export const UserSchema = z.object({
   providerMetrics: z.object({
     averageRating: z.number().min(0).max(5),
     totalReviews: z.number().int().min(0),
+    isOnline: z.boolean(),
   }).optional(),
   createdAt:   z.coerce.date(),
   updatedAt:   z.coerce.date(),

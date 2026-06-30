@@ -19,6 +19,7 @@ describe("FavoritesService", () => {
 
   const providersService = {
     findPublicSummariesByIds: vi.fn(),
+    findPublicSummariesByIdsWithDrivingDistances: vi.fn(),
   };
 
   let service: FavoritesService;
@@ -42,7 +43,27 @@ describe("FavoritesService", () => {
     const result = await service.list("clerk-1");
 
     expect(providersService.findPublicSummariesByIds).toHaveBeenCalledWith(["pp-2", "pp-1"]);
+    expect(providersService.findPublicSummariesByIdsWithDrivingDistances).not.toHaveBeenCalled();
     expect(result.data).toHaveLength(2);
+  });
+
+  it("list passes lat/lon through to driving-distance enrichment", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "u-1", role: "CUSTOMER" });
+    prisma.favoriteProvider.findMany.mockResolvedValue([{ providerId: "pp-1" }]);
+    providersService.findPublicSummariesByIdsWithDrivingDistances.mockResolvedValue([
+      { id: "pp-1", firstName: "A", lastName: "One", distanceMeters: 1200 },
+    ]);
+
+    const result = await service.list("clerk-1", 31.5, 74.3, "rid-1");
+
+    expect(providersService.findPublicSummariesByIdsWithDrivingDistances).toHaveBeenCalledWith(
+      ["pp-1"],
+      31.5,
+      74.3,
+      "rid-1"
+    );
+    expect(providersService.findPublicSummariesByIds).not.toHaveBeenCalled();
+    expect(result.data[0]?.distanceMeters).toBe(1200);
   });
 
   it("add upserts favorite", async () => {

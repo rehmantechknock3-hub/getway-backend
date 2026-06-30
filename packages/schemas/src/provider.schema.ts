@@ -39,6 +39,9 @@ export const CreateServiceCategorySchema = z.object({
   name: z.string().min(1).max(80),
 });
 
+export const ServiceCurrencySchema = z.enum(["USD", "EUR", "GBP", "AED", "SAR", "PKR"]);
+export type ServiceCurrency = z.infer<typeof ServiceCurrencySchema>;
+
 export const ServiceSchema = z.object({
   id:          z.string().uuid(),
   providerId:  z.string().uuid(),
@@ -46,6 +49,7 @@ export const ServiceSchema = z.object({
   title:       z.string().min(1),
   description: z.string().optional(),
   price:       z.number().positive(),
+  priceCurrency: ServiceCurrencySchema.default("USD"),
   duration:    z.number().int().positive(), // minutes
   isActive:    z.boolean().default(true),
   createdAt:   z.coerce.date(),
@@ -57,6 +61,7 @@ export const CreateServiceSchema = ServiceSchema.pick({
   title:       true,
   description: true,
   price:       true,
+  priceCurrency: true,
   duration:    true,
 });
 
@@ -76,10 +81,26 @@ export const ProviderPublicSummarySchema = z.object({
   verificationStatus: VerificationStatus,
   latitude: z.number().optional(),
   longitude: z.number().optional(),
+  /**
+   * Driving distance in km (Google Distance Matrix, cached) from the customer to the nearest listed
+   * service location when the list request includes lat/lon. Falls back to straight-line km when routing
+   * is unavailable. Prefer `distanceMeters` for display (integer from Google; avoids rounding error).
+   */
+  distanceKm: z.number().nonnegative().optional(),
+  /** Integer metres along the road when `distanceKind === "DRIVING"`; rounded Haversine when straight-line. */
+  distanceMeters: z.number().int().nonnegative().optional(),
+  /** Nearest shop / pin used for routing; geo list `radius` uses the same resolved distance as the UI (driving when available). */
+  nearestLocationLatitude: z.number().optional(),
+  nearestLocationLongitude: z.number().optional(),
+  /** DRIVING = `distanceKm` from Distance Matrix. STRAIGHT_LINE = Haversine fallback. */
+  distanceKind: z.enum(["DRIVING", "STRAIGHT_LINE"]).optional(),
   startingPrice: z.number().optional(),
+  startingPriceCurrency: ServiceCurrencySchema.default("USD").optional(),
   primaryServiceTitle: z.string().optional(),
   /** Cheapest active service id (same ordering as startingPrice / primaryServiceTitle). */
   primaryServiceId: z.string().uuid().optional(),
+  /** Number of active services currently bookable for this provider. */
+  activeServiceCount: z.number().int().nonnegative(),
   /** Lowercase blob of all active service titles, descriptions, and category names (for client search/filter). */
   serviceSearchText: z.string().optional(),
 });
@@ -97,6 +118,7 @@ export const ProviderServiceOfferSchema = z.object({
   title: z.string(),
   description: z.string().optional(),
   price: z.number(),
+  priceCurrency: ServiceCurrencySchema.default("USD"),
   duration: z.number().int().positive(),
   categoryName: z.string(),
   isActive: z.boolean(),

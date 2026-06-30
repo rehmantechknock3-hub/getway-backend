@@ -14,6 +14,7 @@ import { BookingsModule }      from "./bookings/bookings.module";
 import { FavoritesModule }     from "./favorites/favorites.module";
 import { PaymentsModule }      from "./payments/payments.module";
 import { MessagesModule }      from "./messages/messages.module";
+import { MapsModule }            from "./maps/maps.module";
 import { NotificationsModule } from "./notifications/notifications.module";
 import { StorageModule }       from "./storage/storage.module";
 import { RealtimeModule }      from "./realtime/realtime.module";
@@ -35,6 +36,7 @@ import { ProviderServicesModule } from "./provider-services/provider-services.mo
     FavoritesModule,
     PaymentsModule,
     MessagesModule,
+    MapsModule,
     NotificationsModule,
     StorageModule,
     RealtimeModule,

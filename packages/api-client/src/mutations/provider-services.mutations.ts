@@ -75,3 +75,18 @@ export function useUpdateProviderService() {
     },
   });
 }
+
+export function useDeleteProviderService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (serviceId: string) => {
+      await apiClient.delete(`/api/v1/provider/services/${serviceId}`);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
+      await queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.categories() });
+      await queryClient.invalidateQueries({ queryKey: providerKeys.all() });
+      await queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    },
+  });
+}

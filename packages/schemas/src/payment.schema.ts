@@ -25,5 +25,18 @@ export const CreatePaymentIntentSchema = z.object({
   bookingId: z.string().uuid(),
 });
 
+export const ProviderPayoutRangeSchema = z.enum(["week", "month", "all"]);
+export type ProviderPayoutRange = z.infer<typeof ProviderPayoutRangeSchema>;
+
+export const ProviderPayoutSummarySchema = z.object({
+  range: ProviderPayoutRangeSchema,
+  currency: z.string().length(3).default("USD"),
+  paidCount: z.number().int().nonnegative(),
+  paidAmount: z.number().nonnegative(),
+  pendingCount: z.number().int().nonnegative(),
+  pendingAmount: z.number().nonnegative(),
+});
+
 export type Payment                   = z.infer<typeof PaymentSchema>;
 export type CreatePaymentIntentInput  = z.infer<typeof CreatePaymentIntentSchema>;
+export type ProviderPayoutSummary = z.infer<typeof ProviderPayoutSummarySchema>;

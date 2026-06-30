@@ -5,17 +5,19 @@ import type { User } from "@repo/schemas";
 import { apiClient } from "../client";
 
 export const userKeys = {
-  me: () => ["users", "me"] as const,
+  me: (clerkUserId?: string | null) => ["users", "me", clerkUserId ?? "anonymous"] as const,
 };
 
 export type UseMeOptions = {
   /** When false, the query does not run (e.g. wait until signed in). Defaults to true. */
   enabled?: boolean;
+  /** Scope the cache per Clerk user so switching accounts never serves stale data. */
+  clerkUserId?: string | null;
 };
 
 export function useMe(options?: UseMeOptions) {
   return useQuery({
-    queryKey: userKeys.me(),
+    queryKey: userKeys.me(options?.clerkUserId),
     queryFn: async () => {
       const { data } = await apiClient.get<User>("/api/v1/users/me");
       return data;

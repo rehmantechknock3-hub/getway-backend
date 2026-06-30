@@ -45,6 +45,9 @@ const UpdateSavedLocationsSchema = z.object({
 const UpdateAvatarSchema = z.object({
   avatarUrl: z.string().min(1).max(5000000),
 });
+const UpdateProviderPresenceSchema = z.object({
+  isOnline: z.boolean(),
+});
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
@@ -104,6 +107,17 @@ export class UsersController {
     return this.usersService.updateAvatar(clerkId, parsed.data.avatarUrl);
   }
 
+  @Patch("me/provider/presence")
+  async updateProviderPresence(@Req() req: Request, @Body() body: unknown) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    const parsed = UpdateProviderPresenceSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid provider presence payload");
+
+    return this.usersService.updateProviderPresence(clerkId, parsed.data.isOnline);
+  }
+
   @Post("me/avatar/upload")
   @UseInterceptors(
     FileInterceptor("file", {
@@ -157,9 +171,9 @@ export class UsersController {
     if (!parsed.success) throw new BadRequestException("Invalid onboarding payload");
 
     if (parsed.data.role === "CUSTOMER") {
-      return this.usersService.updateCustomerOnboarding(clerkId, parsed.data.data);
+      return this.usersService.updateCustomerOnboarding(clerkId, parsed.data.data, req.requestId);
     }
-    return this.usersService.updateProviderOnboarding(clerkId, parsed.data.data);
+    return this.usersService.updateProviderOnboarding(clerkId, parsed.data.data, req.requestId);
   }
 
   @Get(":id")

@@ -10,8 +10,8 @@ export type BookingTimelineAudience = "customer" | "provider";
 
 const CUSTOMER_STEPS: Array<{ label: string; hint: string }> = [
   { label: "Request sent", hint: "Your booking request was submitted." },
-  { label: "Provider confirmed", hint: "The provider accepted your booking." },
-  { label: "Service in progress", hint: "Work is underway at your location." },
+  { label: "Provider on the way", hint: "The provider accepted and is heading to your location." },
+  { label: "Service started", hint: "Work is underway at your location." },
   { label: "Completed", hint: "This job is finished." },
 ];
 

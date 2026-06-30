@@ -7,6 +7,8 @@ import { existsSync, mkdirSync } from "fs";
 import { AppModule } from "./app.module";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
+import { SocketIoAdapter } from "./realtime/socket-io.adapter";
+
 async function bootstrap() {
   const logger = new Logger("Bootstrap");
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -28,6 +30,7 @@ async function bootstrap() {
     ],
     credentials: true,
   });
+  app.useWebSocketAdapter(new SocketIoAdapter(app, configService));
 
   const port = parseInt(configService.get<string>("PORT") ?? "3001", 10);
   // Omit host so Node binds the default (on macOS often dual-stack). Binding only `0.0.0.0`

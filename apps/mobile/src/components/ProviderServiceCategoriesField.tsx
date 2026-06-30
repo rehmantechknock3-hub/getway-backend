@@ -45,21 +45,35 @@ export function ProviderServiceCategoriesField({
   onChange,
   maxCategories = MAX_DEFAULT,
 }: ProviderServiceCategoriesFieldProps) {
-  const [showModal, setShowModal] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [customName, setCustomName] = useState("");
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
+  function openModal() {
+    setIsModalVisible(true);
+    overlayOpacity.setValue(0);
+    Animated.timing(overlayOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  function closeModal() {
+    Animated.timing(overlayOpacity, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsModalVisible(false);
+    });
+  }
+
   useEffect(() => {
-    if (showModal) {
-      Animated.timing(overlayOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    } else {
+    if (!isModalVisible) {
       overlayOpacity.setValue(0);
     }
-  }, [showModal, overlayOpacity]);
+  }, [isModalVisible, overlayOpacity]);
 
   function addCustom() {
     const next = addCategoryName(value, customName, maxCategories);
@@ -101,7 +115,7 @@ export function ProviderServiceCategoriesField({
 
       <TouchableOpacity
         className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 mb-3 flex-row items-center justify-between"
-        onPress={() => setShowModal(true)}
+        onPress={openModal}
         activeOpacity={0.85}
       >
         <Text className="text-ink text-base">Browse suggested categories</Text>
@@ -130,17 +144,17 @@ export function ProviderServiceCategoriesField({
       </View>
 
       <Modal
-        visible={showModal}
+        visible={isModalVisible}
         transparent
-        animationType="slide"
-        onRequestClose={() => setShowModal(false)}
+        animationType="none"
+        onRequestClose={closeModal}
       >
         <Animated.View className="flex-1 justify-end" style={{ backgroundColor: "rgba(0,0,0,0.3)", opacity: overlayOpacity }}>
-        <Pressable className="flex-1 justify-end" onPress={() => setShowModal(false)}>
+        <Pressable className="flex-1 justify-end" onPress={closeModal}>
           <Pressable className="bg-canvas rounded-t-3xl p-5 max-h-[70%]" onPress={() => undefined}>
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-ink text-lg font-semibold">Suggested categories</Text>
-              <TouchableOpacity onPress={() => setShowModal(false)} accessibilityLabel="Close">
+              <TouchableOpacity onPress={closeModal} accessibilityLabel="Close">
                 <Ionicons name="close" size={22} color={appColors.ink.DEFAULT} />
               </TouchableOpacity>
             </View>
@@ -166,7 +180,7 @@ export function ProviderServiceCategoriesField({
             </ScrollView>
             <TouchableOpacity
               className="bg-primary-600 rounded-2xl py-3 items-center mt-2"
-              onPress={() => setShowModal(false)}
+              onPress={closeModal}
             >
               <Text className="text-white font-semibold">Done</Text>
             </TouchableOpacity>

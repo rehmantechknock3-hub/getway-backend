@@ -23,6 +23,6 @@ export class ProviderReviewsController {
     const parsed = ListProviderReviewsQuerySchema.safeParse(rawQuery);
     const q = parsed.success ? parsed.data : { page: 1, limit: 20 };
 
-    return this.reviewsService.listForProvider(clerkId, q.page, q.limit);
+    return this.reviewsService.listForProvider(clerkId, q.page, q.limit, req.requestId);
   }
 }

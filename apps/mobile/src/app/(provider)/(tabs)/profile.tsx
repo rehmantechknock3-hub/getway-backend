@@ -1,14 +1,31 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { ActivityIndicator, Alert, Image, ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  RefreshControl,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
+import {
+  useMe,
+  useSubmitProviderOnboarding,
+  useUpdateProfile,
+} from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
-import { ProviderServiceCategoriesField } from "../../../components/ProviderServiceCategoriesField";
+import { ShopAddressField } from "../../../components/ShopAddressField";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 import { normalizeProviderServiceCategories } from "../../../utils/provider-onboarding";
@@ -18,7 +35,30 @@ export default function ProviderProfileScreen() {
   const insets = useSafeAreaInsets();
   const { isLoaded, isSignedIn, signOut } = useAuth();
   const { user: clerkUser } = useUser();
-  const { data: me } = useMe({ enabled: isLoaded && isSignedIn });
+  const { data: me, refetch: refetchMe, isRefetching: isRefetchingMe } = useMe({
+    enabled: isLoaded && isSignedIn,
+  });
+
+  const refetchMeSafely = useCallback(async () => {
+    try {
+      const result = await refetchMe();
+      if (result.isError) {
+        const err = result.error ?? new Error("Failed to refresh profile");
+        reportError(err, { screen: "ProviderProfile", action: "refetchMe" });
+        showToast("error", "Could not refresh profile. Pull to try again.");
+      }
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderProfile", action: "refetchMe" });
+      showToast("error", "Could not refresh profile. Pull to try again.");
+    }
+  }, [refetchMe]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoaded || !isSignedIn) return;
+      void refetchMeSafely();
+    }, [isLoaded, isSignedIn, refetchMeSafely])
+  );
   const updateProfile = useUpdateProfile();
   const updateProviderOnboarding = useSubmitProviderOnboarding();
   const [firstName, setFirstName] = useState("");
@@ -27,9 +67,16 @@ export default function ProviderProfileScreen() {
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [experienceYears, setExperienceYears] = useState("0");
   const [serviceArea, setServiceArea] = useState("");
+  const [shopAddress, setShopAddress] = useState("");
+  const [shopPlaceId, setShopPlaceId] = useState<string | undefined>(undefined);
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  const [shopLocations, setShopLocations] = useState<
+    Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>
+  >([]);
   const [hasTools, setHasTools] = useState(true);
-  const [serviceDescription, setServiceDescription] = useState("");
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const serviceDescription = me?.providerOnboarding?.serviceDescription ?? "";
 
   const signInEmail =
     clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
@@ -45,15 +92,25 @@ export default function ProviderProfileScreen() {
     setServiceCategories(normalizeProviderServiceCategories(me.providerOnboarding));
     setExperienceYears(String(me.providerOnboarding?.experienceYears ?? 0));
     setServiceArea(me.providerOnboarding?.serviceArea ?? "");
+    setShopAddress(me.providerOnboarding?.shopAddress ?? "");
+    setShopPlaceId(me.providerOnboarding?.shopPlaceId);
+    setShopLocations(
+      (me.providerOnboarding?.shopLocations ?? []).map((location) => ({
+        address: location.address,
+        placeId: location.placeId,
+        latitude: location.latitude,
+        longitude: location.longitude,
+      }))
+    );
     setHasTools(me.providerOnboarding?.hasTools ?? true);
-    setServiceDescription(me.providerOnboarding?.serviceDescription ?? "");
     setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
   }, [me, clerkUser?.firstName, clerkUser?.lastName]);
+
 
   async function handleSaveProfile() {
     const emailToSave = accountEmail.trim();
     if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
-      Alert.alert("Required", "Name, email and phone are required.");
+      showToast("error", "Name, email and phone are required.");
       return;
     }
     try {
@@ -63,35 +120,82 @@ export default function ProviderProfileScreen() {
         email: emailToSave,
         phone: phone.trim(),
       });
-      Alert.alert("Saved", "Profile updated successfully.");
+      showToast("success", "Profile updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save profile");
+      reportError(error, { screen: "ProviderProfile", action: "handleSaveProfile" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save profile");
     }
   }
 
   async function handleSaveProviderInfo() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
-    if (serviceCategories.length === 0 || !serviceArea.trim() || !serviceDescription.trim() || Number.isNaN(parsedExperience)) {
-      Alert.alert("Required", "Add at least one service category and complete provider details.");
+    const pendingAddress = shopAddress.trim();
+    const normalizedLocations =
+      pendingAddress.length > 0 &&
+      !shopLocations.some((location) => location.address.toLowerCase() === pendingAddress.toLowerCase())
+        ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
+        : shopLocations;
+    if (
+      !serviceArea.trim() ||
+      normalizedLocations.length === 0 ||
+      Number.isNaN(parsedExperience)
+    ) {
+      showToast("error", "Complete provider details before saving.");
       return;
     }
     try {
+      let locationsToSave = normalizedLocations;
+      if (googleMapsApiKey) {
+        locationsToSave = await enrichShopLocationsWithCoordinates(normalizedLocations, googleMapsApiKey);
+        const anyMissing = locationsToSave.some(
+          (location) => typeof location.latitude !== "number" || typeof location.longitude !== "number"
+        );
+        if (anyMissing) {
+          reportError(new Error("Provider profile: shop coordinates missing after enrichment"), {
+            screen: "ProviderProfile",
+            action: "handleSaveProviderInfo",
+          });
+          showToast(
+            "error",
+            "Could not pin your shop on the map. Pick an address from the suggestions, or enable Places + Geocoding for your Google API key."
+          );
+          return;
+        }
+      }
+
       await updateProviderOnboarding.mutateAsync({
         serviceCategories,
         experienceYears: parsedExperience,
         serviceArea: serviceArea.trim(),
+        shopAddress: locationsToSave[0]?.address ?? pendingAddress,
+        shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
+        shopLocations: locationsToSave,
         hasTools,
         serviceDescription: serviceDescription.trim(),
         profilePhotoUrl: profilePhotoUrl.trim() ? profilePhotoUrl.trim() : undefined,
       });
-      Alert.alert("Saved", "Provider details updated successfully.");
+      showToast("success", "Provider details updated successfully.");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save provider details");
+      reportError(error, { screen: "ProviderProfile", action: "handleSaveProviderInfo" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save provider details");
     }
   }
 
   return (
-    <ScrollView className="flex-1 bg-canvas px-5" contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: Math.max(insets.bottom + 20, 32) }}>
+    <ScrollView
+      className="flex-1 bg-canvas px-5"
+      contentContainerStyle={{
+        paddingTop: insets.top + 12,
+        paddingBottom: Math.max(insets.bottom + 20, 32),
+      }}
+      keyboardShouldPersistTaps="always"
+      refreshControl={
+        <RefreshControl
+          refreshing={isLoaded && isSignedIn && isRefetchingMe}
+          onRefresh={() => void refetchMeSafely()}
+        />
+      }
+    >
       <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
 
       <TouchableOpacity
@@ -206,9 +310,6 @@ export default function ProviderProfileScreen() {
 
       <Text className="text-xl font-bold text-ink mb-4">Provider Onboarding</Text>
 
-      <ProviderServiceCategoriesField value={serviceCategories} onChange={setServiceCategories} />
-      <View className="h-2" />
-
       <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
@@ -226,14 +327,21 @@ export default function ProviderProfileScreen() {
         onChangeText={setServiceArea}
       />
 
-      <Text className="text-ink text-sm font-medium mb-2">Service description</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        style={textInputBaselineStyle}
-        value={serviceDescription}
-        onChangeText={setServiceDescription}
-        multiline
-        numberOfLines={3}
+      <ShopAddressField
+        shopAddress={shopAddress}
+        setShopAddress={setShopAddress}
+        shopPlaceId={shopPlaceId}
+        setShopPlaceId={setShopPlaceId}
+        shopLocations={shopLocations}
+        setShopLocations={setShopLocations}
+        googleMapsApiKey={googleMapsApiKey}
+        inputPlaceholder="Shop/office address"
+        mapDescription="Confirm these pins match your shop locations."
+        mapEmptyMessage={
+          googleMapsApiKey
+            ? "Enter at least 3 characters in shop address to preview on map."
+            : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview shop location."
+        }
       />
 
       <Text className="text-ink-muted text-xs mb-4 leading-5">

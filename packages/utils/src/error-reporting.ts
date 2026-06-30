@@ -47,6 +47,7 @@ function getSentry(): SentryLike | null {
         return s as unknown as SentryLike;
       }
     }
+
   } catch {
     // Running in an environment where globalThis access throws — silently skip.
   }
@@ -70,18 +71,28 @@ export function reportError(error: unknown, ctx: ErrorContext = {}): void {
   const message =
     error instanceof Error ? error.message : String(error ?? "Unknown error");
   const stack = error instanceof Error ? error.stack : undefined;
+  const status =
+    typeof ctx.extra?.["status"] === "number"
+      ? (ctx.extra["status"] as number)
+      : undefined;
+  const isExpectedAuthError = ctx.action === "apiRequest" && status === 401;
 
   // ── Development: structured console output ──────────────────────────────
   if (IS_DEV) {
+    const level = isExpectedAuthError ? "WARN" : "ERROR";
     const tag = [ctx.screen, ctx.action].filter(Boolean).join("] [");
-    const prefix = tag ? `[ERROR] [${tag}]` : "[ERROR]";
-    // Using console.error (not console.log) — this is the designated dev logger,
-    // not a debug leftover. console.error is exempt from the no-console-log rule.
-    // eslint-disable-next-line no-console
-    console.error(`${prefix} -> ${message}`, {
+    const prefix = tag ? `[${level}] [${tag}]` : `[${level}]`;
+    const payload = {
       ...(ctx.extra ?? {}),
       ...(stack ? { stack } : {}),
-    });
+    };
+    if (isExpectedAuthError) {
+      // eslint-disable-next-line no-console
+      console.warn(`${prefix} -> ${message}`, payload);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error(`${prefix} -> ${message}`, payload);
+    }
     return;
   }
 

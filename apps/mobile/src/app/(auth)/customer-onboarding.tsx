@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -12,13 +11,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth, useClerk } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import { apiClient, setAuthToken, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
+import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
@@ -40,6 +43,9 @@ const CAR_COMPANIES = [
 ];
 
 export default function CustomerOnboardingScreen() {
+  const params = useLocalSearchParams<{ allowRoleChange?: string }>();
+  const { getToken } = useAuth();
+  const clerk = useClerk();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitCustomerOnboarding();
@@ -48,14 +54,63 @@ export default function CustomerOnboardingScreen() {
   const [carModel, setCarModel] = useState("");
   const [notes, setNotes] = useState("");
   const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [previewLatitude, setPreviewLatitude] = useState<number | undefined>(undefined);
+  const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  // Covers the full handleContinue flow (set-role + session reload + onboarding + nav),
+  // not just the mutation — the pre-mutation calls take most of the wall-clock time.
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const allowRoleChange = params.allowRoleChange === "1";
 
-  async function handleContinue() {
-    if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
-      Alert.alert("Required", "Please provide location, car company, and model.");
+  useEffect(() => {
+    const query = primaryLocation.trim();
+    if (!googleMapsApiKey || query.length < 3) {
+      setPreviewLatitude(undefined);
+      setPreviewLongitude(undefined);
+      setPreviewLoading(false);
       return;
     }
 
+    const timeout = setTimeout(() => {
+      setPreviewLoading(true);
+      void (async () => {
+        const coords = await fetchGoogleGeocodeLocation(query, googleMapsApiKey);
+        setPreviewLatitude(coords?.latitude);
+        setPreviewLongitude(coords?.longitude);
+        setPreviewLoading(false);
+      })();
+    }, 450);
+
+    return () => clearTimeout(timeout);
+  }, [primaryLocation, googleMapsApiKey]);
+
+  async function handleContinue() {
+    if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
+      showToast("error", "Please provide location, car company, and model.");
+      return;
+    }
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
     try {
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        throw new Error("Your session expired. Please sign in again.");
+      }
+      setAuthToken(token);
+      await apiClient.post(
+        "/api/v1/auth/set-role",
+        { role: "CUSTOMER" },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await clerk.session?.reload();
+      const refreshedToken = await getToken({ skipCache: true });
+      if (!refreshedToken) {
+        throw new Error("Could not refresh your session. Please try again.");
+      }
+      setAuthToken(refreshedToken);
+
       await submitOnboarding.mutateAsync({
         primaryLocation: primaryLocation.trim(),
         carCompany: carCompany.trim(),
@@ -65,8 +120,14 @@ export default function CustomerOnboardingScreen() {
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(customer)/(tabs)/home");
     } catch (error: unknown) {
-      Alert.alert("Error", error instanceof Error ? error.message : "Failed to save onboarding");
+      reportError(error, { screen: "CustomerOnboarding", action: "handleContinue" });
+      showToast("error", error instanceof Error ? error.message : "Failed to save onboarding");
+      setIsSubmitting(false);
     }
+  }
+
+  function handleChangeRole() {
+    router.replace("/(auth)/role-select?allowRoleChange=1");
   }
 
   return (
@@ -79,6 +140,17 @@ export default function CustomerOnboardingScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {allowRoleChange ? (
+          <TouchableOpacity
+            className="self-start flex-row items-center gap-2 mb-4"
+            onPress={handleChangeRole}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chevron-back" size={18} color={appColors.ink.DEFAULT} />
+            <Text className="text-ink font-medium">I am not a customer</Text>
+          </TouchableOpacity>
+        ) : null}
+
         <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
             <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
@@ -99,6 +171,18 @@ export default function CustomerOnboardingScreen() {
           style={textInputBaselineStyle}
           value={primaryLocation}
           onChangeText={setPrimaryLocation}
+        />
+        <LocationPreviewMap
+          title="Location preview"
+          description="Verify your service location is pinned correctly."
+          latitude={previewLatitude}
+          longitude={previewLongitude}
+          isLoading={previewLoading}
+          emptyMessage={
+            googleMapsApiKey
+              ? "Type at least 3 characters to preview your location."
+              : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview your location on map."
+          }
         />
 
         <Text className="text-ink text-sm font-medium mb-2">Car company</Text>
@@ -137,13 +221,16 @@ export default function CustomerOnboardingScreen() {
         />
 
         <TouchableOpacity
-          className="w-full bg-primary-600 rounded-2xl py-4 items-center"
+          className="w-full bg-primary-600 rounded-2xl py-4 items-center flex-row justify-center gap-2"
           onPress={handleContinue}
-          disabled={submitOnboarding.isPending}
-          style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
+          disabled={isSubmitting}
+          style={{ opacity: isSubmitting ? 0.6 : 1 }}
         >
-          {submitOnboarding.isPending ? (
-            <ActivityIndicator color={appColors.onPrimary} />
+          {isSubmitting ? (
+            <>
+              <ActivityIndicator color={appColors.onPrimary} />
+              <Text className="text-white font-semibold text-base">Setting up your account…</Text>
+            </>
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}
