@@ -10,6 +10,10 @@ import { Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Server, Socket } from "socket.io";
 
+import type { Message } from "@repo/schemas";
+
+import { MessagesService } from "../messages/messages.service";
+
 import { authenticateSocket } from "./ws-auth.helper";
 
 @WebSocketGateway({
@@ -18,7 +22,10 @@ import { authenticateSocket } from "./ws-auth.helper";
 export class ChatGateway implements OnGatewayConnection {
   private readonly logger = new Logger(ChatGateway.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly messagesService: MessagesService
+  ) {}
 
   @WebSocketServer() server!: Server;
 
@@ -29,14 +36,34 @@ export class ChatGateway implements OnGatewayConnection {
     if (conversationId) client.join(`conversation:${conversationId}`);
   }
 
+  emitMessage(conversationId: string, message: Message) {
+    this.server
+      .to(`conversation:${conversationId}`)
+      .emit("message:received", message);
+  }
+
   @SubscribeMessage("message:send")
-  handleMessage(
-    @MessageBody() data: { conversationId: string; content: string; type: string },
+  async handleMessage(
+    @MessageBody() data: { conversationId: string; content: string; type?: string },
     @ConnectedSocket() client: Socket
   ) {
-    if (!client.data?.clerkId) return;
-    this.server
-      .to(`conversation:${data.conversationId}`)
-      .emit("message:received", data);
+    const clerkId = client.data?.clerkId as string | undefined;
+    if (!clerkId) return;
+
+    try {
+      const msg = await this.messagesService.sendMessage(clerkId, {
+        conversationId: data.conversationId,
+        content: data.content,
+        type: data.type ?? "TEXT",
+      });
+      this.emitMessage(data.conversationId, msg);
+    } catch (error) {
+      this.logger.warn(
+        `message:send failed for conversation ${data.conversationId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      client.emit("message:error", { error: "Failed to send message" });
+    }
   }
 }

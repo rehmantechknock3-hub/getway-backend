@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { apiClient, useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
+import { apiClient, setAuthToken, useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
@@ -42,6 +42,9 @@ export default function ProviderOnboardingScreen() {
   >([]);
   const [hasTools, setHasTools] = useState(true);
   const [serviceDescription, setServiceDescription] = useState("");
+  // Covers the full handleContinue flow (set-role + session reload + geocode + onboarding + nav),
+  // not just the mutation — the pre-mutation calls take most of the wall-clock time.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   const allowRoleChange = params.allowRoleChange === "1";
 
@@ -66,15 +69,26 @@ export default function ProviderOnboardingScreen() {
       showToast("error", "Please enter valid years of experience.");
       return;
     }
+    if (isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
-      const token = await getToken();
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        throw new Error("Your session expired. Please sign in again.");
+      }
+      setAuthToken(token);
       await apiClient.post(
         "/api/v1/auth/set-role",
         { role: "PROVIDER" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       await clerk.session?.reload();
+      const refreshedToken = await getToken({ skipCache: true });
+      if (!refreshedToken) {
+        throw new Error("Could not refresh your session. Please try again.");
+      }
+      setAuthToken(refreshedToken);
 
       let locationsToSave = normalizedLocations;
       if (googleMapsApiKey) {
@@ -91,6 +105,7 @@ export default function ProviderOnboardingScreen() {
             "error",
             "Could not pin your shop on the map. Pick an address from the suggestions, or enable Places + Geocoding for your Google API key."
           );
+          setIsSubmitting(false);
           return;
         }
       }
@@ -110,6 +125,7 @@ export default function ProviderOnboardingScreen() {
     } catch (error: unknown) {
       reportError(error, { screen: "ProviderOnboarding", action: "handleContinue" });
       showToast("error", error instanceof Error ? error.message : "Failed to save onboarding");
+      setIsSubmitting(false);
     }
   }
 
@@ -218,13 +234,16 @@ export default function ProviderOnboardingScreen() {
         </View>
 
         <TouchableOpacity
-          className="w-full bg-primary-600 rounded-2xl py-4 items-center"
+          className="w-full bg-primary-600 rounded-2xl py-4 items-center flex-row justify-center gap-2"
           onPress={() => void handleContinue()}
-          disabled={submitOnboarding.isPending}
-          style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
+          disabled={isSubmitting}
+          style={{ opacity: isSubmitting ? 0.6 : 1 }}
         >
-          {submitOnboarding.isPending ? (
-            <ActivityIndicator color={appColors.onPrimary} />
+          {isSubmitting ? (
+            <>
+              <ActivityIndicator color={appColors.onPrimary} />
+              <Text className="text-white font-semibold text-base">Setting up your profile…</Text>
+            </>
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}

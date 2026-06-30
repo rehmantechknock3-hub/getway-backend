@@ -20,6 +20,7 @@ export * from "./queries/maps.queries";
 export * from "./queries/payments.queries";
 export * from "./queries/providers.queries";
 export * from "./queries/users.queries";
+export * from "./queries/messages.queries";
 
 // Mutations
 export * from "./mutations/admin-bookings.mutations";
@@ -29,3 +30,4 @@ export * from "./mutations/notifications.mutations";
 export * from "./mutations/favorites.mutations";
 export * from "./mutations/users.mutations";
 export * from "./mutations/provider-services.mutations";
+export * from "./mutations/messages.mutations";

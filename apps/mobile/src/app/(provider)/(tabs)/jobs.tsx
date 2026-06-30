@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { ProviderBookingView } from "@repo/schemas";
 import {
-  setAuthToken,
   useNotifications,
   useProviderBookings,
   useUpdateProviderBookingStatus,
@@ -174,27 +173,10 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
 
 export default function JobsScreen() {
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn, sessionClaims } = useAuth();
+  const { isLoaded, isSignedIn, sessionClaims } = useAuth();
   const firstName = (sessionClaims?.firstName as string) ?? "there";
-  const [apiReady, setApiReady] = useState(false);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const queueQuery = useProviderBookings(1, { enabled, scope: "queue" });
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
   const { data: notificationPayload, refetch: refetchNotifications } = useNotifications(1, { enabled });

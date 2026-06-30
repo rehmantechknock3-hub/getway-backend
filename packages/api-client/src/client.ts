@@ -61,16 +61,15 @@ export function setAuthToken(token: string | null): void {
 // ── Request interceptor: optional fresh Clerk token + Request-ID ────────────
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  if (authTokenResolver) {
+  const hasExplicitAuthorization = Boolean(config.headers.Authorization);
+  if (authTokenResolver && !hasExplicitAuthorization) {
     try {
       const token = await authTokenResolver();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
-      } else {
-        delete config.headers.Authorization;
       }
     } catch {
-      delete config.headers.Authorization;
+      // Preserve any explicit/default Authorization header already attached by the app.
     }
   }
 

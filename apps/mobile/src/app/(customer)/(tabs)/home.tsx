@@ -24,7 +24,6 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ProviderPublicSummary } from "@repo/schemas";
 import {
   getApiBaseUrl,
-  setAuthToken,
   useFavoriteProviders,
   useMe,
   useNotifications,
@@ -260,22 +259,14 @@ function ProviderRow({
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { sessionClaims, getToken, isLoaded, isSignedIn } = useAuth();
+  const { sessionClaims, isLoaded, isSignedIn } = useAuth();
   const firstName = (sessionClaims?.firstName as string) ?? "there";
-  const [apiReady, setApiReady] = useState(false);
   const [feed, setFeed] = useState<"discover" | "saved">("discover");
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [customerCoords, setCustomerCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [customerLocationReady, setCustomerLocationReady] = useState(false);
-
-  const refreshAuthToken = useCallback(async () => {
-    const token = await getToken();
-    setAuthToken(token);
-    setApiReady(Boolean(token));
-    return token;
-  }, [getToken]);
 
   const refreshCustomerLocation = useCallback(async () => {
     const perm = await Location.requestForegroundPermissionsAsync();
@@ -306,21 +297,7 @@ export default function HomeScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void refreshAuthToken().then(() => {
-      if (cancelled) return;
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, refreshAuthToken]);
-
-  const providersQueryEnabled = isLoaded && isSignedIn && apiReady;
+  const providersQueryEnabled = isLoaded && isSignedIn;
 
   const { data: me, refetch: refetchMe } = useMe({ enabled: providersQueryEnabled });
 
@@ -349,11 +326,10 @@ export default function HomeScreen() {
     useCallback(() => {
       if (!providersQueryEnabled) return;
       void (async () => {
-        await refreshAuthToken();
         await refetchNotifications();
         await refetchMe();
       })();
-    }, [providersQueryEnabled, refetchNotifications, refreshAuthToken, refetchMe])
+    }, [providersQueryEnabled, refetchNotifications, refetchMe])
   );
 
   useEffect(() => {
@@ -417,7 +393,6 @@ export default function HomeScreen() {
     if (feed === "discover") {
       void (async () => {
         try {
-          await refreshAuthToken();
           await refreshCustomerLocation();
           await refetchMe();
         } finally {
@@ -426,10 +401,7 @@ export default function HomeScreen() {
       })();
     }
     else {
-      void (async () => {
-        await refreshAuthToken();
-        await refetchFavorites();
-      })();
+      void refetchFavorites();
     }
   };
 

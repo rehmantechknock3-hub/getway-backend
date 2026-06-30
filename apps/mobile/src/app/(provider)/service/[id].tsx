@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@clerk/expo";
 
-import { setAuthToken, useMyProviderServices } from "@repo/api-client";
+import { useMyProviderServices } from "@repo/api-client";
 
 import { ProviderServiceForm } from "../../../components/ProviderServiceForm";
 import { appColors } from "../../../styles/colors";
@@ -12,26 +12,9 @@ import { appColors } from "../../../styles/colors";
 export default function ProviderEditServiceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const { data, isLoading, isError } = useMyProviderServices({ enabled });
 
   const service = useMemo(() => data?.find((s) => s.id === id), [data, id]);

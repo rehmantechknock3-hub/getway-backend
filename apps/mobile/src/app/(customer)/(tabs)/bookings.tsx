@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
@@ -15,7 +15,7 @@ import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { Booking } from "@repo/schemas";
-import { setAuthToken, useBookings } from "@repo/api-client";
+import { useBookings } from "@repo/api-client";
 import { appColors } from "../../../styles/colors";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
@@ -61,26 +61,9 @@ function statusBadgeClasses(status: Booking["status"]): { box: string; text: str
 export default function BookingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const { data, isLoading, isError, refetch, isRefetching } = useBookings(1, { enabled });
 
   useFocusEffect(

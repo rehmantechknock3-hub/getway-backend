@@ -23,7 +23,7 @@ export async function authenticateSocket(
   }
 
   try {
-    const payload = await verifyToken(token, { secretKey });
+    const payload = await verifyToken(token, { secretKey, clockSkewInMs: 60_000 });
     client.data.clerkId = payload.sub;
     return true;
   } catch (error) {

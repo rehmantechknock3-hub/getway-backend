@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
-import { setAuthToken, useProviderBookings, useProviderPayoutSummary } from "@repo/api-client";
+import { useProviderBookings, useProviderPayoutSummary } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
@@ -42,33 +42,10 @@ function formatDate(value: Date): string {
 export default function EarningsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
   const [dateRange, setDateRange] = useState<DateRangeFilter>("all");
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken()
-      .then((token) => {
-        if (cancelled) return;
-        setAuthToken(token);
-        setApiReady(true);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setApiReady(false);
-        reportError(error, { screen: "ProviderEarnings", action: "resolveAuthToken" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [getToken, isLoaded, isSignedIn]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
   const payoutSummaryQuery = useProviderPayoutSummary(dateRange, { enabled });
   const stats = historyQuery.data?.stats;

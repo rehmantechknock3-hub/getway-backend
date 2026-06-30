@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 import {
   ActivityIndicator,
@@ -17,7 +17,6 @@ import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
-  setAuthToken,
   useDeleteProviderService,
   useEnsureProviderListing,
   useMe,
@@ -44,30 +43,13 @@ function clerkPublicRole(user: ReturnType<typeof useUser>["user"]): string | und
 
 export default function ProviderServicesScreen() {
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const { user: clerkUser } = useUser();
-  const [apiReady, setApiReady] = useState(false);
   const bootstrapListingRef = useRef(false);
   const ensureListing = useEnsureProviderListing();
   const deleteService = useDeleteProviderService();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const meEnabled = isLoaded && isSignedIn && apiReady;
+  const meEnabled = isLoaded && isSignedIn;
   const { data: me, isLoading: meLoading } = useMe({ enabled: meEnabled });
   /** Routing uses Clerk metadata; `/users/me` uses DB role — keep both in sync, but don’t block this tab if only DB lags. */
   const clerkRole = clerkPublicRole(clerkUser);

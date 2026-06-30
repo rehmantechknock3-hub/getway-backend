@@ -17,7 +17,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { apiClient, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import { apiClient, setAuthToken, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
@@ -57,6 +57,9 @@ export default function CustomerOnboardingScreen() {
   const [previewLatitude, setPreviewLatitude] = useState<number | undefined>(undefined);
   const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // Covers the full handleContinue flow (set-role + session reload + onboarding + nav),
+  // not just the mutation — the pre-mutation calls take most of the wall-clock time.
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   const allowRoleChange = params.allowRoleChange === "1";
 
@@ -87,15 +90,26 @@ export default function CustomerOnboardingScreen() {
       showToast("error", "Please provide location, car company, and model.");
       return;
     }
+    if (isSubmitting) return;
 
+    setIsSubmitting(true);
     try {
-      const token = await getToken();
+      const token = await getToken({ skipCache: true });
+      if (!token) {
+        throw new Error("Your session expired. Please sign in again.");
+      }
+      setAuthToken(token);
       await apiClient.post(
         "/api/v1/auth/set-role",
         { role: "CUSTOMER" },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       await clerk.session?.reload();
+      const refreshedToken = await getToken({ skipCache: true });
+      if (!refreshedToken) {
+        throw new Error("Could not refresh your session. Please try again.");
+      }
+      setAuthToken(refreshedToken);
 
       await submitOnboarding.mutateAsync({
         primaryLocation: primaryLocation.trim(),
@@ -108,6 +122,7 @@ export default function CustomerOnboardingScreen() {
     } catch (error: unknown) {
       reportError(error, { screen: "CustomerOnboarding", action: "handleContinue" });
       showToast("error", error instanceof Error ? error.message : "Failed to save onboarding");
+      setIsSubmitting(false);
     }
   }
 
@@ -206,13 +221,16 @@ export default function CustomerOnboardingScreen() {
         />
 
         <TouchableOpacity
-          className="w-full bg-primary-600 rounded-2xl py-4 items-center"
+          className="w-full bg-primary-600 rounded-2xl py-4 items-center flex-row justify-center gap-2"
           onPress={handleContinue}
-          disabled={submitOnboarding.isPending}
-          style={{ opacity: submitOnboarding.isPending ? 0.6 : 1 }}
+          disabled={isSubmitting}
+          style={{ opacity: isSubmitting ? 0.6 : 1 }}
         >
-          {submitOnboarding.isPending ? (
-            <ActivityIndicator color={appColors.onPrimary} />
+          {isSubmitting ? (
+            <>
+              <ActivityIndicator color={appColors.onPrimary} />
+              <Text className="text-white font-semibold text-base">Setting up your account…</Text>
+            </>
           ) : (
             <Text className="text-white font-semibold text-base">Continue</Text>
           )}

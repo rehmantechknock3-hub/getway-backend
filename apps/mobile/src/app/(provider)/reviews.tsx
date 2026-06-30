@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useQueryClient } from "@tanstack/react-query";
 
-import { setAuthToken, useProviderReviews, userKeys } from "@repo/api-client";
+import { useProviderReviews, userKeys } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
@@ -29,33 +29,9 @@ function formatReviewDate(d: Date): string {
 export default function ProviderReviewsScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken()
-      .then((token) => {
-        if (cancelled) return;
-        setAuthToken(token);
-        setApiReady(true);
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        reportError(error, { screen: "ProviderReviews", action: "getToken" });
-        showToast("error", "Could not verify your session. Try again.");
-        setApiReady(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const { data, isLoading, isError, refetch, isRefetching } = useProviderReviews(1, { enabled });
 
   const refreshReviewsAndProfileMetrics = useCallback(async () => {

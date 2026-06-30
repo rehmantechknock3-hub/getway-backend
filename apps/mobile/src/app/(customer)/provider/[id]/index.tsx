@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 
 import {
   ActivityIndicator,
@@ -16,7 +16,6 @@ import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
-  setAuthToken,
   useAddFavoriteProvider,
   useFavoriteProviders,
   useProvider,
@@ -40,26 +39,9 @@ export default function ProviderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const providerId = typeof id === "string" ? id : id?.[0] ?? "";
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const favoritesEnabled = isLoaded && isSignedIn && apiReady;
+  const favoritesEnabled = isLoaded && isSignedIn;
   const { data: favoritesPayload } = useFavoriteProviders({ enabled: favoritesEnabled });
   const addFavorite = useAddFavoriteProvider();
   const removeFavorite = useRemoveFavoriteProvider();

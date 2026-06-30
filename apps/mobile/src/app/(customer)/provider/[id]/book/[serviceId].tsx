@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -18,7 +18,6 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   bookingKeys,
-  setAuthToken,
   useCreateBooking,
   useProvider,
   useProviderServices,
@@ -72,8 +71,7 @@ export default function BookServiceScreen() {
   const svcId = typeof serviceId === "string" ? serviceId : serviceId?.[0] ?? "";
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState<Step>(1);
 
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -90,24 +88,8 @@ export default function BookServiceScreen() {
   const [locating, setLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
   const servicesQuery = useProviderServices(providerId, {
-    enabled: apiReady && !!providerId,
+    enabled: isLoaded && isSignedIn && !!providerId,
   });
   const providerQuery = useProvider(providerId);
   const createBooking = useCreateBooking();

@@ -37,6 +37,16 @@ export default function SignInScreen() {
     return null;
   }
 
+  function isExpectedSignInError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
+    return (
+      message.includes("identifier is invalid") ||
+      message.includes("password") ||
+      message.includes("invalid") ||
+      message.includes("couldn't find")
+    );
+  }
+
   async function handleSignIn() {
     if (!email.trim()) {
       showToast("error", "Please enter your email address.");
@@ -67,7 +77,6 @@ export default function SignInScreen() {
         reportError(new Error("Sign in finalize did not return createdSessionId"), {
           screen: "SignInScreen",
           action: "handleSignIn",
-          extra: { identifier: email.trim() },
         });
         showToast("error", "Could not complete sign in. Please try again.");
         return;
@@ -85,11 +94,12 @@ export default function SignInScreen() {
         throw activateResult.error;
       }
     } catch (error: unknown) {
-      reportError(error, {
-        screen: "SignInScreen",
-        action: "handleSignIn",
-        extra: { identifier: email.trim() },
-      });
+      if (!isExpectedSignInError(error)) {
+        reportError(error, {
+          screen: "SignInScreen",
+          action: "handleSignIn",
+        });
+      }
       showToast("error", error instanceof Error ? error.message : "Sign in failed");
     } finally {
       setLoading(false);

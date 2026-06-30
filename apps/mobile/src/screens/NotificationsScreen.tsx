@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
@@ -19,7 +19,6 @@ import type { Notification } from "@repo/schemas";
 import {
   useClearAllNotifications,
   useDeleteNotification,
-  setAuthToken,
   useMarkNotificationRead,
   useNotifications,
 } from "@repo/api-client";
@@ -39,26 +38,9 @@ type StackRole = "customer" | "provider";
 
 export function NotificationsScreen({ stack }: { stack: StackRole }) {
   const insets = useSafeAreaInsets();
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [apiReady, setApiReady] = useState(false);
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn) {
-      setApiReady(false);
-      return;
-    }
-    let cancelled = false;
-    void getToken().then((token) => {
-      if (cancelled) return;
-      setAuthToken(token);
-      setApiReady(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, getToken]);
-
-  const enabled = isLoaded && isSignedIn && apiReady;
+  const enabled = isLoaded && isSignedIn;
   const { data, isLoading, isError, refetch, isRefetching } = useNotifications(1, { enabled });
   const markRead = useMarkNotificationRead();
   const deleteNotification = useDeleteNotification();

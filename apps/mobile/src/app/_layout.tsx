@@ -94,14 +94,24 @@ function RootNavigator() {
   const meQuery = useMe({ enabled: Boolean(isLoaded && isSignedIn && role) });
 
   // Per-request Clerk JWT (avoids 401s from stale axios default headers after reload / token refresh).
+  // The resolver and the eager fetch both swallow Clerk errors: when a session is briefly
+  // inactive (sign-in/out transitions, refresh in flight) Clerk throws "Unable to authenticate
+  // the request" — we don't want that to surface as an unhandled promise rejection.
   useLayoutEffect(() => {
     if (!isSignedIn) {
       setAuthTokenResolver(null);
       setAuthToken(null);
       return;
     }
-    setAuthTokenResolver(() => getToken());
-    void getToken().then((token) => {
+    const safeGetToken = async (): Promise<string | null> => {
+      try {
+        return await getToken({ skipCache: true });
+      } catch {
+        return null;
+      }
+    };
+    setAuthTokenResolver(safeGetToken);
+    void safeGetToken().then((token) => {
       setAuthToken(token);
     });
     return () => {

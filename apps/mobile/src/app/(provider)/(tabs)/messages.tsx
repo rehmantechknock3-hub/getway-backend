@@ -54,10 +54,7 @@ function ConversationRow({
       </View>
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center justify-between mb-0.5">
-          <Text
-            className="text-ink font-semibold text-sm flex-1 mr-2"
-            numberOfLines={1}
-          >
+          <Text className="text-ink font-semibold text-sm flex-1 mr-2" numberOfLines={1}>
             {name}
           </Text>
           <Text className="text-ink-muted text-xs flex-shrink-0">
@@ -81,7 +78,7 @@ function ConversationRow({
   );
 }
 
-export default function CustomerMessagesScreen() {
+export default function ProviderMessagesScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { userId: clerkUserId, isLoaded, isSignedIn } = useAuth();
@@ -97,7 +94,7 @@ export default function CustomerMessagesScreen() {
       queryClient
         .invalidateQueries({ queryKey: messageKeys.conversations() })
         .catch((err: unknown) => {
-          reportError(err, { screen: "CustomerMessages", action: "focusRefetch" });
+          reportError(err, { screen: "ProviderMessages", action: "focusRefetch" });
         });
     }, [enabled, queryClient])
   );
@@ -133,7 +130,7 @@ export default function CustomerMessagesScreen() {
           <Ionicons name="chatbubbles-outline" size={52} color={appColors.ink.subtle} />
           <Text className="text-ink font-semibold text-base mt-4">No messages yet</Text>
           <Text className="text-ink-muted text-sm text-center mt-2 leading-5">
-            When you book a service, you can message the provider directly from the booking.
+            Customer messages will appear here once they start a conversation from a booking.
           </Text>
         </View>
       ) : (
@@ -146,7 +143,7 @@ export default function CustomerMessagesScreen() {
               myUserId={me?.id ?? ""}
               onPress={() =>
                 router.push(
-                  `/(customer)/conversation/${item.id}?bookingId=${item.bookingId}`
+                  `/(provider)/conversation/${item.id}?bookingId=${item.bookingId}`
                 )
               }
             />

@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -180,6 +180,7 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
 
 export default function BookingDetailScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = typeof id === "string" ? id : "";
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -369,6 +370,16 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            className="flex-row items-center justify-center gap-2 bg-canvas-raised border border-primary-600 rounded-2xl py-3.5 mt-4"
+            onPress={() => router.push(`/(customer)/conversation/new?bookingId=${bookingId}`)}
+            accessibilityRole="button"
+            accessibilityLabel="Message provider"
+          >
+            <Ionicons name="chatbubble-outline" size={18} color={appColors.primary[600]} />
+            <Text className="text-primary-600 font-semibold text-sm">Message provider</Text>
+          </TouchableOpacity>
 
           <CustomerReviewBlock booking={booking} />
         </>
