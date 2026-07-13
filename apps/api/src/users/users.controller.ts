@@ -20,18 +20,11 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import sharp from "sharp";
 import { z } from "zod";
 
-import { UpdateOnboardingSchema } from "@repo/schemas";
+import { UpdateOnboardingSchema, UpdateUserProfileSchema } from "@repo/schemas";
 
 import { ClerkAuthGuard } from "../auth/clerk.guard";
 import { Roles } from "../auth/roles.decorator";
 import { UsersService } from "./users.service";
-
-const UpdateUserProfileSchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().min(1),
-  email: z.string().email(),
-  phone: z.string().min(6).max(20),
-});
 
 const UpdateSavedLocationsSchema = z.object({
   savedLocations: z.array(

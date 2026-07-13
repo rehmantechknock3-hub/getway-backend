@@ -13,7 +13,6 @@ describe("UsersController", () => {
       controller.updateProfile({ auth: undefined } as never, {
         firstName: "A",
         lastName: "B",
-        email: "a@b.com",
         phone: "123456",
       })
     ).rejects.toBeInstanceOf(BadRequestException);

@@ -88,11 +88,12 @@ describe("UsersService", () => {
       },
     };
     const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    const refreshed = { id: "u1", firstName: "Saad", lastName: "Nadeem", phone: "123456789" };
+    vi.spyOn(service, "findByClerkId").mockResolvedValue(refreshed as never);
 
-    await service.updateProfile("clerk_1", {
+    const out = await service.updateProfile("clerk_1", {
       firstName: "Saad",
       lastName: "Nadeem",
-      email: "saad@example.com",
       phone: "123456789",
     });
 
@@ -101,8 +102,33 @@ describe("UsersService", () => {
       data: {
         firstName: "Saad",
         lastName: "Nadeem",
-        email: "saad@example.com",
         phone: "123456789",
+      },
+    });
+    expect(out).toEqual(refreshed);
+  });
+
+  it("updateProfile clears phone when omitted or empty", async () => {
+    const prisma = {
+      user: {
+        update: vi.fn().mockResolvedValue({ id: "u1" }),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1" } as never);
+
+    await service.updateProfile("clerk_1", {
+      firstName: "Saad",
+      lastName: "Nadeem",
+      phone: "",
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { clerkId: "clerk_1" },
+      data: {
+        firstName: "Saad",
+        lastName: "Nadeem",
+        phone: null,
       },
     });
   });
@@ -119,7 +145,6 @@ describe("UsersService", () => {
       service.updateProfile("clerk_missing", {
         firstName: "Saad",
         lastName: "Nadeem",
-        email: "saad@example.com",
         phone: "123456789",
       })
     ).rejects.toThrow();
@@ -133,6 +158,7 @@ describe("UsersService", () => {
     };
     const service = new UsersService(prisma as never, { get: vi.fn() } as never);
     const savedLocations = [{ label: "Home", address: "Downtown St" }];
+    vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1", savedLocations } as never);
 
     await service.updateSavedLocations("clerk_2", savedLocations);
 

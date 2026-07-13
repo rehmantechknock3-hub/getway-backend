@@ -3,6 +3,14 @@ import { z } from "zod";
 
 import { BookingStatus, type BookingStatus as BookingStatusType } from "@repo/schemas";
 
+export function isTerminalBookingStatus(status: BookingStatusType | null | undefined): boolean {
+  return status === "COMPLETED" || status === "CANCELLED" || status === "REJECTED";
+}
+
+export function isLiveMapTrackingStatus(status: BookingStatusType | null | undefined): boolean {
+  return status === "ACCEPTED" || status === "IN_PROGRESS";
+}
+
 export type LocationUpdate = {
   latitude:  number;
   longitude: number;
@@ -35,12 +43,20 @@ export function useBookingTracking(
   });
 
   useEffect(() => {
-    if (!socket || !bookingId) {
+    if (!bookingId) {
       setState((prev) => {
         if (prev.status === null && prev.providerLocation === null && prev.isConnected === false) {
           return prev;
         }
         return { status: null, providerLocation: null, isConnected: false };
+      });
+      return;
+    }
+
+    if (!socket) {
+      setState((prev) => {
+        if (prev.providerLocation === null && prev.isConnected === false) return prev;
+        return { ...prev, providerLocation: null, isConnected: false };
       });
       return;
     }

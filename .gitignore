@@ -1,3 +1,4 @@
+
 # Dependencies
 node_modules
 .pnp
@@ -12,7 +13,9 @@ out
 # Turbo
 .turbo
 
-# Environment variables
+
+# Environment variables (never commit secrets)
+.env
 .env.development.local
 .env.test.local
 .env.production.local

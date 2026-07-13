@@ -21,6 +21,13 @@ type UploadAvatarInput = {
   fileName?: string | null;
 };
 
+function refreshMeCache(queryClient: ReturnType<typeof useQueryClient>, user?: User) {
+  if (user) {
+    queryClient.setQueriesData<User>({ queryKey: userKeys.meRoot }, user);
+  }
+  void queryClient.invalidateQueries({ queryKey: userKeys.meRoot });
+}
+
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -28,8 +35,8 @@ export function useUpdateProfile() {
       const { data } = await apiClient.patch<User>("/api/v1/users/me/profile", input);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
     },
   });
 }
@@ -43,8 +50,8 @@ export function useUpdateSavedLocations() {
       });
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
     },
   });
 }
@@ -65,8 +72,8 @@ export function useUpdateAvatar() {
       });
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
     },
   });
 }
@@ -81,8 +88,8 @@ export function useSubmitCustomerOnboarding() {
       });
       return response;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
       void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
     },
   });
@@ -98,11 +105,11 @@ export function useSubmitProviderOnboarding() {
       });
       return response;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
       void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
       void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.categories() });
       void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
-      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
     },
   });
 }
@@ -117,7 +124,7 @@ export function useEnsureProviderListing() {
       return data;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+      void queryClient.invalidateQueries({ queryKey: userKeys.meRoot });
       void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
       void queryClient.invalidateQueries({ queryKey: providerMyServicesKeys.list() });
     },
@@ -133,8 +140,8 @@ export function useUpdateProviderPresence() {
       });
       return data;
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: userKeys.me() });
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
       void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
     },
   });

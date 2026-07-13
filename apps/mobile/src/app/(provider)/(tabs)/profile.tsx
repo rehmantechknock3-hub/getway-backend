@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 
 import {
   ActivityIndicator,
   Image,
   RefreshControl,
   ScrollView,
-  Switch,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -17,25 +15,28 @@ import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
-import {
-  useMe,
-  useSubmitProviderOnboarding,
-  useUpdateProfile,
-} from "@repo/api-client";
+import { useMe } from "@repo/api-client";
 import { showToast } from "@repo/ui";
-import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
+import { reportError } from "@repo/utils";
 
-import { ShopAddressField } from "../../../components/ShopAddressField";
 import { appColors } from "../../../styles/colors";
-import { textInputBaselineStyle } from "../../../styles/text-input";
 import { normalizeProviderServiceCategories } from "../../../utils/provider-onboarding";
+
+function ProfileField({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="mb-3">
+      <Text className="text-ink-muted text-xs mb-1">{label}</Text>
+      <Text className="text-ink text-base">{value || "—"}</Text>
+    </View>
+  );
+}
 
 export default function ProviderProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isLoaded, isSignedIn, signOut } = useAuth();
   const { user: clerkUser } = useUser();
-  const { data: me, refetch: refetchMe, isRefetching: isRefetchingMe } = useMe({
+  const { data: me, refetch: refetchMe, isRefetching: isRefetchingMe, isLoading } = useMe({
     enabled: isLoaded && isSignedIn,
   });
 
@@ -59,126 +60,25 @@ export default function ProviderProfileScreen() {
       void refetchMeSafely();
     }, [isLoaded, isSignedIn, refetchMeSafely])
   );
-  const updateProfile = useUpdateProfile();
-  const updateProviderOnboarding = useSubmitProviderOnboarding();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [serviceCategories, setServiceCategories] = useState<string[]>([]);
-  const [experienceYears, setExperienceYears] = useState("0");
-  const [serviceArea, setServiceArea] = useState("");
-  const [shopAddress, setShopAddress] = useState("");
-  const [shopPlaceId, setShopPlaceId] = useState<string | undefined>(undefined);
-  const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-  const [shopLocations, setShopLocations] = useState<
-    Array<{ address: string; placeId?: string; latitude?: number; longitude?: number }>
-  >([]);
-  const [hasTools, setHasTools] = useState(true);
-  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
-  const serviceDescription = me?.providerOnboarding?.serviceDescription ?? "";
-
-  const signInEmail =
-    clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
+  const signInEmail = clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
   const accountEmail = signInEmail || me?.email || "";
+  const firstName = me?.firstName || clerkUser?.firstName?.trim() || "";
+  const lastName = me?.lastName || clerkUser?.lastName?.trim() || "";
+  const phone = me?.phone ?? "";
+  const serviceCategories = normalizeProviderServiceCategories(me?.providerOnboarding);
+  const experienceYears = String(me?.providerOnboarding?.experienceYears ?? 0);
+  const serviceArea = me?.providerOnboarding?.serviceArea ?? "";
+  const shopLocations = me?.providerOnboarding?.shopLocations ?? [];
+  const hasTools = me?.providerOnboarding?.hasTools ?? true;
+  const profilePhotoUrl = me?.providerOnboarding?.profilePhotoUrl ?? me?.avatarUrl ?? "";
 
-  useEffect(() => {
-    if (!me) return;
-    const clerkFirst = clerkUser?.firstName?.trim() ?? "";
-    const clerkLast = clerkUser?.lastName?.trim() ?? "";
-    setFirstName(clerkFirst || me.firstName);
-    setLastName(clerkLast || me.lastName);
-    setPhone(me.phone ?? "");
-    setServiceCategories(normalizeProviderServiceCategories(me.providerOnboarding));
-    setExperienceYears(String(me.providerOnboarding?.experienceYears ?? 0));
-    setServiceArea(me.providerOnboarding?.serviceArea ?? "");
-    setShopAddress(me.providerOnboarding?.shopAddress ?? "");
-    setShopPlaceId(me.providerOnboarding?.shopPlaceId);
-    setShopLocations(
-      (me.providerOnboarding?.shopLocations ?? []).map((location) => ({
-        address: location.address,
-        placeId: location.placeId,
-        latitude: location.latitude,
-        longitude: location.longitude,
-      }))
+  if (isLoading) {
+    return (
+      <View className="flex-1 bg-canvas items-center justify-center">
+        <ActivityIndicator />
+      </View>
     );
-    setHasTools(me.providerOnboarding?.hasTools ?? true);
-    setProfilePhotoUrl(me.providerOnboarding?.profilePhotoUrl ?? me.avatarUrl ?? "");
-  }, [me, clerkUser?.firstName, clerkUser?.lastName]);
-
-
-  async function handleSaveProfile() {
-    const emailToSave = accountEmail.trim();
-    if (!firstName.trim() || !lastName.trim() || !emailToSave || !phone.trim()) {
-      showToast("error", "Name, email and phone are required.");
-      return;
-    }
-    try {
-      await updateProfile.mutateAsync({
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        email: emailToSave,
-        phone: phone.trim(),
-      });
-      showToast("success", "Profile updated successfully.");
-    } catch (error: unknown) {
-      reportError(error, { screen: "ProviderProfile", action: "handleSaveProfile" });
-      showToast("error", error instanceof Error ? error.message : "Failed to save profile");
-    }
-  }
-
-  async function handleSaveProviderInfo() {
-    const parsedExperience = Number.parseInt(experienceYears, 10);
-    const pendingAddress = shopAddress.trim();
-    const normalizedLocations =
-      pendingAddress.length > 0 &&
-      !shopLocations.some((location) => location.address.toLowerCase() === pendingAddress.toLowerCase())
-        ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
-        : shopLocations;
-    if (
-      !serviceArea.trim() ||
-      normalizedLocations.length === 0 ||
-      Number.isNaN(parsedExperience)
-    ) {
-      showToast("error", "Complete provider details before saving.");
-      return;
-    }
-    try {
-      let locationsToSave = normalizedLocations;
-      if (googleMapsApiKey) {
-        locationsToSave = await enrichShopLocationsWithCoordinates(normalizedLocations, googleMapsApiKey);
-        const anyMissing = locationsToSave.some(
-          (location) => typeof location.latitude !== "number" || typeof location.longitude !== "number"
-        );
-        if (anyMissing) {
-          reportError(new Error("Provider profile: shop coordinates missing after enrichment"), {
-            screen: "ProviderProfile",
-            action: "handleSaveProviderInfo",
-          });
-          showToast(
-            "error",
-            "Could not pin your shop on the map. Pick an address from the suggestions, or enable Places + Geocoding for your Google API key."
-          );
-          return;
-        }
-      }
-
-      await updateProviderOnboarding.mutateAsync({
-        serviceCategories,
-        experienceYears: parsedExperience,
-        serviceArea: serviceArea.trim(),
-        shopAddress: locationsToSave[0]?.address ?? pendingAddress,
-        shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
-        shopLocations: locationsToSave,
-        hasTools,
-        serviceDescription: serviceDescription.trim(),
-        profilePhotoUrl: profilePhotoUrl.trim() ? profilePhotoUrl.trim() : undefined,
-      });
-      showToast("success", "Provider details updated successfully.");
-    } catch (error: unknown) {
-      reportError(error, { screen: "ProviderProfile", action: "handleSaveProviderInfo" });
-      showToast("error", error instanceof Error ? error.message : "Failed to save provider details");
-    }
   }
 
   return (
@@ -188,7 +88,6 @@ export default function ProviderProfileScreen() {
         paddingTop: insets.top + 12,
         paddingBottom: Math.max(insets.bottom + 20, 32),
       }}
-      keyboardShouldPersistTaps="always"
       refreshControl={
         <RefreshControl
           refreshing={isLoaded && isSignedIn && isRefetchingMe}
@@ -230,7 +129,9 @@ export default function ProviderProfileScreen() {
             </View>
           )}
           <View className="flex-1">
-            <Text className="text-ink font-semibold text-lg">{firstName} {lastName}</Text>
+            <Text className="text-ink font-semibold text-lg">
+              {firstName} {lastName}
+            </Text>
             <Text className="text-ink-muted text-sm">
               {serviceCategories.length > 0 ? serviceCategories.join(" · ") : "Provider profile"}
             </Text>
@@ -262,111 +163,41 @@ export default function ProviderProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text className="text-ink text-sm font-medium mb-2">First name</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        style={textInputBaselineStyle}
-        value={firstName}
-        onChangeText={setFirstName}
-      />
-
-      <Text className="text-ink text-sm font-medium mb-2">Last name</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        style={textInputBaselineStyle}
-        value={lastName}
-        onChangeText={setLastName}
-      />
-
-      <Text className="text-ink text-sm font-medium mb-2">Email</Text>
-      <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 mb-1">
-        <Text className="text-ink text-base">{accountEmail || "—"}</Text>
+      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <Text className="text-ink text-lg font-semibold mb-4">Personal information</Text>
+        <ProfileField label="First name" value={firstName} />
+        <ProfileField label="Last name" value={lastName} />
+        <ProfileField label="Email" value={accountEmail} />
+        <ProfileField label="Phone number" value={phone} />
       </View>
-      <Text className="text-ink-muted text-xs mb-4">
-        Same as your sign-in email. Update it in your account settings if needed.
-      </Text>
 
-      <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-6"
-        keyboardType="phone-pad"
-        style={textInputBaselineStyle}
-        value={phone}
-        onChangeText={setPhone}
-      />
+      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <Text className="text-xl font-bold text-ink mb-4">Provider details</Text>
+        <ProfileField label="Experience (years)" value={experienceYears} />
+        <ProfileField label="Service area" value={serviceArea} />
+        <ProfileField label="Own tools" value={hasTools ? "Yes" : "No"} />
 
-      <TouchableOpacity
-        className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8"
-        onPress={handleSaveProfile}
-        disabled={updateProfile.isPending}
-        style={{ opacity: updateProfile.isPending ? 0.6 : 1 }}
-      >
-        {updateProfile.isPending ? (
-          <ActivityIndicator color={appColors.onPrimary} />
-        ) : (
-          <Text className="text-white font-semibold">Save Profile</Text>
-        )}
-      </TouchableOpacity>
-
-      <Text className="text-xl font-bold text-ink mb-4">Provider Onboarding</Text>
-
-      <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        keyboardType="number-pad"
-        style={textInputBaselineStyle}
-        value={experienceYears}
-        onChangeText={setExperienceYears}
-      />
-
-      <Text className="text-ink text-sm font-medium mb-2">Service area</Text>
-      <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-        style={textInputBaselineStyle}
-        value={serviceArea}
-        onChangeText={setServiceArea}
-      />
-
-      <ShopAddressField
-        shopAddress={shopAddress}
-        setShopAddress={setShopAddress}
-        shopPlaceId={shopPlaceId}
-        setShopPlaceId={setShopPlaceId}
-        shopLocations={shopLocations}
-        setShopLocations={setShopLocations}
-        googleMapsApiKey={googleMapsApiKey}
-        inputPlaceholder="Shop/office address"
-        mapDescription="Confirm these pins match your shop locations."
-        mapEmptyMessage={
-          googleMapsApiKey
-            ? "Enter at least 3 characters in shop address to preview on map."
-            : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview shop location."
-        }
-      />
-
-      <Text className="text-ink-muted text-xs mb-4 leading-5">
-        Set price and duration for each offering under <Text className="font-semibold text-ink-soft">My services</Text>.
-      </Text>
-
-      <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-6 flex-row items-center justify-between">
-        <View className="flex-1 pr-3">
-          <Text className="text-ink font-semibold">Have your own tools</Text>
-          <Text className="text-ink-muted text-sm">Set to off if customer needs to provide equipment.</Text>
-        </View>
-        <Switch value={hasTools} onValueChange={setHasTools} />
+        {shopLocations.length > 0 ? (
+          <View className="mt-2">
+            <Text className="text-ink-muted text-xs mb-2">Shop locations</Text>
+            <View className="gap-2">
+              {shopLocations.map((location, index) => (
+                <View key={`${location.address}-${index}`} className="bg-canvas border border-ink-faint rounded-2xl p-3">
+                  <Text className="text-ink text-sm">{location.address}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <TouchableOpacity
-        className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8"
-        onPress={handleSaveProviderInfo}
-        disabled={updateProviderOnboarding.isPending}
-        style={{ opacity: updateProviderOnboarding.isPending ? 0.6 : 1 }}
+        className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8 active:opacity-90"
+        onPress={() => router.push("/(provider)/edit-info")}
+        accessibilityRole="button"
+        accessibilityLabel="Edit profile information"
       >
-        {updateProviderOnboarding.isPending ? (
-          <ActivityIndicator color={appColors.onPrimary} />
-        ) : (
-          <Text className="text-white font-semibold">Save Provider Details</Text>
-        )}
+        <Text className="text-white font-semibold">EDIT INFO</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

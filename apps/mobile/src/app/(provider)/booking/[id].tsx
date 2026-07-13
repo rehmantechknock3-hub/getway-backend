@@ -10,7 +10,7 @@ import { io, type Socket } from "socket.io-client";
 import * as Location from "expo-location";
 
 import { useProviderBooking } from "@repo/api-client";
-import { useBookingTracking } from "@repo/hooks";
+import { isTerminalBookingStatus, useBookingTracking } from "@repo/hooks";
 import { reportError } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
@@ -76,8 +76,14 @@ export default function ProviderBookingDetailScreen() {
 
   const enabled = isLoaded && isSignedIn && !!bookingId;
   const { data: booking, isLoading, isError, refetch } = useProviderBooking(bookingId, { enabled });
-  const tracking = useBookingTracking(enabled ? bookingId : null, socketInstance);
-  const effectiveStatus = tracking.status ?? booking?.status ?? null;
+  const bookingStatus = booking?.status ?? null;
+  const shouldConnectSocket =
+    enabled && !!bookingId && !isLoading && !!booking && !isTerminalBookingStatus(bookingStatus);
+  const tracking = useBookingTracking(
+    shouldConnectSocket ? bookingId : null,
+    shouldConnectSocket ? socketInstance : null
+  );
+  const effectiveStatus = tracking.status ?? bookingStatus;
 
   useEffect(() => {
     getTokenRef.current = getToken;
@@ -103,7 +109,12 @@ export default function ProviderBookingDetailScreen() {
   );
 
   useEffect(() => {
-    if (!enabled || !bookingId) {
+    if (!tracking.status || !isTerminalBookingStatus(tracking.status)) return;
+    void refetch();
+  }, [tracking.status, refetch]);
+
+  useEffect(() => {
+    if (!shouldConnectSocket) {
       socketRef.current?.disconnect();
       socketRef.current = null;
       setSocketInstance(null);
@@ -172,7 +183,7 @@ export default function ProviderBookingDetailScreen() {
       socketRef.current = null;
       setSocketInstance(null);
     };
-  }, [enabled, bookingId]);
+  }, [shouldConnectSocket, bookingId]);
 
   useEffect(() => {
     if (!socketInstance || !bookingId) return;

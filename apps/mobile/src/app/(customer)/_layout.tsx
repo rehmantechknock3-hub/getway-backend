@@ -51,6 +51,15 @@ export default function CustomerLayout() {
           headerTintColor: appColors.ink.DEFAULT,
         }}
       />
+      <Stack.Screen
+        name="edit-info"
+        options={{
+          headerShown: true,
+          title: "Edit info",
+          headerBackTitle: "Back",
+          headerTintColor: appColors.ink.DEFAULT,
+        }}
+      />
     </Stack>
   );
 }

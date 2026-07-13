@@ -17,7 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { io, type Socket } from "socket.io-client";
 
 import { useBooking, useCreateReview } from "@repo/api-client";
-import { useBookingTracking } from "@repo/hooks";
+import { isLiveMapTrackingStatus, isTerminalBookingStatus, useBookingTracking } from "@repo/hooks";
 import type { BookingWithReview } from "@repo/schemas";
 import { reportError } from "@repo/utils";
 
@@ -194,9 +194,16 @@ export default function BookingDetailScreen() {
   } | null>(null);
 
   const enabled = isLoaded && isSignedIn && !!bookingId;
-  const { data: booking, isLoading, isError } = useBooking(bookingId, { enabled });
-  const tracking = useBookingTracking(enabled ? bookingId : null, socketInstance);
-  const effectiveStatus = tracking.status ?? booking?.status ?? null;
+  const { data: booking, isLoading, isError, refetch } = useBooking(bookingId, { enabled });
+  const bookingStatus = booking?.status ?? null;
+  const shouldConnectSocket =
+    enabled && !!bookingId && !isLoading && !!booking && !isTerminalBookingStatus(bookingStatus);
+  const tracking = useBookingTracking(
+    shouldConnectSocket ? bookingId : null,
+    shouldConnectSocket ? socketInstance : null
+  );
+  const effectiveStatus = tracking.status ?? bookingStatus;
+  const shouldShowLiveMap = isLiveMapTrackingStatus(effectiveStatus);
   const providerFallbackLocation =
     booking &&
     typeof booking.providerLatitude === "number" &&
@@ -232,7 +239,12 @@ export default function BookingDetailScreen() {
   }, [tracking.providerLocation]);
 
   useEffect(() => {
-    if (!enabled || !bookingId) {
+    if (!tracking.status || !isTerminalBookingStatus(tracking.status)) return;
+    void refetch();
+  }, [tracking.status, refetch]);
+
+  useEffect(() => {
+    if (!shouldConnectSocket) {
       socketRef.current?.disconnect();
       socketRef.current = null;
       setSocketInstance(null);
@@ -302,7 +314,7 @@ export default function BookingDetailScreen() {
       socketRef.current = null;
       setSocketInstance(null);
     };
-  }, [enabled, bookingId]);
+  }, [shouldConnectSocket, bookingId]);
 
   return (
     <ScrollView
@@ -337,10 +349,10 @@ export default function BookingDetailScreen() {
         <>
           <BookingStatusTimeline status={effectiveStatus ?? booking.status} />
 
-          {(effectiveStatus === "IN_PROGRESS" || effectiveStatus === "COMPLETED") ? (
+          {shouldShowLiveMap ? (
             <LiveTrackingMapCard
               title="Track provider on map"
-              subtitle="Live updates are visible once the provider starts the job."
+              subtitle="Live updates appear once the provider is on the way."
               customerLocation={{ latitude: booking.latitude, longitude: booking.longitude }}
               providerLocation={providerDisplayLocation}
               providerLocationIsLive={providerLocationFromLiveTracking}
