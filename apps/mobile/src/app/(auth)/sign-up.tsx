@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
   ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -37,14 +37,19 @@ export default function SignUpScreen() {
   const clerk = useClerk();
   const insets = useSafeAreaInsets();
 
-  const [step,      setStep]      = useState<Step>("details");
+  const [step, setStep] = useState<Step>("details");
   const [firstName, setFirstName] = useState("");
-  const [lastName,  setLastName]  = useState("");
-  const [email,     setEmail]     = useState("");
-  const [password,  setPassword]  = useState("");
-  const [code,      setCode]      = useState("");
-  const [loading,   setLoading]   = useState(false);
-  const [showPw,    setShowPw]    = useState(false);
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [showPw, setShowPw] = useState(false);
+
+  useEffect(() => {
+    setCode("");
+  }, [step, email]);
 
   async function handleCreate() {
     if (!firstName.trim() || !lastName.trim()) {
@@ -81,6 +86,7 @@ export default function SignUpScreen() {
         throw sendCodeResult.error;
       }
 
+      setCode("");
       setStep("verify");
     } catch (error: unknown) {
       if (!isExpectedSignUpInputError(error)) {
@@ -137,6 +143,30 @@ export default function SignUpScreen() {
     }
   }
 
+  async function handleResendCode() {
+    setResending(true);
+    try {
+      const sendCodeResult = await safeClerkCall(() =>
+        signUp.verifications.sendEmailCode()
+      );
+      if ("error" in sendCodeResult && sendCodeResult.error) {
+        throw sendCodeResult.error;
+      }
+
+      setCode("");
+      showToast("success", "A new verification code was sent to your email.");
+    } catch (error: unknown) {
+      reportError(error, {
+        screen: "SignUpScreen",
+        action: "handleResendCode",
+        extra: { identifier: email.trim() },
+      });
+      showToast("error", getErrorMessage(error) || "Could not resend code.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   // Step indicator
   const StepDots = () => (
     <View className="flex-row gap-2 mb-8">
@@ -174,28 +204,43 @@ export default function SignUpScreen() {
             {/* Code input */}
             <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 mb-6">
               <TextInput
+                key={`verify-code-${email.trim().toLowerCase()}`}
                 className="text-ink text-3xl font-bold tracking-widest text-center"
                 placeholder="000000"
                 placeholderTextColor={appColors.ink.subtle}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
-                onChangeText={setCode}
+                onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))}
                 style={{ letterSpacing: 12 }}
               />
             </View>
 
             <TouchableOpacity
               onPress={handleVerify}
-              disabled={loading || code.length < 6}
+              disabled={loading || resending || code.length < 6}
               className="w-full bg-primary-600 rounded-2xl py-4 items-center"
-              style={{ opacity: loading || code.length < 6 ? 0.5 : 1 }}
+              style={{ opacity: loading || resending || code.length < 6 ? 0.5 : 1 }}
               activeOpacity={0.85}
             >
               {loading
                 ? <ActivityIndicator color={appColors.onPrimary} />
                 : <Text className="text-white font-semibold text-base">Verify Email</Text>
               }
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleResendCode}
+              disabled={loading || resending}
+              className="w-full py-4 items-center mt-2 active:opacity-80"
+              accessibilityRole="button"
+              accessibilityLabel="Resend verification code"
+            >
+              {resending ? (
+                <ActivityIndicator color={appColors.primary[600]} />
+              ) : (
+                <Text className="text-primary-600 font-semibold text-base">Resend code</Text>
+              )}
             </TouchableOpacity>
           </View>
         </ScrollView>

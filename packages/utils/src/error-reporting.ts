@@ -91,7 +91,7 @@ export function reportError(error: unknown, ctx: ErrorContext = {}): void {
       console.warn(`${prefix} -> ${message}`, payload);
     } else {
       // eslint-disable-next-line no-console
-      console.error(`${prefix} -> ${message}`, payload);
+     // console.error(`${prefix} -> ${message}`, payload);
     }
     return;
   }

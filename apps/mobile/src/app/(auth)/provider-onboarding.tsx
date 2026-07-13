@@ -182,7 +182,7 @@ export default function ProviderOnboardingScreen() {
           <Text className="text-ink text-sm font-medium mb-2">Service area</Text>
           <TextInput
             className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
-            placeholder="e.g. DHA, Gulberg"
+            placeholder="e.g. New York, Washington"
             placeholderTextColor={appColors.ink.subtle}
             style={textInputBaselineStyle}
             value={serviceArea}

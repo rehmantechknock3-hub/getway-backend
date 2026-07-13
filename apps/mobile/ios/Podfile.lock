@@ -1951,6 +1951,30 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - RNSentry (8.7.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-hermes
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Sentry (= 9.8.0)
+    - Yoga
   - RNWorklets (0.8.1):
     - hermes-engine
     - RCTRequired
@@ -2022,6 +2046,9 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - Sentry (9.8.0):
+    - Sentry/Core (= 9.8.0)
+  - Sentry/Core (9.8.0)
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2112,6 +2139,7 @@ DEPENDENCIES:
   - "ReactNativeDependencies (from `../../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@7.29.0___q4ywyg4643fhsj67frxjq7ic3q/node_modules/react-native/third-party-podspecs/ReactNativeDependencies.podspec`)"
   - "RNReanimated (from `../../../node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.8.1_@babel+core@7.29.0_@react-native+me_ht7nxf2q4kjzfh5e66evc7sx3u/node_modules/react-native-reanimated`)"
   - "RNScreens (from `../../../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_@babel+core@7.29.0_@react-native+metro-config_uyyrrs7brqa2nnnpahyjayvw6m/node_modules/react-native-screens`)"
+  - "RNSentry (from `../../../node_modules/.pnpm/@sentry+react-native@8.7.0_expo@54.0.33_react-native@0.81.5_@babel+core@7.29.0_@react-native+_ed5bbukcqn62mahmabcqaaa2xe/node_modules/@sentry/react-native`)"
   - "RNWorklets (from `../../../node_modules/.pnpm/react-native-worklets@0.8.1_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@_awkresv3teyzn65pu2rj7phhf4/node_modules/react-native-worklets`)"
   - "Yoga (from `../../../node_modules/.pnpm/react-native@0.81.5_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@7.29.0___q4ywyg4643fhsj67frxjq7ic3q/node_modules/react-native/ReactCommon/yoga`)"
 
@@ -2124,6 +2152,7 @@ SPEC REPOS:
     - GTMAppAuth
     - GTMSessionFetcher
     - PromisesObjC
+    - Sentry
 
 EXTERNAL SOURCES:
   ClerkGoogleSignIn:
@@ -2299,6 +2328,8 @@ EXTERNAL SOURCES:
     :path: "../../../node_modules/.pnpm/react-native-reanimated@4.1.7_react-native-worklets@0.8.1_@babel+core@7.29.0_@react-native+me_ht7nxf2q4kjzfh5e66evc7sx3u/node_modules/react-native-reanimated"
   RNScreens:
     :path: "../../../node_modules/.pnpm/react-native-screens@4.16.0_react-native@0.81.5_@babel+core@7.29.0_@react-native+metro-config_uyyrrs7brqa2nnnpahyjayvw6m/node_modules/react-native-screens"
+  RNSentry:
+    :path: "../../../node_modules/.pnpm/@sentry+react-native@8.7.0_expo@54.0.33_react-native@0.81.5_@babel+core@7.29.0_@react-native+_ed5bbukcqn62mahmabcqaaa2xe/node_modules/@sentry/react-native"
   RNWorklets:
     :path: "../../../node_modules/.pnpm/react-native-worklets@0.8.1_@babel+core@7.29.0_@react-native+metro-config@0.84.1_@babel+core@_awkresv3teyzn65pu2rj7phhf4/node_modules/react-native-worklets"
   Yoga:
@@ -2398,7 +2429,9 @@ SPEC CHECKSUMS:
   ReactNativeDependencies: 71ce9c28beb282aa720ea7b46980fff9669f428a
   RNReanimated: bbe7ff642fde01aefdc249e68735058b68ba9aef
   RNScreens: d8d6f1792f6e7ac12b0190d33d8d390efc0c1845
+  RNSentry: c60f22ba4945e650f727ee40ee3b2ac73bca065a
   RNWorklets: e00cc6af9d11264c5b839543d773a9797d2e05f7
+  Sentry: 88746bf877eff714bc45315a39ad1d1efea2cdda
   Yoga: 5934998fbeaef7845dbf698f698518695ab4cd1a
 
 PODFILE CHECKSUM: a31ddb565ae558335a5154e11a9cb9c9dfeb7c73

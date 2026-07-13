@@ -329,24 +329,30 @@ export class UsersService {
   }
 
   async updateProfile(clerkId: string, input: UpdateUserProfileInput) {
-    return this.prisma.user.update({
+    const phone = input.phone?.trim();
+    await this.prisma.user.update({
       where: { clerkId },
       data: {
         firstName: input.firstName,
         lastName: input.lastName,
-        email: input.email,
-        phone: input.phone,
+        phone: phone && phone.length > 0 ? phone : null,
       },
     });
+    const user = await this.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   async updateSavedLocations(clerkId: string, savedLocations: SavedLocation[]) {
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { clerkId },
       data: {
         savedLocations: savedLocations as Prisma.InputJsonValue,
       },
     });
+    const user = await this.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   async updateAvatar(clerkId: string, avatarUrl: string) {
@@ -393,13 +399,16 @@ export class UsersService {
         : {}),
     };
 
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { clerkId },
       data: {
         onboardingCompleted: true,
         customerOnboarding: customerOnboarding as Prisma.InputJsonValue,
       },
     });
+    const user = await this.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding, requestId?: string) {
@@ -420,7 +429,7 @@ export class UsersService {
       shopLocations: geocodedLocations,
     };
 
-    return this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { clerkId },
         data: {
@@ -432,7 +441,7 @@ export class UsersService {
       const profile = await tx.providerProfile.findUnique({
         where: { userId: user.id },
       });
-      if (!profile) return user;
+      if (!profile) return;
 
       if (
         typeof primaryLocation?.latitude === "number" &&
@@ -451,8 +460,10 @@ export class UsersService {
       if (existing === 0) {
         await this.seedStarterListing(profile.id, data, tx);
       }
-      return user;
     });
+    const user = await this.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   /** Backfill for providers who onboarded before starter listings existed. */

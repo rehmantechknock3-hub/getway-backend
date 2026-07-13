@@ -65,12 +65,12 @@ export default function SignInScreen() {
       if ("error" in passwordResult && passwordResult.error) {
         throw passwordResult.error;
       }
-
+      console.log("passwordResult", passwordResult);
       const finalizeResult = await safeClerkCall(() => signIn.finalize());
       if ("error" in finalizeResult && finalizeResult.error) {
         throw finalizeResult.error;
       }
-
+      console.log("finalizeResult", finalizeResult);
       const createdSessionId =
         resolveCreatedSessionId(finalizeResult) ?? resolveCreatedSessionId(signIn);
       if (!createdSessionId) {

@@ -26,6 +26,7 @@ import {
 
 import { textInputBaselineStyle } from "../styles/text-input";
 import { appColors } from "../styles/colors";
+import { SuggestedServiceCategoriesModal } from "./SuggestedServiceCategoriesModal";
 
 const SERVICE_CURRENCIES = ["USD", "EUR", "GBP", "AED", "SAR", "PKR"] as const;
 type ServiceCurrency = (typeof SERVICE_CURRENCIES)[number];
@@ -54,6 +55,7 @@ export function ProviderServiceForm(props: Props) {
 
   const createCategory = useCreateProviderServiceCategory();
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [presetsVisible, setPresetsVisible] = useState(false);
   const [categoryId, setCategoryId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -120,12 +122,9 @@ export function ProviderServiceForm(props: Props) {
     }
   }
 
-  async function handleCreateCategory() {
-    const t = newCategoryName.trim();
-    if (!t) {
-      Alert.alert("Category name", "Enter a name for the new category.");
-      return;
-    }
+  async function handleCreateCategoryByName(name: string) {
+    const t = name.trim();
+    if (!t) return;
     try {
       const row = await createCategory.mutateAsync({ name: t });
       setNewCategoryName("");
@@ -134,6 +133,24 @@ export function ProviderServiceForm(props: Props) {
     } catch {
       Alert.alert("Could not create category", "Try a different name or check your connection.");
     }
+  }
+
+  async function handleCreateCategory() {
+    const t = newCategoryName.trim();
+    if (!t) {
+      Alert.alert("Category name", "Enter a name for the new category.");
+      return;
+    }
+    await handleCreateCategoryByName(t);
+  }
+
+  async function handleTogglePreset(name: string) {
+    const existing = (categories ?? []).find((c) => c.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      setCategoryId(existing.id);
+      return;
+    }
+    await handleCreateCategoryByName(name);
   }
 
   async function onSave() {
@@ -229,10 +246,17 @@ export function ProviderServiceForm(props: Props) {
       >
         <Text className="text-ink font-semibold text-lg text-center mb-2">Create a category</Text>
         <Text className="text-ink-muted text-sm text-center leading-5 mb-6">
-          Every service belongs to a category (e.g. Oil change). Create one here, then complete the rest of this
-          form.
+          Every service belongs to a category (e.g. Oil change). Pick a suggested category or type your own.
         </Text>
-        <Text className="text-ink text-sm font-medium mb-2">New category name</Text>
+        <TouchableOpacity
+          className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 mb-4 flex-row items-center justify-between"
+          onPress={() => setPresetsVisible(true)}
+          activeOpacity={0.85}
+        >
+          <Text className="text-ink text-base">Browse suggested categories</Text>
+          <Ionicons name="chevron-down" size={18} color={appColors.ink.soft} />
+        </TouchableOpacity>
+        <Text className="text-ink text-sm font-medium mb-2">Or add your own</Text>
         <TextInput
           className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
           style={textInputBaselineStyle}
@@ -257,6 +281,12 @@ export function ProviderServiceForm(props: Props) {
         <TouchableOpacity className="py-3 items-center" onPress={() => router.back()} disabled={busy}>
           <Text className="text-ink-muted font-semibold">Go back</Text>
         </TouchableOpacity>
+        <SuggestedServiceCategoriesModal
+          visible={presetsVisible}
+          onClose={() => setPresetsVisible(false)}
+          selectedNames={[]}
+          onToggle={(name) => void handleTogglePreset(name)}
+        />
       </ScrollView>
     );
   }
@@ -333,6 +363,14 @@ export function ProviderServiceForm(props: Props) {
 
       {props.mode === "new" ? (
         <>
+          <TouchableOpacity
+            className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 mb-4 flex-row items-center justify-between"
+            onPress={() => setPresetsVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Text className="text-ink text-base">Browse suggested categories</Text>
+            <Ionicons name="chevron-down" size={18} color={appColors.ink.soft} />
+          </TouchableOpacity>
           <Text className="text-ink text-sm font-medium mb-2">Add another category</Text>
           <View className="flex-row gap-2 items-center mb-5">
             <TextInput
@@ -461,6 +499,13 @@ export function ProviderServiceForm(props: Props) {
       <TouchableOpacity className="py-3 items-center" onPress={() => router.back()} disabled={busy}>
         <Text className="text-ink-muted font-semibold">Cancel</Text>
       </TouchableOpacity>
+
+      <SuggestedServiceCategoriesModal
+        visible={presetsVisible}
+        onClose={() => setPresetsVisible(false)}
+        selectedNames={categoriesList.map((c) => c.name)}
+        onToggle={(name) => void handleTogglePreset(name)}
+      />
     </ScrollView>
   );
 }

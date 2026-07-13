@@ -5,6 +5,7 @@ import type { User } from "@repo/schemas";
 import { apiClient } from "../client";
 
 export const userKeys = {
+  meRoot: ["users", "me"] as const,
   me: (clerkUserId?: string | null) => ["users", "me", clerkUserId ?? "anonymous"] as const,
 };
 
