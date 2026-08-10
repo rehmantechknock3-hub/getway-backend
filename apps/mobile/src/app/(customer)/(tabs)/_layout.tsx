@@ -7,17 +7,22 @@ export default function CustomerTabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: appColors.primary[600],
-        tabBarInactiveTintColor: appColors.ink.subtle,
+        tabBarActiveTintColor: appColors.glow.blue,
+        tabBarInactiveTintColor: appColors.surface.muted,
+        tabBarStyle: {
+          backgroundColor: appColors.surface.night,
+          borderTopColor: appColors.surface.border,
+          borderTopWidth: 1,
+        },
         headerShown: false,
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "Discover",
+          title: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="map-outline" size={size} color={color} />
+            <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />

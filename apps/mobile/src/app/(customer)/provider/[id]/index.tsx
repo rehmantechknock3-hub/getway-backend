@@ -123,6 +123,12 @@ export default function ProviderDetailScreen() {
     provider.serviceCategory ?? provider.primaryServiceTitle ?? "Service provider";
   const favoriteBusy = addFavorite.isPending || removeFavorite.isPending;
 
+  const fromPrice = (() => {
+    if (!services?.length) return null;
+    const lowest = services.reduce((min, s) => (s.price < min.price ? s : min), services[0]);
+    return formatServicePrice(lowest.price, lowest.priceCurrency);
+  })();
+
   return (
     <ScrollView
       className="flex-1 bg-canvas"
@@ -132,120 +138,126 @@ export default function ProviderDetailScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View className="px-5 pt-4">
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-5 mb-6 shadow-sm">
-          <View className="flex-row items-start gap-4">
+        {/* Hero profile */}
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl overflow-hidden mb-5">
+          <View className="bg-canvas-sunken items-center justify-center py-8">
             {provider.avatarUrl ? (
               <Image
                 source={{ uri: provider.avatarUrl }}
-                className="w-16 h-16 rounded-2xl bg-canvas-sunken"
+                className="w-24 h-24 rounded-2xl bg-canvas-raised"
                 accessibilityLabel={`${displayName} profile photo`}
               />
             ) : (
-              <View className="w-16 h-16 rounded-2xl bg-canvas-sunken items-center justify-center">
-                <Text className="text-xl font-bold text-ink-muted">{initials}</Text>
+              <View className="w-24 h-24 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
+                <Text className="text-3xl font-bold text-primary-600">{initials}</Text>
               </View>
             )}
-            <View className="flex-1">
-              <View className="flex-row items-start justify-between gap-2">
-                <View className="flex-1">
-                  <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-                    {displayName}
-                  </Text>
-                  <Text className="text-ink-muted text-sm mt-1">{headline}</Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={isFavorite ? "Remove from saved providers" : "Save provider"}
-                  accessibilityRole="button"
-                  onPress={toggleFavorite}
-                  disabled={!favoritesEnabled || favoriteBusy}
-                  className="w-11 h-11 rounded-2xl bg-primary-50 border border-primary-200 items-center justify-center active:opacity-80"
-                >
-                  {favoriteBusy ? (
-                    <ActivityIndicator size="small" color={appColors.primary[600]} />
-                  ) : (
-                    <Ionicons
-                      name={isFavorite ? "heart" : "heart-outline"}
-                      size={22}
-                      color={appColors.primary[600]}
-                    />
-                  )}
-                </Pressable>
-              </View>
-              <View className="flex-row items-center gap-4 mt-3">
-                <View className="flex-row items-center gap-1">
-                  <Ionicons name="star" size={16} color={appColors.semantic.warning} />
-                  <Text className="text-ink font-semibold">
-                    {provider.averageRating.toFixed(1)}
-                  </Text>
-                  <Text className="text-ink-muted text-sm">
-                    ({provider.totalReviews} reviews)
-                  </Text>
-                </View>
-                {provider.isOnline ? (
-                  <View className="flex-row items-center gap-1">
-                    <View className="w-2 h-2 rounded-full bg-green-500" />
-                    <Text className="text-green-700 text-xs font-medium">Online</Text>
-                  </View>
-                ) : (
-                  <View className="flex-row items-center gap-1">
-                    <View className="w-2 h-2 rounded-full bg-ink-subtle" />
-                    <Text className="text-ink-subtle text-xs font-medium">Offline</Text>
-                  </View>
-                )}
-              </View>
-            </View>
           </View>
 
-          {provider.serviceArea ? (
-            <View className="flex-row items-center gap-2 mt-4 pt-4 border-t border-ink-faint">
-              <Ionicons name="location-outline" size={18} color={appColors.ink.muted} />
-              <Text className="text-ink-soft text-sm flex-1">{provider.serviceArea}</Text>
+          <View className="p-5">
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
+                  {displayName}
+                </Text>
+                <Text className="text-ink-muted text-sm mt-1">{headline}</Text>
+              </View>
+              <Pressable
+                accessibilityLabel={isFavorite ? "Remove from saved providers" : "Save provider"}
+                accessibilityRole="button"
+                onPress={toggleFavorite}
+                disabled={!favoritesEnabled || favoriteBusy}
+                className="w-11 h-11 rounded-full bg-primary-50 border border-primary-100 items-center justify-center active:opacity-80"
+              >
+                {favoriteBusy ? (
+                  <ActivityIndicator size="small" color={appColors.primary[600]} />
+                ) : (
+                  <Ionicons
+                    name={isFavorite ? "heart" : "heart-outline"}
+                    size={22}
+                    color={appColors.primary[600]}
+                  />
+                )}
+              </Pressable>
             </View>
-          ) : null}
 
-          {provider.bio ? (
-            <Text className="text-ink-soft text-sm mt-3">{provider.bio}</Text>
-          ) : null}
-
-          {provider.serviceDescription ? (
-            <View className="mt-4">
-              <Text className="text-ink text-sm font-semibold mb-2">About</Text>
-              <Text className="text-ink-soft text-sm leading-5">{provider.serviceDescription}</Text>
+            <View className="flex-row flex-wrap items-center gap-3 mt-4">
+              <View className="flex-row items-center gap-1 bg-canvas-sunken rounded-full px-3 py-1.5">
+                <Ionicons name="star" size={14} color={appColors.semantic.warning} />
+                <Text className="text-ink font-semibold text-sm">
+                  {provider.averageRating.toFixed(1)}
+                </Text>
+                <Text className="text-ink-muted text-xs">({provider.totalReviews})</Text>
+              </View>
+              {provider.isOnline ? (
+                <View className="flex-row items-center gap-1.5 bg-primary-50 rounded-full px-3 py-1.5">
+                  <View className="w-2 h-2 rounded-full" style={{ backgroundColor: appColors.semantic.success }} />
+                  <Text className="text-primary-700 text-xs font-semibold">Online</Text>
+                </View>
+              ) : (
+                <View className="flex-row items-center gap-1.5 bg-canvas-sunken rounded-full px-3 py-1.5">
+                  <View className="w-2 h-2 rounded-full bg-ink-subtle" />
+                  <Text className="text-ink-muted text-xs font-medium">Offline</Text>
+                </View>
+              )}
+              {fromPrice ? (
+                <View className="flex-row items-center gap-1 rounded-full px-3 py-1.5 border border-primary-100 bg-primary-50">
+                  <Text className="text-primary-700 text-xs font-semibold">From {fromPrice}</Text>
+                </View>
+              ) : null}
             </View>
-          ) : null}
 
-          {provider.experienceYears != null ? (
-            <Text className="text-ink-muted text-xs mt-3">
-              {provider.experienceYears} years experience
-              {provider.hasTools === false ? " · Customer provides tools" : ""}
-            </Text>
-          ) : null}
+            {provider.serviceArea ? (
+              <View className="flex-row items-center gap-2 mt-4 pt-4 border-t border-ink-faint">
+                <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
+                <Text className="text-ink-soft text-sm flex-1">{provider.serviceArea}</Text>
+              </View>
+            ) : null}
+
+            {provider.bio ? (
+              <Text className="text-ink-soft text-sm mt-3 leading-5">{provider.bio}</Text>
+            ) : null}
+
+            {provider.serviceDescription ? (
+              <View className="mt-4">
+                <Text className="text-ink text-sm font-semibold mb-2">About</Text>
+                <Text className="text-ink-soft text-sm leading-5">{provider.serviceDescription}</Text>
+              </View>
+            ) : null}
+
+            {provider.experienceYears != null ? (
+              <Text className="text-ink-muted text-xs mt-3">
+                {provider.experienceYears} years experience
+                {provider.hasTools === false ? " · Customer provides tools" : ""}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
-        <Text className="text-lg font-bold text-ink mb-1">Services</Text>
-        <Text className="text-ink-subtle text-sm mb-3">
-          Pick a service and time to book. The provider is notified in their Jobs tab.
+        <Text className="text-lg font-bold text-ink mb-1">Choose a package</Text>
+        <Text className="text-ink-muted text-sm mb-3">
+          Select a service below, then pick a time to book.
         </Text>
 
         {!provider.isOnline ? (
-          <View className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-4">
-            <Text className="text-amber-900 text-sm font-semibold mb-1">Why booking isn&apos;t available</Text>
-            <Text className="text-amber-800 text-sm leading-5">
-              This provider&apos;s status is <Text className="font-semibold">Offline</Text>. New bookings can only be
-              started when they are <Text className="font-semibold">Online</Text> (they turn that on in the Provider
-              app). You can still view their profile and save them to favorites.
-            </Text>
+          <View className="bg-canvas-sunken border border-ink-faint rounded-2xl px-4 py-3 mb-4 flex-row gap-3">
+            <Ionicons name="information-circle-outline" size={22} color={appColors.ink.muted} />
+            <View className="flex-1">
+              <Text className="text-ink text-sm font-semibold mb-1">Booking unavailable</Text>
+              <Text className="text-ink-muted text-sm leading-5">
+                This provider is offline. You can still view their profile and save them to favorites.
+              </Text>
+            </View>
           </View>
         ) : null}
 
         {loadingServices ? (
-          <ActivityIndicator className="my-6" />
+          <ActivityIndicator className="my-6" color={appColors.primary[600]} />
         ) : !services?.length ? (
           <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-4">
             <Text className="text-ink font-medium text-sm mb-2">No services to book yet</Text>
             <Text className="text-ink-muted text-sm leading-5">
-              This provider’s profile is visible, but they have not published a service customers can book. They need to
-              open the Provider app → Services tab once so a listing is created from their onboarding details.
+              This provider has not published a bookable service yet.
             </Text>
           </View>
         ) : (
@@ -255,23 +267,37 @@ export default function ProviderDetailScreen() {
                 key={s.id}
                 className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 overflow-hidden"
               >
-                <View className="flex-row items-start justify-between gap-3">
-                  <View className="flex-1">
-                    <Text className="text-ink font-semibold text-base">{s.title}</Text>
-                    <Text className="text-ink-muted text-xs mt-1">{s.categoryName}</Text>
-                    {s.description ? (
-                      <Text className="text-ink-soft text-sm mt-2">{s.description}</Text>
-                    ) : null}
+                <View className="flex-row items-start gap-3">
+                  <View className="w-12 h-12 rounded-xl bg-primary-50 items-center justify-center">
+                    <Ionicons name="construct-outline" size={22} color={appColors.primary[600]} />
                   </View>
-                  <Text className="text-primary-600 font-bold">
-                    {formatServicePrice(s.price, s.priceCurrency)}
-                  </Text>
+                  <View className="flex-1">
+                    <View className="flex-row items-start justify-between gap-2">
+                      <View className="flex-1">
+                        <Text className="text-ink font-semibold text-base">{s.title}</Text>
+                        <Text className="text-ink-muted text-xs mt-1">{s.categoryName}</Text>
+                      </View>
+                      <Text className="text-primary-600 font-bold">
+                        {formatServicePrice(s.price, s.priceCurrency)}
+                      </Text>
+                    </View>
+                    {s.description ? (
+                      <Text className="text-ink-soft text-sm mt-2" numberOfLines={3}>
+                        {s.description}
+                      </Text>
+                    ) : null}
+                    <View className="flex-row items-center gap-1.5 mt-2">
+                      <Ionicons name="time-outline" size={14} color={appColors.ink.subtle} />
+                      <Text className="text-ink-subtle text-xs">{s.duration} min</Text>
+                    </View>
+                  </View>
                 </View>
-                <Text className="text-ink-subtle text-xs mt-2 mb-3">{s.duration} min</Text>
                 <TouchableOpacity
                   activeOpacity={provider.isOnline ? 0.9 : 1}
                   disabled={!provider.isOnline}
-                  className={`rounded-xl py-3 items-center ${provider.isOnline ? "bg-primary-600" : "bg-ink-faint"}`}
+                  className={`mt-4 rounded-2xl py-3.5 items-center ${
+                    provider.isOnline ? "bg-primary-600" : "bg-ink-faint"
+                  }`}
                   onPress={() =>
                     router.push(`/(customer)/provider/${providerId}/book/${s.id}` as const)
                   }
@@ -283,16 +309,13 @@ export default function ProviderDetailScreen() {
                   }
                 >
                   <Text
-                    className={`font-bold text-sm ${provider.isOnline ? "text-white" : "text-ink-subtle"}`}
+                    className={`font-bold text-sm ${
+                      provider.isOnline ? "text-white" : "text-ink-subtle"
+                    }`}
                   >
                     Book this service
                   </Text>
                 </TouchableOpacity>
-                {!provider.isOnline ? (
-                  <Text className="text-ink-subtle text-xs text-center mt-2 leading-4">
-                    Disabled — provider status is Offline.
-                  </Text>
-                ) : null}
               </View>
             ))}
           </View>
@@ -305,16 +328,14 @@ export default function ProviderDetailScreen() {
               activeOpacity={0.8}
               onPress={() => router.push(`/(customer)/provider/${providerId}/reviews` as const)}
             >
-              <Text className="text-primary-700 font-semibold text-sm">See all</Text>
+              <Text className="text-primary-600 font-semibold text-sm">See all</Text>
             </TouchableOpacity>
           ) : null}
         </View>
-        <Text className="text-ink-subtle text-sm mb-3">
-          Real feedback from completed bookings.
-        </Text>
+        <Text className="text-ink-muted text-sm mb-3">Real feedback from completed bookings.</Text>
 
         {loadingReviews ? (
-          <ActivityIndicator className="my-4" />
+          <ActivityIndicator className="my-4" color={appColors.primary[600]} />
         ) : !(providerReviews?.data.length ?? 0) ? (
           <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-2">
             <Text className="text-ink font-medium text-sm">No reviews yet</Text>
@@ -350,10 +371,10 @@ export default function ProviderDetailScreen() {
         {(providerReviews?.total ?? 0) > 3 ? (
           <TouchableOpacity
             activeOpacity={0.85}
-            className="mt-3 mb-1 bg-canvas-raised border border-ink-faint rounded-xl py-2.5 items-center"
+            className="mt-3 mb-1 bg-canvas-raised border border-primary-100 rounded-2xl py-3 items-center"
             onPress={() => router.push(`/(customer)/provider/${providerId}/reviews` as const)}
           >
-            <Text className="text-primary-700 font-semibold">See all reviews</Text>
+            <Text className="text-primary-600 font-semibold">See all reviews</Text>
           </TouchableOpacity>
         ) : null}
       </View>

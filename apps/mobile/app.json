@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "Marketplace",
-    "slug": "marketplace",
+    "name": "WayNow",
+    "slug": "waynow",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "marketplace",
+    "scheme": "waynow",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2563eb"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
@@ -18,6 +18,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to show nearby service providers.",
         "NSLocationAlwaysUsageDescription": "We need your location to track service providers during a booking.",
+        "NSPhotoLibraryUsageDescription": "Allow WayNow to access your photos so you can upload a provider profile picture.",
+        "NSCameraUsageDescription": "Allow WayNow to use your camera so you can take a provider profile picture.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
@@ -26,13 +28,16 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#2563eb"
+        "backgroundColor": "#000000"
       },
       "package": "com.marketplace.app",
       "usesCleartextTraffic": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
       ]
     },
     "plugins": [
@@ -41,14 +46,21 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Marketplace to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow WayNow to use your location."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow WayNow to access your photos so you can upload a provider profile picture.",
+          "cameraPermission": "Allow WayNow to use your camera so you can take a provider profile picture."
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#2563eb"
+          "color": "#8B5CF6"
         }
       ],
       "@clerk/expo"

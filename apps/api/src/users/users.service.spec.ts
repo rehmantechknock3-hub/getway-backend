@@ -478,16 +478,34 @@ describe("UsersService", () => {
     const prisma = {
       user: {
         update: vi.fn().mockResolvedValue({ id: "u1" }),
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u1",
+          clerkId: "clerk_4",
+          role: "PROVIDER",
+          email: "p@example.com",
+          firstName: "Pat",
+          lastName: "Lee",
+          phone: null,
+          avatarUrl: "https://example.com/a.jpg",
+          savedLocations: [],
+          onboardingCompleted: true,
+          customerOnboarding: null,
+          providerOnboarding: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          providerProfile: null,
+        }),
       },
     };
     const service = new UsersService(prisma as never, { get: vi.fn() } as never);
 
-    await service.updateAvatar("clerk_4", "data:image/jpeg;base64,abc123");
+    const result = await service.updateAvatar("clerk_4", "https://example.com/a.jpg");
 
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { clerkId: "clerk_4" },
-      data: { avatarUrl: "data:image/jpeg;base64,abc123" },
+      data: { avatarUrl: "https://example.com/a.jpg" },
     });
+    expect(result.avatarUrl).toBe("https://example.com/a.jpg");
   });
 
   it("deleteByClerkId returns false when user is absent", async () => {

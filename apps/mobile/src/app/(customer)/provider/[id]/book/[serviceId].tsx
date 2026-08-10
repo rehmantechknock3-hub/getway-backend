@@ -2,8 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
+  StatusBar,
   Text,
   TextInput,
   TouchableOpacity,
@@ -22,6 +22,8 @@ import {
   useProvider,
   useProviderServices,
 } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { reportError } from "@repo/utils";
 
 import { appColors } from "../../../../../styles/colors";
 import { textInputBaselineStyle } from "../../../../../styles/text-input";
@@ -63,6 +65,15 @@ function formatSlotSummary(day: Date, hour: number): string {
   return `${formatDayChip(day)} · ${slot}`;
 }
 
+function formatMoney(n: number, currency?: string): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency ?? "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
 type Step = 1 | 2 | 3;
 
 export default function BookServiceScreen() {
@@ -73,6 +84,7 @@ export default function BookServiceScreen() {
   const queryClient = useQueryClient();
   const { isLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState<Step>(1);
+  const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
 
   const today = useMemo(() => startOfDay(new Date()), []);
   const dayOptions = useMemo(
@@ -104,6 +116,12 @@ export default function BookServiceScreen() {
     [selectedDay, selectedHour]
   );
 
+  const providerName = useMemo(() => {
+    const p = providerQuery.data;
+    if (!p) return "Provider";
+    return `${p.firstName} ${p.lastName}`.trim();
+  }, [providerQuery.data]);
+
   const useMyLocation = useCallback(async () => {
     setFormError(null);
     setLocating(true);
@@ -118,7 +136,8 @@ export default function BookServiceScreen() {
         latitude: pos.coords.latitude,
         longitude: pos.coords.longitude,
       });
-    } catch {
+    } catch (error: unknown) {
+      reportError(error, { action: "book_use_my_location" });
       setFormError("Could not read your location. Try again or enter an address.");
     } finally {
       setLocating(false);
@@ -135,7 +154,7 @@ export default function BookServiceScreen() {
     const lon = coords?.longitude ?? 0;
     setFormError(null);
     try {
-      await createBooking.mutateAsync({
+      const booking = await createBooking.mutateAsync({
         serviceId: svcId,
         scheduledAt,
         address: address.trim(),
@@ -144,23 +163,16 @@ export default function BookServiceScreen() {
         notes: notes.trim() ? notes.trim() : undefined,
       });
       await queryClient.refetchQueries({ queryKey: bookingKeys.all() });
-      Alert.alert(
-        "Booking confirmed",
-        "Your booking was created successfully. You can review it anytime under My bookings.",
-        [
-          {
-            text: "OK",
-            onPress: () => router.replace("/(customer)/(tabs)/bookings"),
-          },
-        ]
-      );
+      setCreatedBookingId(booking.id);
     } catch (error: unknown) {
+      reportError(error, { action: "create_booking", extra: { serviceId: svcId } });
       const message = error instanceof Error ? error.message : "";
       if (message.toLowerCase().includes("offline")) {
         setFormError("Provider is offline right now. Booking is unavailable.");
         return;
       }
       setFormError("Booking failed. Check your connection and try again.");
+      showToast("error", "Booking failed", "Please try again.");
     }
   }, [svcId, address, providerQuery.data, coords, scheduledAt, notes, createBooking, queryClient]);
 
@@ -175,7 +187,7 @@ export default function BookServiceScreen() {
   if (servicesQuery.isLoading) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center px-6">
-        <ActivityIndicator />
+        <ActivityIndicator color={appColors.primary[600]} />
         <Text className="text-ink-muted text-sm mt-4 text-center">Loading booking…</Text>
       </View>
     );
@@ -212,7 +224,7 @@ export default function BookServiceScreen() {
   if (providerQuery.isLoading) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center px-6">
-        <ActivityIndicator />
+        <ActivityIndicator color={appColors.primary[600]} />
         <Text className="text-ink-muted text-sm mt-4 text-center">Loading provider…</Text>
       </View>
     );
@@ -239,7 +251,7 @@ export default function BookServiceScreen() {
     );
   }
 
-  if (!providerQuery.data.isOnline) {
+  if (!providerQuery.data.isOnline && !createdBookingId) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center px-6">
         <Ionicons name="moon-outline" size={40} color={appColors.ink.subtle} />
@@ -247,8 +259,7 @@ export default function BookServiceScreen() {
           Can&apos;t book — provider is offline
         </Text>
         <Text className="text-ink-muted text-sm text-center leading-5 mb-6">
-          Their status is <Text className="text-ink-soft font-semibold">Offline</Text>, so new bookings are blocked until
-          they go online in the Provider app. Check back later or use the heart on their profile to save them.
+          Their status is Offline, so new bookings are blocked until they go online. Check back later.
         </Text>
         <TouchableOpacity
           className="bg-primary-600 rounded-2xl px-6 py-3"
@@ -257,6 +268,96 @@ export default function BookServiceScreen() {
         >
           <Text className="text-white font-bold">Go back</Text>
         </TouchableOpacity>
+      </View>
+    );
+  }
+
+  /* Dark success state — same route, template screen 8 */
+  if (createdBookingId) {
+    return (
+      <View
+        className="flex-1 bg-surface-night"
+        style={{ paddingTop: insets.top + 24, paddingBottom: Math.max(insets.bottom + 24, 32) }}
+      >
+        <StatusBar barStyle="light-content" />
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: 20, flexGrow: 1, justifyContent: "center" }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="items-center mb-8">
+            <View className="w-20 h-20 rounded-full bg-surface-elevated items-center justify-center mb-5 border border-surface-border">
+              <Ionicons name="checkmark-circle" size={52} color={appColors.semantic.success} />
+            </View>
+            <Text className="text-white text-2xl font-bold text-center mb-2">
+              Booking confirmed
+            </Text>
+            <Text className="text-surface-muted text-sm text-center leading-5 px-4">
+              Your request was sent. You can track it anytime under Bookings.
+            </Text>
+          </View>
+
+          <View className="bg-surface-card border border-surface-border rounded-2xl p-4 mb-5">
+            <Text className="text-surface-muted text-xs font-semibold mb-3 uppercase tracking-wide">
+              Summary
+            </Text>
+            <Text className="text-white font-semibold text-base mb-1">{service.title}</Text>
+            <Text className="text-surface-soft text-sm mb-3">{providerName}</Text>
+            <View className="flex-row items-center gap-2 mb-2">
+              <Ionicons name="calendar-outline" size={16} color={appColors.glow.blue} />
+              <Text className="text-surface-soft text-sm">
+                {formatSlotSummary(selectedDay, selectedHour)}
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-2 mb-2">
+              <Ionicons name="location-outline" size={16} color={appColors.glow.blue} />
+              <Text className="text-surface-soft text-sm flex-1" numberOfLines={2}>
+                {address.trim()}
+              </Text>
+            </View>
+            <View className="flex-row items-center gap-2">
+              <Ionicons name="cash-outline" size={16} color={appColors.glow.blue} />
+              <Text className="text-white font-semibold">
+                {formatMoney(service.price, service.priceCurrency)}
+              </Text>
+            </View>
+          </View>
+
+          <View className="bg-surface-elevated border border-surface-border rounded-2xl p-4 mb-8">
+            <Text className="text-white font-semibold mb-3">What happens next?</Text>
+            {[
+              "The provider will review and accept your request",
+              "You’ll get updates as the booking status changes",
+              "Track progress and message them from the appointment",
+            ].map((line) => (
+              <View key={line} className="flex-row items-start gap-2.5 mb-2.5">
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={18}
+                  color={appColors.semantic.success}
+                />
+                <Text className="text-surface-soft text-sm flex-1 leading-5">{line}</Text>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            className="bg-glow-blue rounded-2xl py-4 items-center mb-3"
+            activeOpacity={0.9}
+            onPress={() =>
+              router.replace(`/(customer)/booking/${createdBookingId}` as const)
+            }
+          >
+            <Text className="text-white font-bold text-base">View appointment</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="border border-surface-border rounded-2xl py-4 items-center"
+            activeOpacity={0.85}
+            onPress={() => router.replace("/(customer)/(tabs)/bookings")}
+          >
+            <Text className="text-surface-soft font-semibold">Go to bookings</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
@@ -272,23 +373,17 @@ export default function BookServiceScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-5 mb-5">
-        <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-1">
-          You&apos;re booking
-        </Text>
+      <StatusBar barStyle="dark-content" />
+
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-5 mb-5">
+        <Text className="text-xs font-semibold text-primary-600 mb-1">You&apos;re booking</Text>
         <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.3 }}>
           {service.title}
         </Text>
         <Text className="text-ink-muted text-sm mt-1">{service.categoryName}</Text>
-        {!providerQuery.data.isOnline ? (
-          <View className="mt-3 bg-amber-100 border border-amber-200 rounded-xl px-3 py-2">
-            <Text className="text-amber-800 text-xs leading-5">
-              <Text className="font-semibold">Status: Offline</Text>
-              {" — "}
-              you can&apos;t complete a booking until this provider goes online again.
-            </Text>
-          </View>
-        ) : null}
+        <Text className="text-primary-600 font-bold mt-2">
+          {formatMoney(service.price, service.priceCurrency)}
+        </Text>
       </View>
 
       <View className="flex-row items-center justify-between mb-6">
@@ -305,9 +400,9 @@ export default function BookServiceScreen() {
 
       {step === 1 ? (
         <View>
-          <Text className="text-lg font-bold text-ink mb-1">When do you want the booking?</Text>
+          <Text className="text-lg font-bold text-ink mb-1">Pick a date & time</Text>
           <Text className="text-ink-muted text-sm mb-5 leading-5">
-            Choose a day, then pick a time window. You can add details and the address in the next steps.
+            Choose a day, then select a time window.
           </Text>
 
           <Text className="text-sm font-bold text-ink mb-2">Day</Text>
@@ -324,11 +419,13 @@ export default function BookServiceScreen() {
                   onPress={() => setSelectedDay(d)}
                   activeOpacity={0.85}
                   className={`px-4 py-3 rounded-2xl border ${
-                    active ? "bg-primary-600 border-primary-600" : "bg-canvas-raised border-ink-faint"
+                    active
+                      ? "bg-primary-50 border-primary-600"
+                      : "bg-canvas-raised border-ink-faint"
                   }`}
                 >
                   <Text
-                    className={`text-sm font-semibold ${active ? "text-white" : "text-ink"}`}
+                    className={`text-sm font-semibold ${active ? "text-primary-600" : "text-ink"}`}
                   >
                     {formatDayChip(d)}
                   </Text>
@@ -346,12 +443,16 @@ export default function BookServiceScreen() {
                   key={slot.label}
                   onPress={() => setSelectedHour(slot.hour)}
                   activeOpacity={0.85}
-                  className={`px-4 py-2.5 rounded-xl border ${
-                    active ? "bg-ink border-ink" : "bg-canvas-raised border-ink-faint"
+                  className={`px-4 py-2.5 rounded-2xl border min-w-[44%] ${
+                    active
+                      ? "bg-primary-50 border-primary-600"
+                      : "bg-canvas-raised border-ink-faint"
                   }`}
                 >
                   <Text
-                    className={`text-sm font-semibold ${active ? "text-white" : "text-ink-soft"}`}
+                    className={`text-sm font-semibold text-center ${
+                      active ? "text-primary-600" : "text-ink-soft"
+                    }`}
                   >
                     {slot.label}
                   </Text>
@@ -372,9 +473,9 @@ export default function BookServiceScreen() {
 
       {step === 2 ? (
         <View>
-          <Text className="text-lg font-bold text-ink mb-1">Describe the booking</Text>
+          <Text className="text-lg font-bold text-ink mb-1">Add notes</Text>
           <Text className="text-ink-muted text-sm mb-5 leading-5">
-            Optional: access instructions, vehicle details, or anything the provider should know before they arrive.
+            Optional: access instructions, vehicle details, or anything the provider should know.
           </Text>
 
           <Text className="text-sm font-bold text-ink mb-2">Notes (optional)</Text>
@@ -410,19 +511,34 @@ export default function BookServiceScreen() {
 
       {step === 3 ? (
         <View>
-          <Text className="text-lg font-bold text-ink mb-1">Where should we meet you?</Text>
+          <Text className="text-lg font-bold text-ink mb-1">Review & confirm</Text>
           <Text className="text-ink-muted text-sm mb-4 leading-5">
-            Enter the full service address. You can fill coordinates using your location for more accurate routing.
+            Check the details, then confirm your booking.
           </Text>
 
-          <View className="bg-primary-50 border border-primary-200 rounded-2xl p-4 mb-5">
-            <Text className="text-xs font-semibold text-primary-700 uppercase tracking-wide mb-1">Scheduled</Text>
-            <Text className="text-ink font-semibold">{formatSlotSummary(selectedDay, selectedHour)}</Text>
-            {notes.trim() ? (
-              <Text className="text-ink-soft text-sm mt-2" numberOfLines={3}>
-                Note: {notes.trim()}
+          <View className="gap-3 mb-5">
+            <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4">
+              <Text className="text-ink-muted text-xs font-semibold mb-1">Provider</Text>
+              <Text className="text-ink font-semibold">{providerName}</Text>
+            </View>
+            <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4">
+              <Text className="text-ink-muted text-xs font-semibold mb-1">Service</Text>
+              <Text className="text-ink font-semibold">{service.title}</Text>
+              <Text className="text-primary-600 font-bold mt-1">
+                {formatMoney(service.price, service.priceCurrency)}
               </Text>
-            ) : null}
+            </View>
+            <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4">
+              <Text className="text-ink-muted text-xs font-semibold mb-1">Date & time</Text>
+              <Text className="text-ink font-semibold">
+                {formatSlotSummary(selectedDay, selectedHour)}
+              </Text>
+              {notes.trim() ? (
+                <Text className="text-ink-soft text-sm mt-2" numberOfLines={3}>
+                  Note: {notes.trim()}
+                </Text>
+              ) : null}
+            </View>
           </View>
 
           <Text className="text-sm font-bold text-ink mb-2">Service address</Text>
@@ -437,7 +553,7 @@ export default function BookServiceScreen() {
           />
 
           <TouchableOpacity
-            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary-200 bg-primary-50 mb-2"
+            className="flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary-100 bg-primary-50 mb-2"
             onPress={useMyLocation}
             disabled={locating}
             activeOpacity={0.85}
@@ -447,7 +563,7 @@ export default function BookServiceScreen() {
             ) : (
               <Ionicons name="navigate-outline" size={20} color={appColors.primary[600]} />
             )}
-            <Text className="text-primary-700 font-semibold text-sm">Use my location for map pin</Text>
+            <Text className="text-primary-600 font-semibold text-sm">Use my location for map pin</Text>
           </TouchableOpacity>
 
           {formError ? (
@@ -467,7 +583,7 @@ export default function BookServiceScreen() {
             <TouchableOpacity
               className="flex-1 bg-primary-600 rounded-2xl py-4 items-center active:opacity-90"
               onPress={() => void submit()}
-              disabled={createBooking.isPending || !address.trim() || !providerQuery.data.isOnline}
+              disabled={createBooking.isPending || !address.trim()}
               activeOpacity={0.9}
             >
               {createBooking.isPending ? (

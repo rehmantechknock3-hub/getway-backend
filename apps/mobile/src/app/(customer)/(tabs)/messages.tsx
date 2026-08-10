@@ -43,7 +43,7 @@ function ConversationRow({
   return (
     <TouchableOpacity
       onPress={onPress}
-      className="flex-row items-center px-4 py-3.5 border-b border-ink-faint bg-canvas"
+      className="flex-row items-center px-5 py-4 border-b border-ink-faint bg-canvas"
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${name}`}
     >
@@ -112,7 +112,7 @@ export default function CustomerMessagesScreen() {
 
       {!enabled || isLoading ? (
         <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
+          <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError ? (
         <View className="flex-1 items-center justify-center px-6">
@@ -122,7 +122,7 @@ export default function CustomerMessagesScreen() {
           </Text>
           <TouchableOpacity
             onPress={() => void refetch()}
-            className="mt-4 bg-primary-600 rounded-xl px-5 py-2.5"
+            className="mt-4 bg-primary-600 rounded-2xl px-5 py-2.5"
             accessibilityRole="button"
           >
             <Text className="text-white font-semibold text-sm">Retry</Text>
@@ -130,7 +130,9 @@ export default function CustomerMessagesScreen() {
         </View>
       ) : (data?.length ?? 0) === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
-          <Ionicons name="chatbubbles-outline" size={52} color={appColors.ink.subtle} />
+          <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-1">
+            <Ionicons name="chatbubbles-outline" size={32} color={appColors.primary[600]} />
+          </View>
           <Text className="text-ink font-semibold text-base mt-4">No messages yet</Text>
           <Text className="text-ink-muted text-sm text-center mt-2 leading-5">
             When you book a service, you can message the provider directly from the booking.

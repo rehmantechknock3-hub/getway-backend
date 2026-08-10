@@ -103,20 +103,20 @@ export default function RoleSelectScreen() {
                 onPress={() => setSelected(role.value)}
                 activeOpacity={0.85}
                 className={[
-                  "rounded-3xl p-6 border-2",
-                  active ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised",
+                  "rounded-2xl p-5 border-2",
+                  active ? "border-primary-600 bg-primary-50" : "border-ink-faint bg-canvas-raised",
                 ].join(" ")}
               >
                 {/* Icon + title row */}
                 <View className="flex-row items-center gap-4 mb-4">
                   <View
                     className="w-14 h-14 rounded-2xl items-center justify-center"
-                    style={{ backgroundColor: active ? appColors.primary[500] : role.iconBg }}
+                    style={{ backgroundColor: active ? appColors.primary[600] : role.iconBg }}
                   >
                     <Ionicons
                       name={role.icon}
                       size={24}
-                      color={active ? appColors.onPrimary : appColors.primary[500]}
+                      color={active ? appColors.onPrimary : appColors.primary[600]}
                     />
                   </View>
                   <View className="flex-1">
@@ -134,7 +134,7 @@ export default function RoleSelectScreen() {
                 </View>
 
                 {/* Perks */}
-                <View className={`pt-4 border-t gap-2 ${active ? "border-primary-200" : "border-ink-faint"}`}>
+                <View className={`pt-4 border-t gap-2 ${active ? "border-primary-100" : "border-ink-faint"}`}>
                   {role.perks.map((perk) => (
                     <View key={perk} className="flex-row items-center gap-2">
                       <Ionicons
@@ -142,7 +142,7 @@ export default function RoleSelectScreen() {
                         size={16}
                         color={active ? appColors.primary[600] : appColors.ink.subtle}
                       />
-                      <Text className={`text-sm ${active ? "text-primary-800" : "text-ink-muted"}`}>
+                      <Text className={`text-sm ${active ? "text-primary-700" : "text-ink-muted"}`}>
                         {perk}
                       </Text>
                     </View>

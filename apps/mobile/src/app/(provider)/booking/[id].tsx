@@ -278,17 +278,23 @@ export default function ProviderBookingDetailScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Text className="text-2xl font-bold text-ink mb-1" style={{ letterSpacing: -0.5 }}>
-        Job details
+        Job
       </Text>
       {booking ? (
-        <Text className="text-ink-muted text-sm mb-6">{statusLabel(effectiveStatus ?? booking.status)}</Text>
+        <View className="flex-row items-center gap-2 mb-6">
+          <View className="bg-primary-50 rounded-full px-3 py-1">
+            <Text className="text-primary-700 text-xs font-semibold">
+              {statusLabel(effectiveStatus ?? booking.status)}
+            </Text>
+          </View>
+        </View>
       ) : (
         <View className="mb-6 h-[18px]" />
       )}
 
       {!enabled || isLoading ? (
         <View className="py-20 items-center">
-          <ActivityIndicator />
+          <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError || !booking ? (
         <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
@@ -312,18 +318,18 @@ export default function ProviderBookingDetailScreen() {
           ) : null}
 
           <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
-            <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2">Service</Text>
+            <Text className="text-xs font-semibold text-primary-600 mb-2">Service</Text>
             <Text className="text-ink font-bold text-lg">{booking.serviceTitle}</Text>
             <View className="flex-row items-center gap-2 mt-3">
-              <Ionicons name="person-outline" size={18} color={appColors.ink.muted} />
+              <Ionicons name="person-outline" size={18} color={appColors.primary[600]} />
               <Text className="text-ink-soft text-sm flex-1">{customerName || "Customer"}</Text>
             </View>
-            <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2 mt-4">
+            <Text className="text-xs font-semibold text-primary-600 mb-2 mt-4">
               Scheduled time
             </Text>
             <Text className="text-ink font-bold text-base">{formatWhen(booking.scheduledAt)}</Text>
             <View className="flex-row items-start gap-2 mt-4">
-              <Ionicons name="location-outline" size={20} color={appColors.ink.muted} />
+              <Ionicons name="location-outline" size={20} color={appColors.primary[600]} />
               <Text className="text-ink-soft text-sm flex-1 leading-5">{booking.address}</Text>
             </View>
             {booking.notes ? (

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   ScrollView,
   Text,
@@ -19,6 +18,7 @@ import { io, type Socket } from "socket.io-client";
 import { useBooking, useCreateReview } from "@repo/api-client";
 import { isLiveMapTrackingStatus, isTerminalBookingStatus, useBookingTracking } from "@repo/hooks";
 import type { BookingWithReview } from "@repo/schemas";
+import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
@@ -112,19 +112,19 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
         rating,
         comment: comment.trim().length > 0 ? comment.trim() : undefined,
       });
-      Alert.alert("Thanks!", "Your review helps other customers choose great providers.");
-    } catch {
-      Alert.alert("Could not submit review", "Check your connection and try again.");
+      showToast("success", "Thanks for your review", "Your feedback helps other customers.");
+    } catch (error: unknown) {
+      reportError(error, { action: "submit_review", extra: { bookingId: booking.id } });
+      showToast("error", "Could not submit review", "Check your connection and try again.");
     }
   };
 
   return (
     <View className="bg-canvas-raised rounded-2xl border border-primary-100 p-4 mt-4">
-      <Text className="text-ink font-semibold text-base mb-1">Rate this visit</Text>
+      <Text className="text-ink font-semibold text-base mb-1">How was your service?</Text>
       <Text className="text-ink-muted text-sm mb-4 leading-5">
-        How did your completed service go? Your rating and optional feedback appear on the provider’s profile.
+        Rate this visit. Your feedback appears on the provider’s profile.
       </Text>
-      <Text className="text-ink-soft text-xs font-semibold uppercase tracking-wide mb-2">Tap a star</Text>
       <View className="flex-row items-center gap-2 mb-4">
         {STAR_VALUES.map((v) => (
           <TouchableOpacity
@@ -142,11 +142,9 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
           </TouchableOpacity>
         ))}
       </View>
-      <Text className="text-ink-soft text-xs font-semibold uppercase tracking-wide mb-2">
-        Comment (optional)
-      </Text>
+      <Text className="text-ink-soft text-xs font-semibold mb-2">Comment (optional)</Text>
       <TextInput
-        className="bg-canvas border border-ink-faint rounded-xl px-3 py-3 text-ink text-sm min-h-[88px]"
+        className="bg-canvas border border-ink-faint rounded-2xl px-3 py-3 text-ink text-sm min-h-[88px]"
         placeholder="Share what went well or what could improve…"
         placeholderTextColor={appColors.ink.subtle}
         style={textInputBaselineStyle}
@@ -158,7 +156,7 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
         accessibilityLabel="Optional review comment"
       />
       <TouchableOpacity
-        className={`mt-4 rounded-xl py-3.5 items-center ${
+        className={`mt-4 rounded-2xl py-3.5 items-center ${
           rating < 1 || createReview.isPending ? "bg-ink-faint" : "bg-primary-600"
         }`}
         disabled={rating < 1 || createReview.isPending}
@@ -327,17 +325,23 @@ export default function BookingDetailScreen() {
       showsVerticalScrollIndicator={false}
     >
       <Text className="text-2xl font-bold text-ink mb-1" style={{ letterSpacing: -0.5 }}>
-        Booking details
+        Appointment
       </Text>
       {booking ? (
-        <Text className="text-ink-muted text-sm mb-6">{statusLabel(effectiveStatus ?? booking.status)}</Text>
+        <View className="flex-row items-center gap-2 mb-6">
+          <View className="bg-primary-50 rounded-full px-3 py-1">
+            <Text className="text-primary-700 text-xs font-semibold">
+              {statusLabel(effectiveStatus ?? booking.status)}
+            </Text>
+          </View>
+        </View>
       ) : (
         <View className="mb-6 h-[18px]" />
       )}
 
       {!enabled || isLoading ? (
         <View className="py-20 items-center">
-          <ActivityIndicator />
+          <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError || !booking ? (
         <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
@@ -347,6 +351,18 @@ export default function BookingDetailScreen() {
         </View>
       ) : (
         <>
+          <View className="flex-row gap-3 mb-4">
+            <TouchableOpacity
+              className="flex-1 flex-row items-center justify-center gap-2 bg-canvas-raised border border-primary-600 rounded-2xl py-3.5"
+              onPress={() => router.push(`/(customer)/conversation/new?bookingId=${bookingId}`)}
+              accessibilityRole="button"
+              accessibilityLabel="Message provider"
+            >
+              <Ionicons name="chatbubble-outline" size={18} color={appColors.primary[600]} />
+              <Text className="text-primary-600 font-semibold text-sm">Message</Text>
+            </TouchableOpacity>
+          </View>
+
           <BookingStatusTimeline status={effectiveStatus ?? booking.status} />
 
           {shouldShowLiveMap ? (
@@ -362,12 +378,10 @@ export default function BookingDetailScreen() {
           ) : null}
 
           <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
-            <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-2">
-              Scheduled time
-            </Text>
+            <Text className="text-xs font-semibold text-primary-600 mb-2">Scheduled time</Text>
             <Text className="text-ink font-bold text-lg">{formatWhen(booking.scheduledAt)}</Text>
             <View className="flex-row items-start gap-2 mt-4">
-              <Ionicons name="location-outline" size={20} color={appColors.ink.muted} />
+              <Ionicons name="location-outline" size={20} color={appColors.primary[600]} />
               <Text className="text-ink-soft text-sm flex-1 leading-5">{booking.address}</Text>
             </View>
             {booking.notes ? (
@@ -383,15 +397,19 @@ export default function BookingDetailScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            className="flex-row items-center justify-center gap-2 bg-canvas-raised border border-primary-600 rounded-2xl py-3.5 mt-4"
-            onPress={() => router.push(`/(customer)/conversation/new?bookingId=${bookingId}`)}
-            accessibilityRole="button"
-            accessibilityLabel="Message provider"
-          >
-            <Ionicons name="chatbubble-outline" size={18} color={appColors.primary[600]} />
-            <Text className="text-primary-600 font-semibold text-sm">Message provider</Text>
-          </TouchableOpacity>
+          <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
+            <Text className="text-ink font-semibold mb-3">Before you go</Text>
+            {[
+              "Keep your phone nearby for provider updates",
+              "Ensure the service location is accessible",
+              "Message the provider if anything changes",
+            ].map((line) => (
+              <View key={line} className="flex-row items-start gap-2.5 mb-2.5">
+                <Ionicons name="checkmark-circle-outline" size={18} color={appColors.primary[600]} />
+                <Text className="text-ink-soft text-sm flex-1 leading-5">{line}</Text>
+              </View>
+            ))}
+          </View>
 
           <CustomerReviewBlock booking={booking} />
         </>

@@ -76,7 +76,7 @@ export default function ProviderProfileScreen() {
   if (isLoading) {
     return (
       <View className="flex-1 bg-canvas items-center justify-center">
-        <ActivityIndicator />
+        <ActivityIndicator color={appColors.primary[600]} />
       </View>
     );
   }
@@ -95,7 +95,9 @@ export default function ProviderProfileScreen() {
         />
       }
     >
-      <Text className="text-3xl font-bold text-ink mb-6">Provider Profile</Text>
+      <Text className="text-3xl font-bold text-ink mb-6" style={{ letterSpacing: -0.5 }}>
+        Profile
+      </Text>
 
       <TouchableOpacity
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 flex-row items-center justify-between mb-6 active:opacity-90"
@@ -163,7 +165,7 @@ export default function ProviderProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
         <Text className="text-ink text-lg font-semibold mb-4">Personal information</Text>
         <ProfileField label="First name" value={firstName} />
         <ProfileField label="Last name" value={lastName} />
@@ -171,8 +173,8 @@ export default function ProviderProfileScreen() {
         <ProfileField label="Phone number" value={phone} />
       </View>
 
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
-        <Text className="text-xl font-bold text-ink mb-4">Provider details</Text>
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
+        <Text className="text-lg font-bold text-ink mb-4">Provider details</Text>
         <ProfileField label="Experience (years)" value={experienceYears} />
         <ProfileField label="Service area" value={serviceArea} />
         <ProfileField label="Own tools" value={hasTools ? "Yes" : "No"} />
@@ -197,7 +199,7 @@ export default function ProviderProfileScreen() {
         accessibilityRole="button"
         accessibilityLabel="Edit profile information"
       >
-        <Text className="text-white font-semibold">EDIT INFO</Text>
+        <Text className="text-white font-semibold">Edit info</Text>
       </TouchableOpacity>
 
       <TouchableOpacity

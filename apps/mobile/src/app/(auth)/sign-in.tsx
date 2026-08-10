@@ -120,8 +120,8 @@ export default function SignInScreen() {
       >
         {/* Back */}
         <Link href="/(auth)/welcome" asChild>
-          <TouchableOpacity className="mx-5 mb-8 w-10 h-10 rounded-full bg-canvas-sunken items-center justify-center">
-            <Ionicons name="arrow-back" size={20} color={appColors.ink.DEFAULT} />
+          <TouchableOpacity className="mx-5 mb-8 w-10 h-10 rounded-full bg-primary-50 border border-primary-100 items-center justify-center">
+            <Ionicons name="arrow-back" size={20} color={appColors.primary[600]} />
           </TouchableOpacity>
         </Link>
 

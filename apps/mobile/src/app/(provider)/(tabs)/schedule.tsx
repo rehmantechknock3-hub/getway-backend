@@ -141,7 +141,7 @@ export default function ScheduleScreen() {
       }
       showsVerticalScrollIndicator={false}
     >
-      <Text className="text-3xl font-bold text-ink mb-2">Schedule</Text>
+      <Text className="text-3xl font-bold text-ink mb-2" style={{ letterSpacing: -0.5 }}>Schedule</Text>
       <Text className="text-ink-muted text-sm mb-6">
         Control your availability and let customers know when you are ready.
       </Text>
@@ -165,7 +165,7 @@ export default function ScheduleScreen() {
             size={16}
             color={isOnline ? appColors.semantic.success : appColors.ink.subtle}
           />
-          <Text className={`text-sm font-medium ${isOnline ? "text-green-700" : "text-ink-muted"}`}>
+          <Text className={`text-sm font-medium ${isOnline ? "text-primary-700" : "text-ink-muted"}`}>
             {isOnline ? "You are currently online and visible to customers." : "You are offline for new requests."}
           </Text>
         </View>
@@ -180,7 +180,7 @@ export default function ScheduleScreen() {
           {weeklyPlan.map((slot, index) => (
             <View
               key={slot.day}
-              className="bg-canvas border border-ink-faint rounded-xl px-3 py-2.5"
+              className="bg-canvas border border-ink-faint rounded-2xl px-3 py-2.5"
             >
               <View className="flex-row items-center justify-between">
                 <Text className="text-ink font-medium">{slot.day}</Text>
@@ -238,7 +238,7 @@ export default function ScheduleScreen() {
           ))}
         </View>
         <TouchableOpacity
-          className="mt-3 bg-primary-600 rounded-xl py-3 items-center"
+          className="mt-3 bg-primary-600 rounded-2xl py-3 items-center"
           disabled={isSavingPlan}
           style={{ opacity: isSavingPlan ? 0.65 : 1 }}
           onPress={() => void handleSaveWeeklyPlan()}

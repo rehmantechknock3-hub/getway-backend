@@ -79,14 +79,14 @@ export default function CustomerProviderReviewsScreen() {
           <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError ? (
-        <View className="bg-canvas-raised rounded-3xl p-6 border border-ink-faint mt-4">
+        <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint mt-4">
           <Text className="text-ink text-center font-medium mb-2">Could not load reviews</Text>
           <Text className="text-ink-muted text-sm text-center">
             Please try again in a moment.
           </Text>
         </View>
       ) : reviews.length === 0 ? (
-        <View className="bg-canvas-raised rounded-3xl p-8 border border-ink-faint items-center mt-4">
+        <View className="bg-canvas-raised rounded-2xl p-8 border border-ink-faint items-center mt-4">
           <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
             <Ionicons name="star-outline" size={30} color={appColors.primary[600]} />
           </View>
@@ -102,7 +102,7 @@ export default function CustomerProviderReviewsScreen() {
             return (
               <View
                 key={item.id}
-                className="bg-canvas-raised rounded-3xl border border-ink-faint p-4"
+                className="bg-canvas-raised rounded-2xl border border-ink-faint p-4"
               >
                 <View className="flex-row items-start justify-between gap-3 mb-2">
                   <View className="flex-1 min-w-0">
@@ -143,11 +143,11 @@ export default function CustomerProviderReviewsScreen() {
           <TouchableOpacity
             onPress={() => setPage((p) => Math.max(1, p - 1))}
             disabled={!canPrev || isFetching}
-            className={`px-4 py-2.5 rounded-xl border ${
-              canPrev ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised"
+            className={`px-4 py-2.5 rounded-2xl border ${
+              canPrev ? "border-primary-600 bg-primary-50" : "border-ink-faint bg-canvas-raised"
             }`}
           >
-            <Text className={canPrev ? "text-primary-700 font-semibold" : "text-ink-muted"}>
+            <Text className={canPrev ? "text-primary-600 font-semibold" : "text-ink-muted"}>
               Previous
             </Text>
           </TouchableOpacity>
@@ -157,11 +157,11 @@ export default function CustomerProviderReviewsScreen() {
           <TouchableOpacity
             onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={!canNext || isFetching}
-            className={`px-4 py-2.5 rounded-xl border ${
-              canNext ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised"
+            className={`px-4 py-2.5 rounded-2xl border ${
+              canNext ? "border-primary-600 bg-primary-50" : "border-ink-faint bg-canvas-raised"
             }`}
           >
-            <Text className={canNext ? "text-primary-700 font-semibold" : "text-ink-muted"}>
+            <Text className={canNext ? "text-primary-600 font-semibold" : "text-ink-muted"}>
               Next
             </Text>
           </TouchableOpacity>

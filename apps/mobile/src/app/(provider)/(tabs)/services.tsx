@@ -22,6 +22,9 @@ import {
   useMe,
   useMyProviderServices,
 } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { reportError } from "@repo/utils";
+
 import { appColors } from "../../../styles/colors";
 
 function formatPrice(amount: number, currency: string | undefined): string {
@@ -96,9 +99,17 @@ export default function ProviderServicesScreen() {
           onPress: () => {
             void deleteService
               .mutateAsync(serviceId)
-              .then(() => servicesQuery.refetch())
-              .catch(() => {
-                Alert.alert("Could not delete service", "Please try again.");
+              .then(() => {
+                showToast("success", "Service deleted");
+                return servicesQuery.refetch();
+              })
+              .catch((error: unknown) => {
+                reportError(error, {
+                  screen: "ProviderServices",
+                  action: "deleteService",
+                  extra: { serviceId, serviceTitle },
+                });
+                showToast("error", "Could not delete service", "Please try again.");
               });
           },
         },
@@ -136,7 +147,7 @@ export default function ProviderServicesScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add service"
             >
-              <Ionicons name="add-circle" size={34} color={appColors.primary[600]} />
+              <Ionicons name="add-circle-outline" size={32} color={appColors.primary[600]} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -147,7 +158,7 @@ export default function ProviderServicesScreen() {
 
         {!meEnabled || meLoading ? (
           <View className="py-16 items-center">
-            <ActivityIndicator />
+            <ActivityIndicator color={appColors.primary[600]} />
           </View>
         ) : !isProviderSession ? (
           <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-5">
@@ -199,7 +210,7 @@ export default function ProviderServicesScreen() {
               <View
                 key={s.id}
                 className={`bg-canvas-raised rounded-2xl p-4 ${
-                  incomplete ? "border-2 border-red-400" : "border border-ink-faint"
+                  incomplete ? "border-2 border-primary-600" : "border border-ink-faint"
                 }`}
               >
                 <View className="flex-row items-start justify-between gap-3">
@@ -207,7 +218,7 @@ export default function ProviderServicesScreen() {
                     <Text className="text-ink font-semibold text-base">{s.title}</Text>
                     <Text className="text-ink-muted text-xs mt-1">{s.categoryName}</Text>
                     {incomplete ? (
-                      <Text className="text-red-700 text-sm font-semibold mt-2 leading-5">
+                      <Text className="text-primary-700 text-sm font-semibold mt-2 leading-5">
                         Add a price and duration for this service to publish it.
                       </Text>
                     ) : null}
@@ -216,7 +227,7 @@ export default function ProviderServicesScreen() {
                     ) : null}
                   </View>
                   <Text
-                    className={`font-bold shrink-0 ${incomplete ? "text-red-600" : "text-primary-600"}`}
+                    className={`font-bold shrink-0 ${incomplete ? "text-ink-muted" : "text-primary-600"}`}
                   >
                     {s.price > 0 ? formatPrice(s.price, s.priceCurrency) : "Set price"}
                   </Text>
@@ -229,10 +240,10 @@ export default function ProviderServicesScreen() {
                     </Text>
                   </View>
                   <View
-                    className={`px-2 py-0.5 rounded-full ${s.isActive ? "bg-green-100" : "bg-ink-faint"}`}
+                    className={`px-2 py-0.5 rounded-full ${s.isActive ? "bg-primary-50" : "bg-ink-faint"}`}
                   >
                     <Text
-                      className={`text-xs font-semibold ${s.isActive ? "text-green-800" : "text-ink-muted"}`}
+                      className={`text-xs font-semibold ${s.isActive ? "text-primary-700" : "text-ink-muted"}`}
                     >
                       {s.isActive ? "Active" : "Hidden"}
                     </Text>
@@ -255,8 +266,8 @@ export default function ProviderServicesScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Delete ${s.title}`}
                   >
-                    <Ionicons name="trash-outline" size={14} color={appColors.primary[700]} />
-                    <Text className="text-primary-700 text-xs font-semibold">Delete</Text>
+                    <Ionicons name="trash-outline" size={14} color={appColors.semantic.destructive} />
+                    <Text className="text-ink-muted text-xs font-semibold">Delete</Text>
                   </TouchableOpacity>
                 </View>
               </View>

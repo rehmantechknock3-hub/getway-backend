@@ -186,10 +186,10 @@ export default function SignUpScreen() {
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity
-            className="mx-5 mb-8 w-10 h-10 rounded-full bg-canvas-sunken items-center justify-center"
+            className="mx-5 mb-8 w-10 h-10 rounded-full bg-primary-50 border border-primary-100 items-center justify-center"
             onPress={() => setStep("details")}
           >
-            <Ionicons name="arrow-back" size={20} color={appColors.ink.DEFAULT} />
+            <Ionicons name="arrow-back" size={20} color={appColors.primary[600]} />
           </TouchableOpacity>
 
           <View className="px-6">
@@ -258,8 +258,8 @@ export default function SignUpScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Link href="/(auth)/welcome" asChild>
-          <TouchableOpacity className="mx-5 mb-8 w-10 h-10 rounded-full bg-canvas-sunken items-center justify-center">
-            <Ionicons name="arrow-back" size={20} color={appColors.ink.DEFAULT} />
+          <TouchableOpacity className="mx-5 mb-8 w-10 h-10 rounded-full bg-primary-50 border border-primary-100 items-center justify-center">
+            <Ionicons name="arrow-back" size={20} color={appColors.primary[600]} />
           </TouchableOpacity>
         </Link>
 

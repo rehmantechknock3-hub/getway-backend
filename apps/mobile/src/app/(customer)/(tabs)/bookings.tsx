@@ -16,9 +16,9 @@ import { Ionicons } from "@expo/vector-icons";
 
 import type { Booking } from "@repo/schemas";
 import { useBookings } from "@repo/api-client";
-import { appColors } from "../../../styles/colors";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
+import { appColors } from "../../../styles/colors";
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -42,15 +42,15 @@ function formatMoney(n: number, currency?: string): string {
 function statusBadgeClasses(status: Booking["status"]): { box: string; text: string; label: string } {
   switch (status) {
     case "PENDING":
-      return { box: "bg-amber-100", text: "text-amber-900", label: "Pending" };
+      return { box: "bg-canvas-sunken", text: "text-ink-soft", label: "Pending" };
     case "ACCEPTED":
-      return { box: "bg-primary-50", text: "text-primary-800", label: "Accepted" };
+      return { box: "bg-primary-50", text: "text-primary-700", label: "Accepted" };
     case "IN_PROGRESS":
-      return { box: "bg-blue-100", text: "text-blue-900", label: "In progress" };
+      return { box: "bg-primary-100", text: "text-primary-800", label: "In progress" };
     case "COMPLETED":
-      return { box: "bg-green-100", text: "text-green-900", label: "Completed" };
+      return { box: "bg-primary-50", text: "text-primary-700", label: "Completed" };
     case "REJECTED":
-      return { box: "bg-red-100", text: "text-red-900", label: "Declined" };
+      return { box: "bg-canvas-sunken", text: "text-ink", label: "Declined" };
     case "CANCELLED":
       return { box: "bg-ink-faint", text: "text-ink-muted", label: "Cancelled" };
     default:
@@ -90,22 +90,22 @@ export default function BookingsScreen() {
           My bookings
         </Text>
         <Text className="text-ink-muted text-sm mb-8">
-          Your booking history — tap a booking to track status from request to completion.
+          Tap a booking to track status from request to completion.
         </Text>
 
         {!enabled || isLoading ? (
           <View className="py-16 items-center">
-            <ActivityIndicator />
+            <ActivityIndicator color={appColors.primary[600]} />
           </View>
         ) : isError ? (
-          <View className="bg-canvas-raised rounded-3xl p-6 border border-ink-faint">
+          <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
             <Text className="text-ink text-center font-medium mb-2">Could not load bookings</Text>
             <Text className="text-ink-muted text-sm text-center">
-              Pull to refresh, or confirm you are signed in as a customer and the API is reachable.
+              Pull to refresh, or confirm you are signed in and the API is reachable.
             </Text>
           </View>
         ) : !data?.data.length ? (
-          <View className="bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center">
+          <View className="bg-canvas-raised rounded-2xl p-10 border border-ink-faint items-center">
             <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
               <Ionicons name="calendar-outline" size={30} color={appColors.primary[600]} />
             </View>
@@ -115,23 +115,21 @@ export default function BookingsScreen() {
             </Text>
           </View>
         ) : (
-          <View className="gap-4">
+          <View className="gap-3">
             {data.data.map((b) => {
               const badge = statusBadgeClasses(b.status);
               return (
                 <TouchableOpacity
                   key={b.id}
                   activeOpacity={0.92}
-                  className="bg-canvas-raised rounded-3xl p-5 border border-ink-faint shadow-sm"
+                  className="bg-canvas-raised rounded-2xl p-4 border border-ink-faint"
                   onPress={() => router.push(`/(customer)/booking/${b.id}`)}
                   accessibilityRole="button"
                   accessibilityLabel={`Booking ${formatWhen(b.scheduledAt)}, ${badge.label}. Tap to track status.`}
                 >
                   <View className="flex-row items-start justify-between gap-3 mb-2">
                     <View className="flex-1">
-                      <Text className="text-xs font-semibold text-primary-600 uppercase tracking-wide mb-1">
-                        Scheduled
-                      </Text>
+                      <Text className="text-xs font-semibold text-primary-600 mb-1">Scheduled</Text>
                       <Text className="text-ink font-bold text-base">{formatWhen(b.scheduledAt)}</Text>
                     </View>
                     <View className={`px-3 py-1 rounded-full ${badge.box}`}>
@@ -140,11 +138,13 @@ export default function BookingsScreen() {
                   </View>
                   <BookingStatusProgressDots status={b.status} />
                   <View className="flex-row items-start gap-2 mb-2 mt-3">
-                    <Ionicons name="location-outline" size={18} color={appColors.ink.muted} />
+                    <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
                     <Text className="text-ink-soft text-sm flex-1 leading-5">{b.address}</Text>
                   </View>
                   {b.notes ? (
-                    <Text className="text-ink-muted text-xs leading-4 mb-3 italic">&ldquo;{b.notes}&rdquo;</Text>
+                    <Text className="text-ink-muted text-xs leading-4 mb-3 italic">
+                      &ldquo;{b.notes}&rdquo;
+                    </Text>
                   ) : null}
                   <View className="flex-row items-center justify-between pt-3 border-t border-ink-faint">
                     <Text className="text-ink-subtle text-xs">Total</Text>
@@ -153,7 +153,7 @@ export default function BookingsScreen() {
                     </Text>
                   </View>
                   <View className="flex-row items-center justify-end gap-1 mt-2">
-                    <Text className="text-primary-600 text-xs font-semibold">Track status</Text>
+                    <Text className="text-primary-600 text-xs font-semibold">View appointment</Text>
                     <Ionicons name="chevron-forward" size={14} color={appColors.primary[600]} />
                   </View>
                 </TouchableOpacity>

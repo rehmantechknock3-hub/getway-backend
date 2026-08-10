@@ -23,6 +23,8 @@ import {
   useProviderServiceCategories,
   useUpdateProviderService,
 } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { reportError } from "@repo/utils";
 
 import { textInputBaselineStyle } from "../styles/text-input";
 import { appColors } from "../styles/colors";
@@ -115,7 +117,9 @@ export function ProviderServiceForm(props: Props) {
         return list[0]?.id ?? "";
       });
     } catch (e: unknown) {
-      Alert.alert(
+      reportError(e, { screen: "ProviderServiceForm", action: "deleteCategory" });
+      showToast(
+        "error",
         "Could not delete category",
         apiErrorMessage(e) ?? "Check your connection and try again."
       );
@@ -130,15 +134,16 @@ export function ProviderServiceForm(props: Props) {
       setNewCategoryName("");
       setCategoryId(row.id);
       await refetchCategories();
-    } catch {
-      Alert.alert("Could not create category", "Try a different name or check your connection.");
+    } catch (e: unknown) {
+      reportError(e, { screen: "ProviderServiceForm", action: "createCategory" });
+      showToast("error", "Could not create category", "Try a different name or check your connection.");
     }
   }
 
   async function handleCreateCategory() {
     const t = newCategoryName.trim();
     if (!t) {
-      Alert.alert("Category name", "Enter a name for the new category.");
+      showToast("error", "Category name", "Enter a name for the new category.");
       return;
     }
     await handleCreateCategoryByName(t);
@@ -157,19 +162,19 @@ export function ProviderServiceForm(props: Props) {
     const priceNum = Number.parseFloat(price);
     const durNum = Number.parseInt(duration, 10);
     if (!title.trim()) {
-      Alert.alert("Required", "Enter a service title.");
+      showToast("error", "Required", "Enter a service title.");
       return;
     }
     if (!categoryId) {
-      Alert.alert("Category", "Select a category below, or create a new one.");
+      showToast("error", "Category", "Select a category below, or create a new one.");
       return;
     }
     if (Number.isNaN(priceNum) || priceNum <= 0) {
-      Alert.alert("Price", "Enter a valid price greater than zero.");
+      showToast("error", "Price", "Enter a valid price greater than zero.");
       return;
     }
     if (Number.isNaN(durNum) || durNum <= 0) {
-      Alert.alert("Duration", "Enter duration in whole minutes (e.g. 60).");
+      showToast("error", "Duration", "Enter duration in whole minutes (e.g. 60).");
       return;
     }
 
@@ -200,9 +205,11 @@ export function ProviderServiceForm(props: Props) {
           },
         });
       }
+      showToast("success", "Service saved");
       router.back();
-    } catch {
-      Alert.alert("Could not save", "Check your connection and try again.");
+    } catch (e: unknown) {
+      reportError(e, { screen: "ProviderServiceForm", action: "saveService" });
+      showToast("error", "Could not save", "Check your connection and try again.");
     }
   }
 
