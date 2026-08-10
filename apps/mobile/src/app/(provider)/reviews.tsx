@@ -79,14 +79,14 @@ export default function ProviderReviewsScreen() {
           <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError ? (
-        <View className="bg-canvas-raised rounded-3xl p-6 border border-ink-faint mt-4">
+        <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint mt-4">
           <Text className="text-ink text-center font-medium mb-2">Could not load reviews</Text>
           <Text className="text-ink-muted text-sm text-center">
             Pull to refresh, or confirm you are signed in as a provider and the API is running.
           </Text>
         </View>
       ) : reviews.length === 0 ? (
-        <View className="bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center mt-4">
+        <View className="bg-canvas-raised rounded-2xl p-10 border border-ink-faint items-center mt-4">
           <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
             <Ionicons name="star-outline" size={30} color={appColors.primary[600]} />
           </View>
@@ -102,7 +102,7 @@ export default function ProviderReviewsScreen() {
             return (
               <View
                 key={item.id}
-                className="bg-canvas-raised rounded-3xl border border-ink-faint p-4"
+                className="bg-canvas-raised rounded-2xl border border-ink-faint p-4"
               >
                 <View className="flex-row items-start justify-between gap-3 mb-2">
                   <View className="flex-1 min-w-0">

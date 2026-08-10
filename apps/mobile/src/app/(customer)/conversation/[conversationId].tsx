@@ -100,8 +100,7 @@ function OutgoingBubble({ msg }: { msg: ProcessedMessage }) {
       >
         <Text className="text-white text-sm leading-5">{msg.content}</Text>
         <Text
-          className="text-xs text-right mt-1"
-          style={{ color: "rgba(255,255,255,0.65)", fontSize: 10 }}
+          className="text-primary-100 text-xs text-right mt-1"
         >
           {formatTime(msg.createdAt)}
         </Text>
@@ -144,15 +143,10 @@ function IncomingBubble({
 
       {/* Bubble */}
       <View
-        className="bg-canvas-raised px-3.5 pt-2.5 pb-2"
+        className="bg-canvas-raised px-3.5 pt-2.5 pb-2 border border-ink-faint"
         style={{
           borderRadius: 18,
           borderBottomLeftRadius: msg.isLast ? 4 : 18,
-          shadowColor: "#000",
-          shadowOpacity: 0.07,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 1 },
-          elevation: 2,
         }}
       >
         <Text className="text-ink text-sm leading-5">{msg.content}</Text>
@@ -310,11 +304,6 @@ export default function CustomerConversationScreen() {
         style={{
           paddingTop: insets.top + 10,
           paddingBottom: 12,
-          shadowColor: "#000",
-          shadowOpacity: 0.05,
-          shadowRadius: 6,
-          shadowOffset: { width: 0, height: 2 },
-          elevation: 3,
         }}
       >
         <TouchableOpacity
@@ -324,7 +313,7 @@ export default function CustomerConversationScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={28} color={appColors.ink.DEFAULT} />
+          <Ionicons name="chevron-back" size={28} color={appColors.primary[600]} />
         </TouchableOpacity>
 
         <View
@@ -343,7 +332,11 @@ export default function CustomerConversationScreen() {
           <View className="flex-row items-center mt-0.5 gap-1.5">
             <View
               className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: socketConnected ? "#22C55E" : appColors.ink.faint }}
+              style={{
+                backgroundColor: socketConnected
+                  ? appColors.semantic.success
+                  : appColors.ink.faint,
+              }}
             />
             <Text className="text-ink-muted text-xs">
               {socketConnected ? "Online" : "Connecting…"}
@@ -455,7 +448,7 @@ export default function CustomerConversationScreen() {
             <Ionicons
               name="send"
               size={17}
-              color={canSend ? "#FFFFFF" : appColors.ink.subtle}
+              color={canSend ? appColors.onPrimary : appColors.ink.subtle}
               style={{ marginLeft: 2 }}
             />
           </TouchableOpacity>

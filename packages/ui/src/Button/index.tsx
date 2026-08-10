@@ -1,4 +1,5 @@
 import React from "react";
+
 import { Pressable, Text, ActivityIndicator } from "react-native";
 import type { PressableProps } from "react-native";
 
@@ -12,6 +13,10 @@ type ButtonProps = PressableProps & {
   isLoading?: boolean;
   fullWidth?: boolean;
 };
+
+/** Spinner colors — Ionicons/ActivityIndicator need runtime hex; match theme primary / onPrimary */
+const SPINNER_ON_PRIMARY = "#FFFFFF";
+const SPINNER_PRIMARY = "#2547E6";
 
 const variantClasses: Record<Variant, string> = {
   primary:     "bg-primary-600 active:bg-primary-700",
@@ -67,7 +72,7 @@ export function Button({
       {isLoading ? (
         <ActivityIndicator
           size="small"
-          color={variant === "outline" || variant === "ghost" ? "#2563eb" : "#ffffff"}
+          color={variant === "outline" || variant === "ghost" ? SPINNER_PRIMARY : SPINNER_ON_PRIMARY}
         />
       ) : (
         <Text className={[textClasses[variant], textSizeClasses[size]].join(" ")}>

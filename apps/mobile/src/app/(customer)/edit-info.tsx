@@ -168,10 +168,10 @@ export default function CustomerEditInfoScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5 mt-2">
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5 mt-2">
         <View className="flex-row items-center gap-3 mb-4">
-          <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
-            <Ionicons name="person-outline" size={22} />
+          <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
+            <Ionicons name="person-outline" size={22} color={appColors.primary[600]} />
           </View>
           <View>
             <Text className="text-ink text-lg font-semibold">Personal information</Text>
@@ -226,14 +226,14 @@ export default function CustomerEditInfoScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
         <View className="flex-row items-center justify-between mb-4">
           <View className="flex-row items-center gap-2">
-            <Ionicons name="location-outline" size={18} />
-            <Text className="text-xl font-bold text-ink">Saved Locations</Text>
+            <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
+            <Text className="text-lg font-bold text-ink">Saved Locations</Text>
           </View>
-          <TouchableOpacity onPress={addLocation} className="bg-primary-100 rounded-xl px-3 py-1.5">
-            <Text className="text-primary-700 font-semibold text-sm">+ Add</Text>
+          <TouchableOpacity onPress={addLocation} className="bg-primary-50 border border-primary-100 rounded-2xl px-3 py-1.5">
+            <Text className="text-primary-600 font-semibold text-sm">+ Add</Text>
           </TouchableOpacity>
         </View>
 
@@ -283,10 +283,10 @@ export default function CustomerEditInfoScreen() {
         </TouchableOpacity>
       </View>
 
-      <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
         <View className="flex-row items-center gap-2 mb-4">
-          <Ionicons name="car-sport-outline" size={18} />
-          <Text className="text-xl font-bold text-ink">Vehicle Preferences</Text>
+          <Ionicons name="car-sport-outline" size={18} color={appColors.primary[600]} />
+          <Text className="text-lg font-bold text-ink">Vehicle Preferences</Text>
         </View>
 
         <Text className="text-ink text-sm font-medium mb-2">Primary location</Text>

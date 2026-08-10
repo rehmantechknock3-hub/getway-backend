@@ -18,7 +18,7 @@ export function Card({ children, padding = "md", className = "", ...props }: Car
   return (
     <View
       className={[
-        "bg-white rounded-2xl shadow-sm border border-gray-100",
+        "bg-canvas-raised rounded-2xl shadow-sm border border-ink-faint",
         paddingClasses[padding],
         className,
       ].join(" ")}

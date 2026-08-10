@@ -151,10 +151,10 @@ export default function CustomerOnboardingScreen() {
           </TouchableOpacity>
         ) : null}
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
-            <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
-              <Ionicons name="car-sport-outline" size={22} />
+            <View className="w-11 h-11 rounded-2xl bg-primary-50 border border-primary-100 items-center justify-center">
+              <Ionicons name="car-sport-outline" size={22} color={appColors.primary[600]} />
             </View>
             <View className="flex-1">
               <Text className="text-2xl font-bold text-ink">Tell us about your needs</Text>
@@ -260,14 +260,14 @@ export default function CustomerOnboardingScreen() {
                     <TouchableOpacity
                       key={company}
                       className={`rounded-2xl border px-4 py-3 flex-row items-center justify-between ${
-                        selected ? "border-primary-500 bg-primary-50" : "border-ink-faint bg-canvas-raised"
+                        selected ? "border-primary-600 bg-primary-50" : "border-ink-faint bg-canvas-raised"
                       }`}
                       onPress={() => {
                         setCarCompany(company);
                         setShowCompanyModal(false);
                       }}
                     >
-                      <Text className={selected ? "text-primary-700 font-semibold" : "text-ink"}>{company}</Text>
+                      <Text className={selected ? "text-primary-600 font-semibold" : "text-ink"}>{company}</Text>
                       {selected ? <Ionicons name="checkmark-circle" size={18} /> : null}
                     </TouchableOpacity>
                   );

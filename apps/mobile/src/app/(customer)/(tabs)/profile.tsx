@@ -83,7 +83,9 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="mb-6">
-          <Text className="text-3xl font-bold text-ink mb-1">Profile Management</Text>
+          <Text className="text-3xl font-bold text-ink mb-1" style={{ letterSpacing: -0.5 }}>
+            Profile
+          </Text>
           <Text className="text-ink-muted text-base">Manage your account and saved places.</Text>
         </View>
 
@@ -107,10 +109,10 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={22} color={appColors.ink.subtle} />
         </TouchableOpacity>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <View className="flex-row items-center gap-3 mb-4">
-            <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
-              <Ionicons name="person-outline" size={22} />
+            <View className="w-11 h-11 rounded-full bg-primary-50 items-center justify-center border border-primary-100">
+              <Ionicons name="person-outline" size={22} color={appColors.primary[600]} />
             </View>
             <View className="flex-1">
               <Text className="text-ink text-lg font-semibold">
@@ -126,10 +128,10 @@ export default function ProfileScreen() {
           <ProfileField label="Phone number" value={phone} />
         </View>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <View className="flex-row items-center gap-2 mb-4">
-            <Ionicons name="location-outline" size={18} />
-            <Text className="text-xl font-bold text-ink">Saved Locations</Text>
+            <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
+            <Text className="text-lg font-bold text-ink">Saved Locations</Text>
           </View>
 
           {savedLocations.length === 0 ? (
@@ -146,10 +148,10 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <View className="flex-row items-center gap-2 mb-4">
-            <Ionicons name="car-sport-outline" size={18} />
-            <Text className="text-xl font-bold text-ink">Vehicle Preferences</Text>
+            <Ionicons name="car-sport-outline" size={18} color={appColors.primary[600]} />
+            <Text className="text-lg font-bold text-ink">Vehicle Preferences</Text>
           </View>
 
           <ProfileField label="Primary location" value={primaryLocation} />
@@ -164,10 +166,13 @@ export default function ProfileScreen() {
           accessibilityRole="button"
           accessibilityLabel="Edit profile information"
         >
-          <Text className="text-white font-semibold">EDIT INFO</Text>
+          <Text className="text-white font-semibold">Edit info</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity className="border border-ink-faint rounded-2xl py-3.5 items-center bg-canvas-raised" onPress={() => signOut()}>
+        <TouchableOpacity
+          className="border border-ink-faint rounded-2xl py-3.5 items-center bg-canvas-raised"
+          onPress={() => signOut()}
+        >
           <Text className="text-ink font-semibold">Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>

@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   ScrollView,
   StatusBar,
   Switch,
@@ -13,10 +15,17 @@ import {
 import { useAuth, useClerk } from "@clerk/expo";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { apiClient, setAuthToken, useSubmitProviderOnboarding, userKeys } from "@repo/api-client";
+import {
+  apiClient,
+  setAuthToken,
+  useSubmitProviderOnboarding,
+  useUpdateAvatar,
+  userKeys,
+} from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
@@ -25,6 +34,12 @@ import { ShopAddressField } from "../../components/ShopAddressField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 
+type LocalPhoto = {
+  uri: string;
+  mimeType?: string | null;
+  fileName?: string | null;
+};
+
 export default function ProviderOnboardingScreen() {
   const params = useLocalSearchParams<{ allowRoleChange?: string }>();
   const { getToken } = useAuth();
@@ -32,6 +47,7 @@ export default function ProviderOnboardingScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitProviderOnboarding();
+  const uploadAvatar = useUpdateAvatar();
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [experienceYears, setExperienceYears] = useState("0");
   const [serviceArea, setServiceArea] = useState("");
@@ -42,11 +58,66 @@ export default function ProviderOnboardingScreen() {
   >([]);
   const [hasTools, setHasTools] = useState(true);
   const [serviceDescription, setServiceDescription] = useState("");
-  // Covers the full handleContinue flow (set-role + session reload + geocode + onboarding + nav),
+  const [localPhoto, setLocalPhoto] = useState<LocalPhoto | null>(null);
+  // Covers the full handleContinue flow (set-role + session reload + geocode + upload + onboarding + nav),
   // not just the mutation — the pre-mutation calls take most of the wall-clock time.
   const [isSubmitting, setIsSubmitting] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   const allowRoleChange = params.allowRoleChange === "1";
+
+  async function pickProfilePhoto(source: "library" | "camera") {
+    try {
+      if (source === "library") {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          showToast("error", "Photo access needed", "Allow photo library access to upload your profile picture.");
+          return;
+        }
+      } else {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          showToast("error", "Camera access needed", "Allow camera access to take your profile picture.");
+          return;
+        }
+      }
+
+      const result =
+        source === "library"
+          ? await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ["images"],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.85,
+            })
+          : await ImagePicker.launchCameraAsync({
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.85,
+            });
+
+      if (result.canceled || !result.assets[0]) return;
+      const asset = result.assets[0];
+      setLocalPhoto({
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? "image/jpeg",
+        fileName: asset.fileName ?? `provider-avatar-${Date.now()}.jpg`,
+      });
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderOnboarding", action: "pickProfilePhoto", extra: { source } });
+      showToast("error", "Could not open photos", "Please try again.");
+    }
+  }
+
+  function promptPickProfilePhoto() {
+    Alert.alert("Profile photo", "Add a photo customers will see on your profile.", [
+      { text: "Choose from library", onPress: () => void pickProfilePhoto("library") },
+      { text: "Take photo", onPress: () => void pickProfilePhoto("camera") },
+      ...(localPhoto
+        ? [{ text: "Remove photo", style: "destructive" as const, onPress: () => setLocalPhoto(null) }]
+        : []),
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }
 
   async function handleContinue() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
@@ -56,6 +127,10 @@ export default function ProviderOnboardingScreen() {
       !shopLocations.some((location) => location.address.toLowerCase() === pendingAddress.toLowerCase())
         ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
         : shopLocations;
+    if (!localPhoto) {
+      showToast("error", "Add a profile photo", "Customers need a photo to recognize your profile.");
+      return;
+    }
     if (
       serviceCategories.length === 0 ||
       !serviceArea.trim() ||
@@ -110,6 +185,16 @@ export default function ProviderOnboardingScreen() {
         }
       }
 
+      const uploaded = await uploadAvatar.mutateAsync({
+        uri: localPhoto.uri,
+        mimeType: localPhoto.mimeType,
+        fileName: localPhoto.fileName,
+      });
+      const profilePhotoUrl = uploaded.avatarUrl;
+      if (!profilePhotoUrl) {
+        throw new Error("Photo upload succeeded but no image URL was returned.");
+      }
+
       await submitOnboarding.mutateAsync({
         serviceCategories,
         experienceYears: parsedExperience,
@@ -119,6 +204,7 @@ export default function ProviderOnboardingScreen() {
         shopLocations: locationsToSave,
         hasTools,
         serviceDescription: serviceDescription.trim(),
+        profilePhotoUrl,
       });
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(provider)/(tabs)/services");
@@ -148,15 +234,15 @@ export default function ProviderOnboardingScreen() {
             onPress={handleChangeRole}
             activeOpacity={0.8}
           >
-            <Ionicons name="chevron-back" size={18} color={appColors.ink.DEFAULT} />
-            <Text className="text-ink font-medium">I am not a provider</Text>
+            <Ionicons name="chevron-back" size={18} color={appColors.primary[600]} />
+            <Text className="text-primary-600 font-medium">I am not a provider</Text>
           </TouchableOpacity>
         ) : null}
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-6">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-6">
           <View className="flex-row items-center gap-3">
-            <View className="w-11 h-11 rounded-2xl bg-primary-100 items-center justify-center">
-              <Ionicons name="briefcase-outline" size={22} color={appColors.ink.DEFAULT} />
+            <View className="w-11 h-11 rounded-2xl bg-primary-50 border border-primary-100 items-center justify-center">
+              <Ionicons name="briefcase-outline" size={22} color={appColors.primary[600]} />
             </View>
             <View className="flex-1">
               <Text className="text-2xl font-bold text-ink">Set up your provider profile</Text>
@@ -165,7 +251,39 @@ export default function ProviderOnboardingScreen() {
           </View>
         </View>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl p-4 mb-5">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5 items-center">
+          <Text className="text-ink text-sm font-medium mb-3 self-start">Profile photo</Text>
+          <TouchableOpacity
+            onPress={promptPickProfilePhoto}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Add profile photo"
+            className="w-28 h-28 rounded-2xl bg-canvas-sunken border border-ink-faint items-center justify-center overflow-hidden mb-3"
+          >
+            {localPhoto ? (
+              <Image source={{ uri: localPhoto.uri }} className="w-full h-full" />
+            ) : (
+              <View className="items-center">
+                <Ionicons name="camera-outline" size={28} color={appColors.primary[600]} />
+                <Text className="text-primary-600 text-xs font-semibold mt-1">Add photo</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={promptPickProfilePhoto}
+            className="bg-primary-50 border border-primary-100 rounded-2xl px-4 py-2.5"
+            activeOpacity={0.85}
+          >
+            <Text className="text-primary-600 font-semibold text-sm">
+              {localPhoto ? "Change photo" : "Upload profile photo"}
+            </Text>
+          </TouchableOpacity>
+          <Text className="text-ink-muted text-xs text-center mt-3 leading-5">
+            Required. Customers see this on your provider profile.
+          </Text>
+        </View>
+
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <ProviderServiceCategoriesField value={serviceCategories} onChange={setServiceCategories} />
 
           <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
@@ -225,7 +343,7 @@ export default function ProviderOnboardingScreen() {
           </Text>
         </View>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-3xl px-4 py-4 mb-8 flex-row items-center justify-between">
+        <View className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-4 mb-8 flex-row items-center justify-between">
           <View className="flex-1 pr-3">
             <Text className="text-ink font-semibold">I have my own tools</Text>
             <Text className="text-ink-muted text-sm">Turn off if customer must provide equipment.</Text>

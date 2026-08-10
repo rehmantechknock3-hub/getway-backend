@@ -2,6 +2,20 @@ import { Stack } from "expo-router";
 
 import { appColors } from "../../styles/colors";
 
+const lightHeader = {
+  headerShown: true as const,
+  headerBackTitle: "Back",
+  headerTintColor: appColors.primary[600],
+  headerStyle: {
+    backgroundColor: appColors.canvas.DEFAULT,
+  },
+  headerTitleStyle: {
+    color: appColors.ink.DEFAULT,
+    fontWeight: "600" as const,
+  },
+  headerShadowVisible: false,
+};
+
 export default function CustomerLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -9,55 +23,43 @@ export default function CustomerLayout() {
       <Stack.Screen
         name="provider/[id]/index"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Provider",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="provider/[id]/book/[serviceId]"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Book",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="provider/[id]/reviews"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Reviews",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="booking/[id]"
         options={{
-          headerShown: true,
-          title: "Booking",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
+          ...lightHeader,
+          title: "Appointment",
         }}
       />
       <Stack.Screen
         name="notifications"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Notifications",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="edit-info"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Edit info",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
     </Stack>

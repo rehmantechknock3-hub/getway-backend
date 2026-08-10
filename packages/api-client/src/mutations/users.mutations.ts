@@ -68,7 +68,9 @@ export function useUpdateAvatar() {
       } as never);
 
       const { data } = await apiClient.post<User>("/api/v1/users/me/avatar/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        // Let the runtime attach multipart boundary (do not keep default application/json).
+        headers: { "Content-Type": undefined as unknown as string },
+        timeout: 60_000,
       });
       return data;
     },

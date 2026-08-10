@@ -7,8 +7,13 @@ export default function ProviderTabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: appColors.primary[600],
-        tabBarInactiveTintColor: appColors.ink.subtle,
+        tabBarActiveTintColor: appColors.glow.blue,
+        tabBarInactiveTintColor: appColors.surface.muted,
+        tabBarStyle: {
+          backgroundColor: appColors.surface.night,
+          borderTopColor: appColors.surface.border,
+          borderTopWidth: 1,
+        },
         headerShown: false,
       }}
     >

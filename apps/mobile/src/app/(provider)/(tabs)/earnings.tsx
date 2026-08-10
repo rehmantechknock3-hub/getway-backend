@@ -110,11 +110,11 @@ export default function EarningsScreen() {
         />
       }
     >
-      <Text className="text-3xl font-bold text-ink mb-6">Earnings</Text>
+      <Text className="text-3xl font-bold text-ink mb-6" style={{ letterSpacing: -0.5 }}>Earnings</Text>
 
       {!enabled || historyQuery.isLoading ? (
         <View className="py-20 items-center">
-          <ActivityIndicator />
+          <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : historyQuery.isError ? (
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-6">
@@ -138,7 +138,7 @@ export default function EarningsScreen() {
                 return (
                   <Pressable
                     key={option.id}
-                    className={`px-3 py-1.5 rounded-full border ${
+                    className={`px-3 py-1.5 rounded-2xl border ${
                       active
                         ? "bg-primary-600 border-primary-600"
                         : "bg-canvas border-ink-faint"
@@ -176,13 +176,13 @@ export default function EarningsScreen() {
             <View className="mt-3 bg-canvas rounded-xl border border-ink-faint p-3">
               <Text className="text-ink-muted text-xs mb-2">Payout status breakdown</Text>
               <View className="flex-row items-center justify-between">
-                <Text className="text-green-700 text-sm font-semibold">Paid</Text>
+                <Text className="text-primary-700 text-sm font-semibold">Paid</Text>
                 <Text className="text-ink text-sm font-semibold">
                   {completedCount} ({formatMoney(totalEarnings, "USD")})
                 </Text>
               </View>
               <View className="flex-row items-center justify-between mt-1">
-                <Text className="text-amber-700 text-sm font-semibold">Pending</Text>
+                <Text className="text-ink-soft text-sm font-semibold">Pending</Text>
                 <Text className="text-ink text-sm font-semibold">
                   {pendingCount} ({formatMoney(pendingAmount, payoutCurrency)})
                 </Text>
@@ -228,7 +228,7 @@ export default function EarningsScreen() {
                     </View>
                     <View className="mt-3 pt-3 border-t border-ink-faint flex-row items-center justify-between">
                       <Text className="text-ink-subtle text-xs">{formatDate(row.updatedAt)}</Text>
-                      <Text className="text-green-700 text-xs font-semibold">Paid</Text>
+                      <Text className="text-primary-600 text-xs font-semibold">Paid</Text>
                     </View>
                   </Pressable>
                 );

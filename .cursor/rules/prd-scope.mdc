@@ -1,0 +1,31 @@
+---
+description: Product scope gate — Mobile Car Cleaning Marketplace PRD
+alwaysApply: true
+---
+
+# PRD Scope Gate (GetawayNow)
+
+Canonical product scope: `PRD.md` (Mobile Car Cleaning Marketplace).
+
+## Product in one line
+Two-sided marketplace: customers book **mobile car cleaning** at their location; providers manage jobs/earnings; admins run the platform via web dashboard.
+
+## In scope (summary)
+- **Customer app**: auth (email/phone/Google/Apple), profile + saved locations, favorites, discovery (map/search/filter), booking (schedule + instant), live tracking, Stripe pay, ratings/reviews, notifications, chat
+- **Provider app**: signup + docs/photos, admin approval, jobs accept/reject, online/offline, navigation to customer, earnings/payouts, ratings, chat
+- **Admin web**: auth, users/providers, approve/reject/suspend, bookings, commission %, transactions/payouts, reports
+- **Backend**: NestJS + PostgreSQL + AWS + Google Maps + Stripe Connect + real-time updates
+
+## Booking statuses (PRD)
+`requested → accepted → on the way → service started → service completed` (plus reject/cancel as needed)
+
+## Mandatory behavior on every change request
+1. Before implementing, check the request against `PRD.md`.
+2. If the request is **not** in the PRD (new vertical, feature, role, flow, or deliverable):
+   - **Stop and notify the user first** that it is out of PRD scope.
+   - Ask whether to **exclude it** or **explicitly amend the PRD** before coding.
+3. Do not silently expand product scope.
+4. When the user provides PRD updates, treat them as the new source of truth and update `PRD.md` accordingly.
+
+## Out-of-scope examples (flag these)
+Generic non-car-cleaning marketplaces, unrelated service verticals, features not listed in `PRD.md`, or deliverables beyond the PRD list — unless the user updates the PRD.

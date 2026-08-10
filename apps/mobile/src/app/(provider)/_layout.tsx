@@ -2,6 +2,20 @@ import { Stack } from "expo-router";
 
 import { appColors } from "../../styles/colors";
 
+const lightHeader = {
+  headerShown: true as const,
+  headerBackTitle: "Back",
+  headerTintColor: appColors.primary[600],
+  headerStyle: {
+    backgroundColor: appColors.canvas.DEFAULT,
+  },
+  headerTitleStyle: {
+    color: appColors.ink.DEFAULT,
+    fontWeight: "600" as const,
+  },
+  headerShadowVisible: false,
+};
+
 export default function ProviderLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -9,55 +23,43 @@ export default function ProviderLayout() {
       <Stack.Screen
         name="notifications"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Notifications",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="booking/[id]"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Job",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="reviews"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Customer reviews",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="service/new"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Add service",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="service/[id]"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Edit service",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
       <Stack.Screen
         name="edit-info"
         options={{
-          headerShown: true,
+          ...lightHeader,
           title: "Edit info",
-          headerBackTitle: "Back",
-          headerTintColor: appColors.ink.DEFAULT,
         }}
       />
     </Stack>

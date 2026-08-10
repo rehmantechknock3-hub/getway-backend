@@ -356,10 +356,13 @@ export class UsersService {
   }
 
   async updateAvatar(clerkId: string, avatarUrl: string) {
-    return this.prisma.user.update({
+    await this.prisma.user.update({
       where: { clerkId },
       data: { avatarUrl },
     });
+    const user = await this.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   async updateCustomerOnboarding(clerkId: string, data: CustomerOnboarding, requestId?: string) {

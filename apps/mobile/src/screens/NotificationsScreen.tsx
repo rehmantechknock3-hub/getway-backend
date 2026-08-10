@@ -117,7 +117,7 @@ export function NotificationsScreen({ stack }: { stack: StackRole }) {
             accessibilityRole="button"
             accessibilityLabel="Clear all notifications"
           >
-            <Text className="text-primary-700 text-sm font-semibold">
+            <Text className="text-primary-600 text-sm font-semibold">
               {clearAllNotifications.isPending ? "Clearing..." : "Clear all"}
             </Text>
           </Pressable>
@@ -126,7 +126,7 @@ export function NotificationsScreen({ stack }: { stack: StackRole }) {
 
       {!enabled || isLoading ? (
         <View className="py-16 items-center">
-          <ActivityIndicator />
+          <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : isError ? (
         <View className="bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
@@ -135,8 +135,10 @@ export function NotificationsScreen({ stack }: { stack: StackRole }) {
         </View>
       ) : items.length === 0 ? (
         <View className="bg-canvas-raised rounded-2xl p-10 border border-ink-faint items-center">
-          <Ionicons name="notifications-off-outline" size={40} color={appColors.ink.subtle} />
-          <Text className="text-ink font-semibold text-base mt-4 text-center">You're all caught up</Text>
+          <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-1">
+            <Ionicons name="notifications-off-outline" size={32} color={appColors.primary[600]} />
+          </View>
+          <Text className="text-ink font-semibold text-base mt-4 text-center">You&apos;re all caught up</Text>
           <Text className="text-ink-muted text-sm text-center mt-2 leading-5">
             New booking activity will show up here.
           </Text>

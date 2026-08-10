@@ -1,45 +1,27 @@
-import { View, Text, TouchableOpacity, StatusBar } from "react-native";
+import { Image, View, Text, TouchableOpacity, StatusBar } from "react-native";
 import { Link } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-
-import { appColors } from "../../styles/colors";
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
+    <View className="flex-1 bg-surface-night" style={{ paddingTop: insets.top }}>
       <StatusBar barStyle="light-content" />
 
-      {/* Hero — dark charcoal */}
       <View className="flex-1 items-center justify-center px-8">
-        <View className="w-20 h-20 rounded-3xl bg-primary-500 items-center justify-center mb-6">
-          <Ionicons name="flash" size={40} color={appColors.onPrimary} />
-        </View>
+        <Image
+          source={require("../../../assets/logoWa.png")}
+          className="w-56 h-56 mb-2"
+          resizeMode="contain"
+          accessibilityLabel="WayNow logo"
+        />
 
-        <Text
-          className="text-5xl font-bold text-white text-center mb-3"
-          style={{ letterSpacing: -1.5 }}
-        >
-          Marketplace
+        <Text className="text-surface-muted text-base text-center leading-relaxed" style={{ maxWidth: 280 }}>
+          Every service. One app.
         </Text>
-
-        <Text className="text-ink-subtle text-lg text-center leading-relaxed" style={{ maxWidth: 260 }}>
-          Trusted professionals, on demand
-        </Text>
-
-        <View className="flex-row gap-3 mt-10 flex-wrap justify-center">
-          {["Verified Pros", "Live Tracking", "Secure Payments"].map((f) => (
-            <View key={f} className="flex-row items-center gap-1.5 bg-ink-soft px-3 py-1.5 rounded-full">
-              <View className="w-1.5 h-1.5 rounded-full bg-primary-500" />
-              <Text className="text-ink-subtle text-xs font-medium">{f}</Text>
-            </View>
-          ))}
-        </View>
       </View>
 
-      {/* Bottom card */}
       <View
         className="bg-canvas-raised rounded-t-3xl px-6 pt-8"
         style={{ paddingBottom: Math.max(insets.bottom + 8, 24) }}
@@ -55,7 +37,7 @@ export default function WelcomeScreen() {
 
         <Link href="/(auth)/sign-up" asChild>
           <TouchableOpacity
-            className="w-full bg-canvas-sunken rounded-2xl py-4 items-center"
+            className="w-full bg-canvas-sunken border border-ink-faint rounded-2xl py-4 items-center"
             activeOpacity={0.85}
           >
             <Text className="text-ink text-base font-semibold">Create Account</Text>

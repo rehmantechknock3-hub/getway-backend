@@ -2,7 +2,6 @@ import { useCallback } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -22,6 +21,8 @@ import {
   useProviderBookings,
   useUpdateProviderBookingStatus,
 } from "@repo/api-client";
+import { showToast } from "@repo/ui";
+import { reportError } from "@repo/utils";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
 import { appColors } from "../../../styles/colors";
@@ -48,15 +49,15 @@ function formatMoney(n: number, currency?: string): string {
 function statusBadge(status: ProviderBookingView["status"]): { label: string; bg: string; text: string } {
   switch (status) {
     case "PENDING":
-      return { label: "New request", bg: "bg-amber-100", text: "text-amber-800" };
+      return { label: "New request", bg: "bg-canvas-sunken", text: "text-ink-soft" };
     case "ACCEPTED":
-      return { label: "Accepted", bg: "bg-blue-100", text: "text-blue-800" };
+      return { label: "Accepted", bg: "bg-primary-50", text: "text-primary-700" };
     case "IN_PROGRESS":
-      return { label: "In progress", bg: "bg-green-100", text: "text-green-800" };
+      return { label: "In progress", bg: "bg-primary-100", text: "text-primary-800" };
     case "COMPLETED":
-      return { label: "Completed", bg: "bg-ink-faint", text: "text-ink-muted" };
+      return { label: "Completed", bg: "bg-primary-50", text: "text-primary-700" };
     case "REJECTED":
-      return { label: "Declined", bg: "bg-red-100", text: "text-red-800" };
+      return { label: "Declined", bg: "bg-canvas-sunken", text: "text-ink" };
     case "CANCELLED":
       return { label: "Cancelled", bg: "bg-ink-faint", text: "text-ink-muted" };
     default:
@@ -75,7 +76,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
   const customerName = `${job.customerFirstName} ${job.customerLastName}`.trim();
   const busy = updatingId === job.id;
   return (
-    <View className="bg-canvas-raised rounded-3xl border border-ink-faint overflow-hidden">
+    <View className="bg-canvas-raised rounded-2xl border border-ink-faint overflow-hidden">
       <TouchableOpacity
         activeOpacity={0.92}
         onPress={() => router.push(`/(provider)/booking/${job.id}`)}
@@ -92,7 +93,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
               <Text className="text-ink-muted text-sm">{customerName}</Text>
             </View>
             <View className="flex-row items-center gap-1.5">
-              <Ionicons name="location-outline" size={13} color={appColors.ink.muted} />
+              <Ionicons name="location-outline" size={13} color={appColors.primary[600]} />
               <Text className="text-ink-subtle text-xs flex-1" numberOfLines={2}>
                 {job.address}
               </Text>
@@ -126,7 +127,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={busy}
-            className="flex-1 border border-ink-faint rounded-xl py-2.5 items-center"
+            className="flex-1 border border-ink-faint rounded-2xl py-2.5 items-center bg-canvas"
             onPress={() => void onRunStatus(job.id, "REJECTED")}
           >
             <Text className="text-ink-soft font-semibold text-sm">Decline</Text>
@@ -134,7 +135,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={busy}
-            className="flex-1 bg-primary-600 rounded-xl py-2.5 items-center"
+            className="flex-1 bg-primary-600 rounded-2xl py-2.5 items-center"
             onPress={() => void onRunStatus(job.id, "ACCEPTED")}
           >
             <Text className="text-white font-semibold text-sm">{busy ? "…" : "Accept"}</Text>
@@ -147,7 +148,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={busy}
-            className="bg-primary-600 rounded-xl py-2.5 items-center"
+            className="bg-primary-600 rounded-2xl py-2.5 items-center"
             onPress={() => void onRunStatus(job.id, "IN_PROGRESS")}
           >
             <Text className="text-white font-semibold text-sm">{busy ? "Updating…" : "Start job"}</Text>
@@ -160,7 +161,7 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
           <TouchableOpacity
             activeOpacity={0.85}
             disabled={busy}
-            className="bg-green-700 rounded-xl py-2.5 items-center"
+            className="bg-primary-600 rounded-2xl py-2.5 items-center"
             onPress={() => void onRunStatus(job.id, "COMPLETED")}
           >
             <Text className="text-white font-semibold text-sm">{busy ? "Updating…" : "Mark complete"}</Text>
@@ -205,8 +206,10 @@ export default function JobsScreen() {
   const runStatus = async (bookingId: string, status: ProviderBookingView["status"]) => {
     try {
       await updateStatus.mutateAsync({ bookingId, input: { status } });
-    } catch {
-      Alert.alert("Could not update", "Check your connection and try again.");
+      showToast("success", "Job updated");
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderJobs", action: "updateStatus", extra: { bookingId, status } });
+      showToast("error", "Could not update", "Check your connection and try again.");
     }
   };
 
@@ -233,7 +236,7 @@ export default function JobsScreen() {
           <View>
             <Text className="text-ink-muted text-sm">Hello,</Text>
             <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-              {firstName} ⚡
+              {firstName}
             </Text>
           </View>
           <View className="relative">
@@ -243,7 +246,7 @@ export default function JobsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Notifications"
             >
-              <Ionicons name="notifications-outline" size={22} color={appColors.ink.DEFAULT} />
+              <Ionicons name="notifications-outline" size={22} color={appColors.primary[600]} />
             </TouchableOpacity>
             {(notificationPayload?.unreadCount ?? 0) > 0 ? (
               <View className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-primary-600 items-center justify-center px-1 border border-canvas">
@@ -283,7 +286,7 @@ export default function JobsScreen() {
 
         <View className="flex-row items-center justify-between px-5 mb-4">
           <Text className="text-lg font-bold text-ink">Job queue</Text>
-          <View className="bg-primary-100 px-2.5 py-1 rounded-full">
+          <View className="bg-primary-50 px-2.5 py-1 rounded-full">
             <Text className="text-primary-700 text-xs font-bold">
               {queueQuery.data?.total ?? 0} booking{queueQuery.data?.total === 1 ? "" : "s"}
             </Text>
@@ -292,17 +295,17 @@ export default function JobsScreen() {
 
         {!enabled || isLoading ? (
           <View className="py-16 items-center px-5">
-            <ActivityIndicator />
+            <ActivityIndicator color={appColors.primary[600]} />
           </View>
         ) : isError ? (
-          <View className="mx-5 bg-canvas-raised rounded-3xl p-6 border border-ink-faint">
+          <View className="mx-5 bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
             <Text className="text-ink text-center font-medium mb-2">Could not load jobs</Text>
             <Text className="text-ink-muted text-sm text-center">
               Pull to refresh, or confirm you are signed in as a provider and the API is running.
             </Text>
           </View>
         ) : queueBookings.length === 0 ? (
-          <View className="mx-5 bg-canvas-raised rounded-3xl p-10 border border-ink-faint items-center">
+          <View className="mx-5 bg-canvas-raised rounded-2xl p-10 border border-ink-faint items-center">
             <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
               <Ionicons name="calendar-outline" size={30} color={appColors.primary[600]} />
             </View>

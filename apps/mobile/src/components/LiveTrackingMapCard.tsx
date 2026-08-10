@@ -128,10 +128,10 @@ export function LiveTrackingMapCard({
         </View>
         <View
           className={`px-2.5 py-1 rounded-full ${
-            isConnected ? "bg-green-100" : "bg-amber-100"
+            isConnected ? "bg-primary-50" : "bg-canvas-sunken"
           }`}
         >
-          <Text className={`text-xs font-semibold ${isConnected ? "text-green-800" : "text-amber-800"}`}>
+          <Text className={`text-xs font-semibold ${isConnected ? "text-primary-700" : "text-ink-soft"}`}>
             {isConnected ? "Live" : "Connecting"}
           </Text>
         </View>
