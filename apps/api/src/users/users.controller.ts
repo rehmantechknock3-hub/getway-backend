@@ -150,7 +150,7 @@ export class UsersController {
     const filePath = join(avatarsDir, fileName);
     await writeFile(filePath, outputBuffer);
 
-    const host = req.get("host") ?? "localhost:3001";
+    const host = req.get("host") ?? "localhost:3010";
     const avatarUrl = `${req.protocol}://${host}/uploads/avatars/${fileName}`;
     return this.usersService.updateAvatar(clerkId, avatarUrl);
   }

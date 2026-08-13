@@ -138,6 +138,7 @@ export class ProvidersService {
     // List by provider_profiles row, not users.role. Role controls which app shell you see; someone may still
     // have completed provider onboarding (profile row) while role is CUSTOMER, and should remain discoverable.
     const rows = await this.prisma.providerProfile.findMany({
+      where: { verificationStatus: "APPROVED" },
       include: {
         user: {
           select: {
@@ -242,7 +243,7 @@ export class ProvidersService {
     requestId?: string
   ): Promise<ProviderPublicDetail> {
     const row = await this.prisma.providerProfile.findFirst({
-      where: { id: providerProfileId },
+      where: { id: providerProfileId, verificationStatus: "APPROVED" },
       include: {
         user: {
           select: {
@@ -271,7 +272,7 @@ export class ProvidersService {
 
   async listActiveServices(providerProfileId: string, requestId?: string): Promise<ProviderServiceOffer[]> {
     const exists = await this.prisma.providerProfile.findFirst({
-      where: { id: providerProfileId },
+      where: { id: providerProfileId, verificationStatus: "APPROVED" },
       select: { id: true },
     });
     if (!exists) {

@@ -11,7 +11,9 @@ import { CACHE_MANAGER } from "@nestjs/cache-manager";
 import type { Cache } from "cache-manager";
 import { z } from "zod";
 import type {
+  AdminBookingListResponse,
   Booking as BookingDto,
+  BookingStatus,
   BookingWithReview,
   CreateBookingInput,
   ProviderBookingView,
@@ -257,11 +259,14 @@ export class BookingsService {
         price: true,
         priceCurrency: true,
         title: true,
-        provider: { select: { isOnline: true } },
+        provider: { select: { isOnline: true, verificationStatus: true } },
       },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (service.provider.verificationStatus !== "APPROVED") {
+      throw new ForbiddenException("Provider is not approved");
     }
     if (!service.provider.isOnline) {
       throw new ForbiddenException("Provider is offline");
@@ -331,11 +336,14 @@ export class BookingsService {
         providerId: true,
         price: true,
         priceCurrency: true,
-        provider: { select: { isOnline: true } },
+        provider: { select: { isOnline: true, verificationStatus: true } },
       },
     });
     if (!service) {
       throw new NotFoundException("Service not found or inactive");
+    }
+    if (service.provider.verificationStatus !== "APPROVED") {
+      throw new ForbiddenException("Provider is not approved");
     }
     if (!service.provider.isOnline) {
       throw new ForbiddenException("Provider is offline");
@@ -373,23 +381,57 @@ export class BookingsService {
 
   async listAll(
     page: number,
-    limit: number
-  ): Promise<{ data: BookingWithReview[]; total: number; page: number; limit: number }> {
+    limit: number,
+    status?: BookingStatus,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<AdminBookingListResponse> {
     const safePage = Math.max(1, page);
     const safeLimit = Math.min(50, Math.max(1, limit));
     const skip = (safePage - 1) * safeLimit;
 
+    const scheduledAt: { gte?: Date; lte?: Date } = {};
+    if (fromDate) {
+      scheduledAt.gte = new Date(`${fromDate}T00:00:00.000Z`);
+    }
+    if (toDate) {
+      scheduledAt.lte = new Date(`${toDate}T23:59:59.999Z`);
+    }
+
+    const where = {
+      ...(status ? { status } : {}),
+      ...(Object.keys(scheduledAt).length > 0 ? { scheduledAt } : {}),
+    };
+
     const [rows, total] = await Promise.all([
       this.prisma.booking.findMany({
+        where,
         orderBy: { createdAt: "desc" },
         skip,
         take: safeLimit,
+        include: {
+          customer: { select: { firstName: true, lastName: true } },
+          provider: {
+            select: {
+              user: { select: { firstName: true, lastName: true } },
+            },
+          },
+          service: { select: { title: true } },
+        },
       }),
-      this.prisma.booking.count(),
+      this.prisma.booking.count({ where }),
     ]);
 
     return {
-      data: rows.map((r) => ({ ...this.toDto(r), review: null })),
+      data: rows.map((r) => ({
+        ...this.toDto(r),
+        review: null,
+        customerFirstName: r.customer.firstName,
+        customerLastName: r.customer.lastName,
+        providerFirstName: r.provider.user.firstName,
+        providerLastName: r.provider.user.lastName,
+        serviceTitle: r.service.title,
+      })),
       total,
       page: safePage,
       limit: safeLimit,
@@ -606,9 +648,21 @@ export class BookingsService {
       );
     }
 
-    const { count } = await this.prisma.booking.updateMany({
-      where: { id: bookingId, status: row.status },
-      data: { status: next },
+    const { count } = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.booking.updateMany({
+        where: { id: bookingId, status: row.status },
+        data: { status: next },
+      });
+      if (result.count === 0) {
+        return result;
+      }
+      if (next === "COMPLETED") {
+        await tx.user.update({
+          where: { id: row.customerId },
+          data: { totalSpent: { increment: row.totalAmount } },
+        });
+      }
+      return result;
     });
     if (count === 0) {
       throw new ConflictException("Booking status was updated by another request");

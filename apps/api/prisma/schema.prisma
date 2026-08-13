@@ -65,6 +65,8 @@ model User {
   onboardingCompleted Boolean @default(false)
   customerOnboarding  Json?
   providerOnboarding  Json?
+  /** Lifetime spend from completed bookings (customer). Incremented on COMPLETED. */
+  totalSpent          Float    @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

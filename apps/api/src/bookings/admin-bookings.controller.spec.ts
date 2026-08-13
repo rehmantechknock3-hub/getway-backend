@@ -46,7 +46,41 @@ describe("AdminBookingsController", () => {
 
     const out = await controller.list({ page: "2", limit: "10" });
 
-    expect(bookingsService.listAll).toHaveBeenCalledWith(2, 10);
+    expect(bookingsService.listAll).toHaveBeenCalledWith(2, 10, undefined, undefined, undefined);
     expect(out).toEqual({ data: [], total: 0, page: 2, limit: 10 });
+  });
+
+  it("list passes status filter", async () => {
+    const bookingsService = {
+      listAll: vi.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
+    };
+    const controller = new AdminBookingsController(bookingsService as never);
+
+    await controller.list({ status: "COMPLETED" });
+
+    expect(bookingsService.listAll).toHaveBeenCalledWith(
+      1,
+      20,
+      "COMPLETED",
+      undefined,
+      undefined,
+    );
+  });
+
+  it("list passes date range", async () => {
+    const bookingsService = {
+      listAll: vi.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 20 }),
+    };
+    const controller = new AdminBookingsController(bookingsService as never);
+
+    await controller.list({ from: "2026-08-01", to: "2026-08-12" });
+
+    expect(bookingsService.listAll).toHaveBeenCalledWith(
+      1,
+      20,
+      undefined,
+      "2026-08-01",
+      "2026-08-12",
+    );
   });
 });

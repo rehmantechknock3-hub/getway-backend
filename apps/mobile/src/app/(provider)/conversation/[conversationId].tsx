@@ -4,8 +4,6 @@ import {
   ActivityIndicator,
   AppState,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Text,
   TextInput,
   TouchableOpacity,
@@ -15,18 +13,23 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { io, type Socket } from "socket.io-client";
 
 import {
+  messageKeys,
   useAppendMessage,
   useConversations,
   useMe,
   useMessages,
   useOrCreateConversation,
+  useSendMessage,
 } from "@repo/api-client";
 import type { Message } from "@repo/schemas";
+import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { useKeyboardBottomInset } from "../../../hooks/useKeyboardBottomInset";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
 
@@ -157,6 +160,8 @@ function IncomingBubble({
 export default function ProviderConversationScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const { avoidedBottom, composerPaddingBottom } = useKeyboardBottomInset();
   const { conversationId, bookingId } = useLocalSearchParams<{
     conversationId: string;
     bookingId?: string;
@@ -167,6 +172,8 @@ export default function ProviderConversationScreen() {
 
   const [inputText, setInputText] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [composerHeight, setComposerHeight] = useState(64);
   const socketRef = useRef<Socket | null>(null);
   const getTokenRef = useRef(getToken);
   const reconnectingRef = useRef(false);
@@ -198,6 +205,7 @@ export default function ProviderConversationScreen() {
     enabled: !isNew && !!realConversationId,
   });
   const appendMessage = useAppendMessage(realConversationId, 1);
+  const sendMessageMutation = useSendMessage(realConversationId, 1);
 
   const processedMessages = useMemo(
     () => processMessages(messagesData?.data ?? []),
@@ -216,6 +224,10 @@ export default function ProviderConversationScreen() {
     if (processedMessages.length > 0) setTimeout(() => scrollToBottom(false), 60);
   }, [processedMessages.length, scrollToBottom]);
 
+  useEffect(() => {
+    if (avoidedBottom > 0) setTimeout(() => scrollToBottom(true), 50);
+  }, [avoidedBottom, scrollToBottom]);
+
   // Socket
   useEffect(() => {
     if (isNew || !realConversationId) {
@@ -229,7 +241,7 @@ export default function ProviderConversationScreen() {
     const base = (
       process.env.EXPO_PUBLIC_SOCKET_URL ??
       process.env.EXPO_PUBLIC_API_URL ??
-      "http://localhost:3001"
+      "http://127.0.0.1:3010"
     ).trim().replace(/\/$/, "");
 
     const client = io(`${base}/chat`, {
@@ -251,12 +263,25 @@ export default function ProviderConversationScreen() {
         .finally(() => { reconnectingRef.current = false; });
     };
 
-    client.on("connect", () => setSocketConnected(true));
+    client.on("connect", () => {
+      setSocketConnected(true);
+      // Pull anything stored while this client (or the peer) was offline.
+      void queryClient.invalidateQueries({
+        queryKey: messageKeys.messages(realConversationId, 1),
+      });
+    });
     client.on("disconnect", (r) => { setSocketConnected(false); if (r !== "io client disconnect") reconnect(); });
     client.on("connect_error", () => { setSocketConnected(false); reconnect(); });
     client.on("message:received", (msg: Message) => { appendMessage(msg); scrollToBottom(true); });
 
-    const sub = AppState.addEventListener("change", (s) => { if (s === "active" && !client.connected) reconnect(); });
+    const sub = AppState.addEventListener("change", (s) => {
+      if (s === "active") {
+        void queryClient.invalidateQueries({
+          queryKey: messageKeys.messages(realConversationId, 1),
+        });
+        if (!client.connected) reconnect();
+      }
+    });
 
     if (cancelled) { client.disconnect(); return; }
     socketRef.current = client;
@@ -268,25 +293,31 @@ export default function ProviderConversationScreen() {
       client.disconnect();
       socketRef.current = null;
     };
-  }, [isNew, realConversationId]);
+  }, [isNew, realConversationId, appendMessage, queryClient, scrollToBottom]);
 
-  const sendMessage = useCallback(() => {
+  const sendMessage = useCallback(async () => {
     const text = inputText.trim();
-    if (!text || !socketRef.current?.connected) return;
+    if (!text || !realConversationId || sending) return;
     setInputText("");
-    socketRef.current.emit("message:send", { conversationId: realConversationId, content: text, type: "TEXT" });
-    setTimeout(() => scrollToBottom(true), 80);
-  }, [inputText, conversationId, scrollToBottom]);
+    setSending(true);
+    try {
+      // Always persist over REST so offline peers still receive the message when they return.
+      // Socket remains for live delivery to anyone currently in the room.
+      await sendMessageMutation.mutateAsync({ content: text, type: "TEXT" });
+      setTimeout(() => scrollToBottom(true), 80);
+    } catch (error: unknown) {
+      setInputText(text);
+      reportError(error, { screen: "ProviderConversation", action: "sendMessage" });
+      showToast("error", "Could not send message. Check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
+  }, [inputText, realConversationId, sending, sendMessageMutation, scrollToBottom]);
 
-  const canSend = inputText.trim().length > 0 && socketConnected;
+  const canSend = inputText.trim().length > 0 && !sending && !!realConversationId;
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={insets.bottom}
-      style={{ backgroundColor: appColors.canvas.DEFAULT }}
-    >
+    <View className="flex-1" style={{ backgroundColor: appColors.canvas.DEFAULT }}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <View
         className="flex-row items-center px-4 border-b border-ink-faint bg-canvas-raised"
@@ -328,7 +359,7 @@ export default function ProviderConversationScreen() {
               }}
             />
             <Text className="text-ink-muted text-xs">
-              {socketConnected ? "Online" : "Connecting…"}
+              {socketConnected ? "Connected" : "Reconnecting…"}
             </Text>
           </View>
         </View>
@@ -336,7 +367,10 @@ export default function ProviderConversationScreen() {
 
       {/* ── Messages ────────────────────────────────────────────────────── */}
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
+        <View
+          className="flex-1 items-center justify-center"
+          style={{ marginBottom: composerHeight + avoidedBottom }}
+        >
           <ActivityIndicator color={appColors.primary[600]} />
         </View>
       ) : (
@@ -383,17 +417,30 @@ export default function ProviderConversationScreen() {
           }
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => scrollToBottom(false)}
-          style={{ backgroundColor: appColors.canvas.sunken }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          style={{
+            backgroundColor: appColors.canvas.sunken,
+            marginBottom: composerHeight + avoidedBottom,
+          }}
         />
       )}
 
-      {/* ── Input bar ───────────────────────────────────────────────────── */}
+      {/* ── Input bar (pinned above keyboard) ───────────────────────────── */}
       <View
         className="bg-canvas-raised border-t border-ink-faint"
+        onLayout={(event) => {
+          const next = Math.ceil(event.nativeEvent.layout.height);
+          if (next > 0 && next !== composerHeight) setComposerHeight(next);
+        }}
         style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: avoidedBottom,
           paddingHorizontal: 12,
           paddingTop: 10,
-          paddingBottom: Math.max(insets.bottom + 8, 14),
+          paddingBottom: composerPaddingBottom,
         }}
       >
         <View className="flex-row items-end gap-2">
@@ -421,7 +468,7 @@ export default function ProviderConversationScreen() {
             accessibilityLabel="Message input"
           />
           <TouchableOpacity
-            onPress={sendMessage}
+            onPress={() => void sendMessage()}
             disabled={!canSend}
             className="items-center justify-center"
             style={{
@@ -442,6 +489,6 @@ export default function ProviderConversationScreen() {
           </TouchableOpacity>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }

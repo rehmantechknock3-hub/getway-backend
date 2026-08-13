@@ -31,6 +31,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.marketplace.app",
+      "softwareKeyboardLayoutMode": "pan",
       "usesCleartextTraffic": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",

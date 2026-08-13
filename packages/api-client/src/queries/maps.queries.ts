@@ -1,6 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { DrivingLegResponseSchema, type DrivingLegResponse } from "@repo/schemas";
+import {
+  DrivingLegResponseSchema,
+  PlaceDetailsResponseSchema,
+  PlacesAutocompleteResponseSchema,
+  ReverseGeocodeResponseSchema,
+  type DrivingLegResponse,
+  type PlaceDetailsResponse,
+  type PlacesAutocompleteResponse,
+  type ReverseGeocodeResponse,
+} from "@repo/schemas";
 
 import { apiClient } from "../client";
 
@@ -34,6 +43,7 @@ export const mapsKeys = {
       args.destLatitude,
       args.destLongitude,
     ] as const,
+  placesAutocomplete: (q: string) => ["maps", "places-autocomplete", q] as const,
 };
 
 export function useDrivingLeg(
@@ -43,7 +53,7 @@ export function useDrivingLeg(
     destLatitude: number;
     destLongitude: number;
   },
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean },
 ) {
   const enabled =
     (options?.enabled ?? true) &&
@@ -61,4 +71,38 @@ export function useDrivingLeg(
     enabled,
     staleTime: 30_000,
   });
+}
+
+export function usePlacesAutocomplete(query: string, options?: { enabled?: boolean }) {
+  const q = query.trim();
+  const enabled = (options?.enabled ?? true) && q.length >= 2;
+
+  return useQuery({
+    queryKey: mapsKeys.placesAutocomplete(q),
+    queryFn: async (): Promise<PlacesAutocompleteResponse> => {
+      const { data } = await apiClient.get<unknown>("/api/v1/maps/places/autocomplete", {
+        params: { q },
+      });
+      return PlacesAutocompleteResponseSchema.parse(data);
+    },
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export async function fetchPlaceDetails(placeId: string): Promise<PlaceDetailsResponse> {
+  const { data } = await apiClient.get<unknown>("/api/v1/maps/places/details", {
+    params: { placeId },
+  });
+  return PlaceDetailsResponseSchema.parse(data);
+}
+
+export async function fetchReverseGeocode(
+  latitude: number,
+  longitude: number,
+): Promise<ReverseGeocodeResponse> {
+  const { data } = await apiClient.get<unknown>("/api/v1/maps/geocode/reverse", {
+    params: { latitude, longitude },
+  });
+  return ReverseGeocodeResponseSchema.parse(data);
 }

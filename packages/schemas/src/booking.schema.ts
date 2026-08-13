@@ -61,6 +61,22 @@ export const BookingListResponseSchema = z.object({
   limit: z.number().int(),
 });
 
+/** Admin booking list row with human-readable customer + provider names. */
+export const AdminBookingViewSchema = BookingWithReviewSchema.extend({
+  customerFirstName: z.string(),
+  customerLastName: z.string(),
+  providerFirstName: z.string(),
+  providerLastName: z.string(),
+  serviceTitle: z.string().optional(),
+});
+
+export const AdminBookingListResponseSchema = z.object({
+  data: z.array(AdminBookingViewSchema),
+  total: z.number().int(),
+  page: z.number().int(),
+  limit: z.number().int(),
+});
+
 /** Booking row for provider app (customer + service labels for UI). */
 export const ProviderBookingViewSchema = BookingSchema.extend({
   customerFirstName: z.string(),
@@ -109,6 +125,8 @@ export type CreateBookingInput       = z.infer<typeof CreateBookingSchema>;
 export type AdminCreateBookingInput  = z.infer<typeof AdminCreateBookingSchema>;
 export type UpdateBookingStatusInput = z.infer<typeof UpdateBookingStatusSchema>;
 export type BookingListResponse      = z.infer<typeof BookingListResponseSchema>;
+export type AdminBookingView         = z.infer<typeof AdminBookingViewSchema>;
+export type AdminBookingListResponse = z.infer<typeof AdminBookingListResponseSchema>;
 export type ProviderBookingView      = z.infer<typeof ProviderBookingViewSchema>;
 export type ProviderBookingListResponse = z.infer<typeof ProviderBookingListResponseSchema>;
 export type ProviderJobQueueStats = z.infer<typeof ProviderJobQueueStatsSchema>;

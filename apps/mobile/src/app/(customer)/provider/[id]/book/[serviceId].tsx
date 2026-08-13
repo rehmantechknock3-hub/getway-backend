@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -10,7 +10,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,6 +26,7 @@ import { reportError } from "@repo/utils";
 
 import { appColors } from "../../../../../styles/colors";
 import { textInputBaselineStyle } from "../../../../../styles/text-input";
+import { requestDeviceLocation } from "../../../../../utils/device-location";
 
 const DAY_OFFSETS = [1, 2, 3, 5, 7] as const;
 const SLOT_LABELS = [
@@ -98,7 +98,9 @@ export default function BookServiceScreen() {
   const [notes, setNotes] = useState("");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [didAutoLocate, setDidAutoLocate] = useState(false);
 
   const servicesQuery = useProviderServices(providerId, {
     enabled: isLoaded && isSignedIn && !!providerId,
@@ -122,27 +124,45 @@ export default function BookServiceScreen() {
     return `${p.firstName} ${p.lastName}`.trim();
   }, [providerQuery.data]);
 
-  const useMyLocation = useCallback(async () => {
+  const useMyLocation = useCallback(async (opts?: { silent?: boolean }) => {
     setFormError(null);
     setLocating(true);
     try {
-      const perm = await Location.requestForegroundPermissionsAsync();
-      if (perm.status !== "granted") {
-        setFormError("Location permission is required to use this option.");
+      const result = await requestDeviceLocation({
+        context: { screen: "BookService", action: "useMyLocation" },
+      });
+      if (!result.ok) {
+        setLocationPermissionDenied(result.reason === "denied");
+        if (!opts?.silent) {
+          setFormError(
+            result.reason === "denied"
+              ? "Location permission denied. Enter your service address manually."
+              : "Could not read your location. Enter an address manually."
+          );
+        }
         return;
       }
-      const pos = await Location.getCurrentPositionAsync({});
+      setLocationPermissionDenied(false);
       setCoords({
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
+        latitude: result.data.coords.latitude,
+        longitude: result.data.coords.longitude,
       });
+      setAddress(result.data.addressLabel);
     } catch (error: unknown) {
       reportError(error, { action: "book_use_my_location" });
-      setFormError("Could not read your location. Try again or enter an address.");
+      if (!opts?.silent) {
+        setFormError("Could not read your location. Try again or enter an address.");
+      }
     } finally {
       setLocating(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (step !== 3 || didAutoLocate) return;
+    setDidAutoLocate(true);
+    void useMyLocation({ silent: true });
+  }, [step, didAutoLocate, useMyLocation]);
 
   const submit = useCallback(async () => {
     if (!svcId || !address.trim()) return;
@@ -542,6 +562,15 @@ export default function BookServiceScreen() {
           </View>
 
           <Text className="text-sm font-bold text-ink mb-2">Service address</Text>
+          <Text className="text-ink-muted text-xs mb-2 leading-4">
+            {locating
+              ? "Detecting your current location…"
+              : locationPermissionDenied
+                ? "Location access was denied. Type your service address below."
+                : coords
+                  ? "Using your current location. Edit the address if needed."
+                  : "We'll fill this from GPS when allowed, or you can type it."}
+          </Text>
           <TextInput
             className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 text-ink text-base mb-3 min-h-[88px]"
             placeholder="Street, apartment, city, ZIP"
@@ -550,11 +579,12 @@ export default function BookServiceScreen() {
             value={address}
             onChangeText={setAddress}
             multiline
+            editable={!locating}
           />
 
           <TouchableOpacity
             className="flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary-100 bg-primary-50 mb-2"
-            onPress={useMyLocation}
+            onPress={() => void useMyLocation()}
             disabled={locating}
             activeOpacity={0.85}
           >
@@ -563,7 +593,9 @@ export default function BookServiceScreen() {
             ) : (
               <Ionicons name="navigate-outline" size={20} color={appColors.primary[600]} />
             )}
-            <Text className="text-primary-600 font-semibold text-sm">Use my location for map pin</Text>
+            <Text className="text-primary-600 font-semibold text-sm">
+              {locating ? "Detecting…" : "Use my current location"}
+            </Text>
           </TouchableOpacity>
 
           {formError ? (

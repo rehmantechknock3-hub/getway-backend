@@ -22,3 +22,6 @@ export * from "./message.schema";
 
 // Maps
 export * from "./maps.schema";
+
+// Admin
+export * from "./admin.schema";

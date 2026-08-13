@@ -1,14 +1,15 @@
-import { Module } from "@nestjs/common";
+import { Module, forwardRef } from "@nestjs/common";
 
 import { PrismaModule } from "../prisma/prisma.module";
+import { RealtimeModule } from "../realtime/realtime.module";
 
 import { MessagesController } from "./messages.controller";
-import { MessagesService }    from "./messages.service";
+import { MessagesService } from "./messages.service";
 
 @Module({
-  imports:     [PrismaModule],
+  imports: [PrismaModule, forwardRef(() => RealtimeModule)],
   controllers: [MessagesController],
-  providers:   [MessagesService],
-  exports:     [MessagesService],
+  providers: [MessagesService],
+  exports: [MessagesService],
 })
 export class MessagesModule {}

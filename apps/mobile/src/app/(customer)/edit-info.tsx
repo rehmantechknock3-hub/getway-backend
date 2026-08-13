@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useUser } from "@clerk/expo";
@@ -13,6 +13,7 @@ import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
+import { requestDeviceLocation } from "../../utils/device-location";
 import { countPhoneDigits, sanitizePhoneInput } from "../../utils/phone";
 
 export default function CustomerEditInfoScreen() {
@@ -32,6 +33,8 @@ export default function CustomerEditInfoScreen() {
   const [primaryPreviewLatitude, setPrimaryPreviewLatitude] = useState<number | undefined>(undefined);
   const [primaryPreviewLongitude, setPrimaryPreviewLongitude] = useState<number | undefined>(undefined);
   const [primaryPreviewLoading, setPrimaryPreviewLoading] = useState(false);
+  const [locationDetecting, setLocationDetecting] = useState(false);
+  const [locationFromDevice, setLocationFromDevice] = useState(false);
   const [carCompany, setCarCompany] = useState("");
   const [carModel, setCarModel] = useState("");
   const [notes, setNotes] = useState("");
@@ -39,6 +42,31 @@ export default function CustomerEditInfoScreen() {
 
   const signInEmail = clerkUser?.primaryEmailAddress?.emailAddress?.trim() ?? "";
   const accountEmail = signInEmail || me?.email || "";
+
+  const detectCurrentLocation = useCallback(async () => {
+    setLocationDetecting(true);
+    try {
+      const result = await requestDeviceLocation({
+        context: { screen: "CustomerEditInfo", action: "detectCurrentLocation" },
+      });
+      if (!result.ok) {
+        setLocationFromDevice(false);
+        showToast(
+          "info",
+          result.reason === "denied"
+            ? "Location permission denied. Enter your address manually."
+            : "Could not read your location. Enter your address manually."
+        );
+        return;
+      }
+      setLocationFromDevice(true);
+      setPrimaryLocation(result.data.addressLabel);
+      setPrimaryPreviewLatitude(result.data.coords.latitude);
+      setPrimaryPreviewLongitude(result.data.coords.longitude);
+    } finally {
+      setLocationDetecting(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!me) return;
@@ -55,12 +83,15 @@ export default function CustomerEditInfoScreen() {
       }))
     );
     setPrimaryLocation(me.customerOnboarding?.primaryLocation ?? "");
+    setLocationFromDevice(false);
     setCarCompany(me.customerOnboarding?.carCompany ?? "");
     setCarModel(me.customerOnboarding?.carModel ?? "");
     setNotes(me.customerOnboarding?.notes ?? "");
   }, [me, clerkUser?.firstName, clerkUser?.lastName]);
 
   useEffect(() => {
+    if (locationFromDevice) return;
+
     const query = primaryLocation.trim();
     if (!googleMapsApiKey || query.length < 3) {
       setPrimaryPreviewLatitude(undefined);
@@ -80,7 +111,7 @@ export default function CustomerEditInfoScreen() {
     }, 450);
 
     return () => clearTimeout(timeout);
-  }, [primaryLocation, googleMapsApiKey]);
+  }, [primaryLocation, googleMapsApiKey, locationFromDevice]);
 
   function updateLocation(index: number, key: "label" | "address", value: string) {
     setSavedLocations((prev) =>
@@ -293,17 +324,36 @@ export default function CustomerEditInfoScreen() {
         <TextInput
           className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
           value={primaryLocation}
-          onChangeText={setPrimaryLocation}
-          placeholder="e.g. California, USA"
+          onChangeText={(value) => {
+            setLocationFromDevice(false);
+            setPrimaryLocation(value);
+          }}
+          placeholder="Street, city, or area"
           placeholderTextColor={appColors.ink.subtle}
           style={textInputBaselineStyle}
+          editable={!locationDetecting}
         />
+        <TouchableOpacity
+          className="flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary-100 bg-primary-50 mb-3"
+          onPress={() => void detectCurrentLocation()}
+          disabled={locationDetecting}
+          activeOpacity={0.85}
+        >
+          {locationDetecting ? (
+            <ActivityIndicator size="small" color={appColors.primary[600]} />
+          ) : (
+            <Ionicons name="navigate-outline" size={18} color={appColors.primary[600]} />
+          )}
+          <Text className="text-primary-600 font-semibold text-sm">
+            {locationDetecting ? "Detecting…" : "Use current location"}
+          </Text>
+        </TouchableOpacity>
         <LocationPreviewMap
           title="Location preview"
           description="Verify your primary location pin is correct."
           latitude={primaryPreviewLatitude}
           longitude={primaryPreviewLongitude}
-          isLoading={primaryPreviewLoading}
+          isLoading={primaryPreviewLoading || locationDetecting}
           emptyMessage={
             googleMapsApiKey
               ? "Type at least 3 characters to preview your location."

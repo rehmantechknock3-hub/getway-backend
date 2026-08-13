@@ -255,7 +255,7 @@ export default function BookingDetailScreen() {
     const rawBaseUrl =
       process.env.EXPO_PUBLIC_SOCKET_URL ??
       process.env.EXPO_PUBLIC_API_URL ??
-      "http://localhost:3001";
+      "http://127.0.0.1:3010";
     const normalized = rawBaseUrl.trim().replace(/\/$/, "");
     const client = io(`${normalized}/bookings`, {
       transports: ["websocket"],

@@ -37,6 +37,12 @@ export const SendMessageSchema = z.object({
   type:           MessageType.optional().default("TEXT"),
 });
 
+/** Body for POST /messages/conversations/:conversationId/messages */
+export const SendMessageBodySchema = z.object({
+  content: z.string().min(1).max(2000),
+  type:    MessageType.optional().default("TEXT"),
+});
+
 export const MessageListResponseSchema = z.object({
   data:  z.array(MessageSchema),
   total: z.number().int(),
@@ -48,4 +54,5 @@ export type Conversation         = z.infer<typeof ConversationSchema>;
 export type Message              = z.infer<typeof MessageSchema>;
 export type ConversationListItem = z.infer<typeof ConversationListItemSchema>;
 export type SendMessageInput     = z.infer<typeof SendMessageSchema>;
+export type SendMessageBody      = z.infer<typeof SendMessageBodySchema>;
 export type MessageListResponse  = z.infer<typeof MessageListResponseSchema>;

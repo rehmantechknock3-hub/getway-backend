@@ -244,6 +244,7 @@ export class UsersService {
             averageRating: true,
             totalReviews: true,
             isOnline: true,
+            verificationStatus: true,
           },
         },
       },
@@ -261,6 +262,7 @@ export class UsersService {
             averageRating: providerProfile.averageRating,
             totalReviews: providerProfile.totalReviews,
             isOnline: providerProfile.isOnline,
+            verificationStatus: providerProfile.verificationStatus,
           }
         : undefined,
     };
@@ -290,6 +292,7 @@ export class UsersService {
             averageRating: true,
             totalReviews: true,
             isOnline: true,
+            verificationStatus: true,
           },
         },
       },
@@ -305,6 +308,7 @@ export class UsersService {
             averageRating: providerProfile.averageRating,
             totalReviews: providerProfile.totalReviews,
             isOnline: providerProfile.isOnline,
+            verificationStatus: providerProfile.verificationStatus,
           }
         : undefined,
     };
@@ -313,11 +317,20 @@ export class UsersService {
   async updateProviderPresence(clerkId: string, isOnline: boolean) {
     const user = await this.prisma.user.findUnique({
       where: { clerkId },
-      select: { id: true, role: true, providerProfile: { select: { id: true } } },
+      select: {
+        id: true,
+        role: true,
+        providerProfile: { select: { id: true, verificationStatus: true } },
+      },
     });
     if (!user) throw new NotFoundException("User not found");
     if (user.role !== "PROVIDER" || !user.providerProfile) {
       throw new ForbiddenException("Only providers can update availability");
+    }
+    if (isOnline && user.providerProfile.verificationStatus !== "APPROVED") {
+      throw new ForbiddenException(
+        "Your account must be approved by admin before you can go online",
+      );
     }
 
     await this.prisma.providerProfile.update({

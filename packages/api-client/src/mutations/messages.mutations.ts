@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import type { Message } from "@repo/schemas";
+import type { Message, SendMessageBody } from "@repo/schemas";
 
 import { apiClient } from "../client";
 import { messageKeys } from "../queries/messages.queries";
@@ -19,6 +19,33 @@ export function useMarkMessagesRead(conversationId: string) {
 export function useInvalidateConversations() {
   const queryClient = useQueryClient();
   return () => queryClient.invalidateQueries({ queryKey: messageKeys.conversations() });
+}
+
+export function useSendMessage(conversationId: string, page = 1) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: SendMessageBody) => {
+      const { data } = await apiClient.post<Message>(
+        `/api/v1/messages/conversations/${conversationId}/messages`,
+        body
+      );
+      return data;
+    },
+    onSuccess: (message) => {
+      queryClient.setQueryData(
+        messageKeys.messages(conversationId, page),
+        (prev: { data: Message[]; total: number; page: number; limit: number } | undefined) => {
+          if (!prev) {
+            return { data: [message], total: 1, page, limit: 50 };
+          }
+          const exists = prev.data.some((m) => m.id === message.id);
+          if (exists) return prev;
+          return { ...prev, data: [...prev.data, message], total: prev.total + 1 };
+        }
+      );
+      void queryClient.invalidateQueries({ queryKey: messageKeys.conversations() });
+    },
+  });
 }
 
 // Used to optimistically append a WS-delivered message into the React Query cache.

@@ -9,8 +9,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { io, type Socket } from "socket.io-client";
 import * as Location from "expo-location";
 
-import { useProviderBooking } from "@repo/api-client";
+import { useProviderBooking, useUpdateProviderBookingStatus } from "@repo/api-client";
 import { isTerminalBookingStatus, useBookingTracking } from "@repo/hooks";
+import type { ProviderBookingView } from "@repo/schemas";
+import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
@@ -76,6 +78,7 @@ export default function ProviderBookingDetailScreen() {
 
   const enabled = isLoaded && isSignedIn && !!bookingId;
   const { data: booking, isLoading, isError, refetch } = useProviderBooking(bookingId, { enabled });
+  const updateStatus = useUpdateProviderBookingStatus();
   const bookingStatus = booking?.status ?? null;
   const shouldConnectSocket =
     enabled && !!bookingId && !isLoading && !!booking && !isTerminalBookingStatus(bookingStatus);
@@ -84,6 +87,7 @@ export default function ProviderBookingDetailScreen() {
     shouldConnectSocket ? socketInstance : null
   );
   const effectiveStatus = tracking.status ?? bookingStatus;
+  const statusBusy = updateStatus.isPending;
 
   useEffect(() => {
     getTokenRef.current = getToken;
@@ -127,7 +131,7 @@ export default function ProviderBookingDetailScreen() {
     const rawBaseUrl =
       process.env.EXPO_PUBLIC_SOCKET_URL ??
       process.env.EXPO_PUBLIC_API_URL ??
-      "http://localhost:3001";
+      "http://127.0.0.1:3010";
     const normalized = rawBaseUrl.trim().replace(/\/$/, "");
     const client = io(`${normalized}/bookings`, {
       transports: ["websocket"],
@@ -267,6 +271,28 @@ export default function ProviderBookingDetailScreen() {
   const providerDisplayLocation =
     localProviderLocation ?? tracking.providerLocation ?? lastLiveProviderLocation;
 
+  async function runStatus(status: ProviderBookingView["status"]) {
+    if (!bookingId || statusBusy) return;
+    try {
+      await updateStatus.mutateAsync({ bookingId, input: { status } });
+      await refetch();
+      if (status === "ACCEPTED") {
+        showToast("success", "Request accepted");
+      } else if (status === "REJECTED") {
+        showToast("success", "Request declined");
+      } else {
+        showToast("success", "Job updated");
+      }
+    } catch (error: unknown) {
+      reportError(error, {
+        screen: "ProviderBookingDetail",
+        action: "updateStatus",
+        extra: { bookingId, status },
+      });
+      showToast("error", "Could not update", "Check your connection and try again.");
+    }
+  }
+
   return (
     <ScrollView
       className="flex-1 bg-canvas"
@@ -342,6 +368,82 @@ export default function ProviderBookingDetailScreen() {
               </Text>
             </View>
           </View>
+
+          {effectiveStatus === "PENDING" ? (
+            <View className="mt-4">
+              <Text className="text-ink-muted text-sm mb-3 leading-5">
+                Review this request, then accept to take the job or decline if you cannot do it.
+              </Text>
+              <View className="flex-row gap-3">
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  disabled={statusBusy}
+                  className="flex-1 border border-ink-faint rounded-2xl py-3.5 items-center bg-canvas-raised"
+                  onPress={() => void runStatus("REJECTED")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decline booking request"
+                  style={{ opacity: statusBusy ? 0.6 : 1 }}
+                >
+                  <Text className="text-ink-soft font-semibold text-base">
+                    {statusBusy && updateStatus.variables?.input.status === "REJECTED"
+                      ? "Declining…"
+                      : "Decline"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  disabled={statusBusy}
+                  className="flex-1 bg-primary-600 rounded-2xl py-3.5 items-center"
+                  onPress={() => void runStatus("ACCEPTED")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Accept booking request"
+                  style={{ opacity: statusBusy ? 0.6 : 1 }}
+                >
+                  {statusBusy && updateStatus.variables?.input.status === "ACCEPTED" ? (
+                    <ActivityIndicator color={appColors.onPrimary} />
+                  ) : (
+                    <Text className="text-white font-semibold text-base">Accept</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
+          {effectiveStatus === "ACCEPTED" ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={statusBusy}
+              className="bg-primary-600 rounded-2xl py-3.5 items-center mt-4"
+              onPress={() => void runStatus("IN_PROGRESS")}
+              accessibilityRole="button"
+              accessibilityLabel="Start job"
+              style={{ opacity: statusBusy ? 0.6 : 1 }}
+            >
+              {statusBusy && updateStatus.variables?.input.status === "IN_PROGRESS" ? (
+                <ActivityIndicator color={appColors.onPrimary} />
+              ) : (
+                <Text className="text-white font-semibold text-base">Start job</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
+
+          {effectiveStatus === "IN_PROGRESS" ? (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              disabled={statusBusy}
+              className="bg-primary-600 rounded-2xl py-3.5 items-center mt-4"
+              onPress={() => void runStatus("COMPLETED")}
+              accessibilityRole="button"
+              accessibilityLabel="Mark job complete"
+              style={{ opacity: statusBusy ? 0.6 : 1 }}
+            >
+              {statusBusy && updateStatus.variables?.input.status === "COMPLETED" ? (
+                <ActivityIndicator color={appColors.onPrimary} />
+              ) : (
+                <Text className="text-white font-semibold text-base">Mark complete</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             className="flex-row items-center justify-center gap-2 bg-canvas-raised border border-primary-600 rounded-2xl py-3.5 mt-4"

@@ -15,7 +15,7 @@ export function setAuthTokenResolver(resolver: AuthTokenResolver | null): void {
 const defaultBaseUrl =
   process.env["EXPO_PUBLIC_API_URL"] ??
   process.env["NEXT_PUBLIC_API_URL"] ??
-  "http://localhost:3001";
+  "http://127.0.0.1:3010";
 
 /**
  * Axios instance shared across all query/mutation functions.
@@ -70,6 +70,19 @@ apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) =>
       }
     } catch {
       // Preserve any explicit/default Authorization header already attached by the app.
+    }
+  }
+
+  // React Native FormData uploads break if Axios keeps the default `application/json`
+  // Content-Type (often surfaces as a generic "Network Error" with no HTTP response).
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    const headers = config.headers;
+    if (typeof headers.set === "function") {
+      // `false` tells Axios to omit Content-Type so the runtime can set multipart boundaries.
+      headers.set("Content-Type", false as unknown as string);
+    } else {
+      delete (headers as Record<string, unknown>)["Content-Type"];
+      delete (headers as Record<string, unknown>)["content-type"];
     }
   }
 

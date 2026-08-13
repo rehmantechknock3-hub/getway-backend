@@ -12,11 +12,12 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
 import type { ProviderBookingView } from "@repo/schemas";
 import {
+  useMe,
   useNotifications,
   useProviderBookings,
   useUpdateProviderBookingStatus,
@@ -174,10 +175,16 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
 
 export default function JobsScreen() {
   const insets = useSafeAreaInsets();
-  const { isLoaded, isSignedIn, sessionClaims } = useAuth();
-  const firstName = (sessionClaims?.firstName as string) ?? "there";
+  const { isLoaded, isSignedIn } = useAuth();
+  const { user: clerkUser } = useUser();
 
   const enabled = isLoaded && isSignedIn;
+  const { data: me } = useMe({ enabled });
+  const firstName =
+    me?.firstName?.trim() ||
+    clerkUser?.firstName?.trim() ||
+    "Provider";
+  const verificationStatus = me?.providerMetrics?.verificationStatus;
   const queueQuery = useProviderBookings(1, { enabled, scope: "queue" });
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
   const { data: notificationPayload, refetch: refetchNotifications } = useNotifications(1, { enabled });
@@ -259,6 +266,24 @@ export default function JobsScreen() {
             ) : null}
           </View>
         </View>
+
+        {verificationStatus && verificationStatus !== "APPROVED" ? (
+          <View className="mx-5 mb-5 rounded-2xl border border-ink-faint bg-canvas-sunken px-4 py-3.5">
+            <View className="flex-row items-center gap-2 mb-1">
+              <Ionicons name="shield-outline" size={18} color={appColors.semantic.warning} />
+              <Text className="text-ink font-bold text-sm">
+                {verificationStatus === "REJECTED"
+                  ? "Access suspended"
+                  : "Not approved by admin"}
+              </Text>
+            </View>
+            <Text className="text-ink-soft text-sm leading-5">
+              {verificationStatus === "REJECTED"
+                ? "An admin revoked your marketplace access. You won’t appear to customers until you’re approved again."
+                : "Finish waiting for admin approval. Until then you stay hidden from customers and can’t go online for new jobs."}
+            </Text>
+          </View>
+        ) : null}
 
         <View className="flex-row gap-2 px-5 mb-6">
           <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">

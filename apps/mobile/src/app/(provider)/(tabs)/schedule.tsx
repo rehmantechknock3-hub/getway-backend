@@ -69,6 +69,14 @@ export default function ScheduleScreen() {
   );
 
   async function handlePresenceToggle(nextValue: boolean) {
+    if (nextValue && me?.providerMetrics?.verificationStatus !== "APPROVED") {
+      showToast(
+        "error",
+        "Not approved yet",
+        "An admin must approve your account before you can go online."
+      );
+      return;
+    }
     setIsOnline(nextValue);
     try {
       await updateProviderPresence.mutateAsync(nextValue);
@@ -165,8 +173,13 @@ export default function ScheduleScreen() {
             size={16}
             color={isOnline ? appColors.semantic.success : appColors.ink.subtle}
           />
-          <Text className={`text-sm font-medium ${isOnline ? "text-primary-700" : "text-ink-muted"}`}>
-            {isOnline ? "You are currently online and visible to customers." : "You are offline for new requests."}
+          <Text className={`text-sm font-medium flex-1 ${isOnline ? "text-primary-700" : "text-ink-muted"}`}>
+            {me?.providerMetrics?.verificationStatus &&
+            me.providerMetrics.verificationStatus !== "APPROVED"
+              ? "Admin approval required before you can go online."
+              : isOnline
+                ? "You are currently online and visible to customers."
+                : "You are offline for new requests."}
           </Text>
         </View>
       </View>

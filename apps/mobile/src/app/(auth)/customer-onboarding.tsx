@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -24,6 +24,7 @@ import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
+import { requestDeviceLocation } from "../../utils/device-location";
 
 const CAR_COMPANIES = [
   "Toyota",
@@ -57,13 +58,51 @@ export default function CustomerOnboardingScreen() {
   const [previewLatitude, setPreviewLatitude] = useState<number | undefined>(undefined);
   const [previewLongitude, setPreviewLongitude] = useState<number | undefined>(undefined);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [locationDetecting, setLocationDetecting] = useState(false);
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
+  const [locationFromDevice, setLocationFromDevice] = useState(false);
   // Covers the full handleContinue flow (set-role + session reload + onboarding + nav),
   // not just the mutation — the pre-mutation calls take most of the wall-clock time.
   const [isSubmitting, setIsSubmitting] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   const allowRoleChange = params.allowRoleChange === "1";
 
+  const detectCurrentLocation = useCallback(async (opts?: { silent?: boolean }) => {
+    setLocationDetecting(true);
+    try {
+      const result = await requestDeviceLocation({
+        context: { screen: "CustomerOnboarding", action: "detectCurrentLocation" },
+      });
+      if (!result.ok) {
+        setLocationPermissionDenied(result.reason === "denied");
+        setLocationFromDevice(false);
+        if (!opts?.silent) {
+          showToast(
+            "info",
+            result.reason === "denied"
+              ? "Location permission denied. Enter your address manually."
+              : "Could not read your location. Enter your address manually."
+          );
+        }
+        return;
+      }
+      setLocationPermissionDenied(false);
+      setLocationFromDevice(true);
+      setPrimaryLocation(result.data.addressLabel);
+      setPreviewLatitude(result.data.coords.latitude);
+      setPreviewLongitude(result.data.coords.longitude);
+    } finally {
+      setLocationDetecting(false);
+    }
+  }, []);
+
   useEffect(() => {
+    void detectCurrentLocation({ silent: true });
+  }, [detectCurrentLocation]);
+
+  useEffect(() => {
+    if (locationFromDevice) return;
+
     const query = primaryLocation.trim();
     if (!googleMapsApiKey || query.length < 3) {
       setPreviewLatitude(undefined);
@@ -83,7 +122,7 @@ export default function CustomerOnboardingScreen() {
     }, 450);
 
     return () => clearTimeout(timeout);
-  }, [primaryLocation, googleMapsApiKey]);
+  }, [primaryLocation, googleMapsApiKey, locationFromDevice]);
 
   async function handleContinue() {
     if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
@@ -164,24 +203,54 @@ export default function CustomerOnboardingScreen() {
         </View>
 
         <Text className="text-ink text-sm font-medium mb-2">Primary location</Text>
+        <Text className="text-ink-muted text-xs mb-2 leading-4">
+          {locationDetecting
+            ? "Detecting your current location…"
+            : locationPermissionDenied
+              ? "Location access was denied. Enter your address below, or allow location and try again."
+              : locationFromDevice
+                ? "Using your current location. Edit the address if needed."
+                : "We'll use your GPS when allowed. Otherwise enter an address manually."}
+        </Text>
         <TextInput
-          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
-          placeholder="e.g. California, USA"
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-3"
+          placeholder="Street, city, or area"
           placeholderTextColor={appColors.ink.subtle}
           style={textInputBaselineStyle}
           value={primaryLocation}
-          onChangeText={setPrimaryLocation}
+          onChangeText={(value) => {
+            setLocationFromDevice(false);
+            setPrimaryLocation(value);
+          }}
+          editable={!locationDetecting}
         />
+        <TouchableOpacity
+          className="flex-row items-center justify-center gap-2 py-3 rounded-2xl border border-primary-100 bg-primary-50 mb-4"
+          onPress={() => void detectCurrentLocation()}
+          disabled={locationDetecting}
+          activeOpacity={0.85}
+        >
+          {locationDetecting ? (
+            <ActivityIndicator size="small" color={appColors.primary[600]} />
+          ) : (
+            <Ionicons name="navigate-outline" size={18} color={appColors.primary[600]} />
+          )}
+          <Text className="text-primary-600 font-semibold text-sm">
+            {locationDetecting ? "Detecting…" : "Use current location"}
+          </Text>
+        </TouchableOpacity>
         <LocationPreviewMap
           title="Location preview"
           description="Verify your service location is pinned correctly."
           latitude={previewLatitude}
           longitude={previewLongitude}
-          isLoading={previewLoading}
+          isLoading={previewLoading || locationDetecting}
           emptyMessage={
-            googleMapsApiKey
-              ? "Type at least 3 characters to preview your location."
-              : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview your location on map."
+            locationPermissionDenied
+              ? "Enter an address above to preview it on the map."
+              : googleMapsApiKey
+                ? "Type at least 3 characters to preview your location."
+                : "Add EXPO_PUBLIC_GOOGLE_MAPS_API_KEY to preview your location on map."
           }
         />
 

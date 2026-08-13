@@ -17,18 +17,17 @@ export function createSocketOriginChecker(configService: ConfigService): OriginC
   const socketUrl = configService.get<string>("EXPO_PUBLIC_SOCKET_URL");
   const isProduction = configService.get<string>("NODE_ENV") === "production";
 
+  // Match HTTP CORS in main.ts: Expo Go / Metro can present varying Origins in dev.
+  if (!isProduction) {
+    return () => true;
+  }
+
   const allowedOrigins = new Set<string>([
     ...parseOrigins(webUrl),
     ...parseOrigins(socketCorsOrigin),
     ...parseOrigins(apiUrl),
     ...parseOrigins(socketUrl),
   ]);
-
-  if (!isProduction) {
-    // Dev clients can present localhost origins depending on runtime/container.
-    parseOrigins("http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001")
-      .forEach((origin) => allowedOrigins.add(origin));
-  }
 
   return (origin: string | undefined): boolean => {
     // Native mobile websocket clients may omit Origin; allow authenticated no-origin sockets.

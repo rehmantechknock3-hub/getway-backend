@@ -1,3 +1,35 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --waynow-violet: #8b5cf6;
+    --waynow-blue: #2d5bff;
+    --waynow-cyan: #38bdf8;
+    --waynow-night: #070b14;
+  }
+
+  body {
+    @apply antialiased text-slate-900;
+  }
+
+  ::selection {
+    background: rgba(45, 91, 255, 0.22);
+  }
+}
+
+@layer utilities {
+  .text-waynow-gradient {
+    background-image: linear-gradient(135deg, #a855f7 0%, #2d5bff 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .ring-waynow {
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.18),
+      0 0 0 4px rgba(45, 91, 255, 0.08);
+  }
+}
