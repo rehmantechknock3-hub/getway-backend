@@ -1,6 +1,6 @@
 import "../globals.css";
 import { useEffect, useLayoutEffect } from "react";
-import { Platform } from "react-native";
+import { Platform, View } from "react-native";
 import {
   Stack,
   useGlobalSearchParams,
@@ -16,9 +16,11 @@ import Toast from "react-native-toast-message";
 
 import { setApiBaseUrl, setAuthToken, setAuthTokenResolver, useMe } from "@repo/api-client";
 
+import { appColors } from "../styles/colors";
+
 /** iOS Simulator often resolves `localhost` to IPv6 first; Nest may be IPv4-only → connection fails. */
 function resolveApiUrlForDevice(raw: string): string {
-  const u = raw.trim().replace(/^["']|["']$/g, "") || "http://localhost:3001";
+  const u = raw.trim().replace(/^["']|["']$/g, "") || "http://127.0.0.1:3010";
   if (Platform.OS !== "ios") return u;
   try {
     const parsed = new URL(u);
@@ -35,7 +37,7 @@ setApiBaseUrl(
   resolveApiUrlForDevice(
     process.env["EXPO_PUBLIC_API_URL"] ??
       process.env["NEXT_PUBLIC_API_URL"] ??
-      "http://localhost:3001"
+      "http://127.0.0.1:3010"
   )
 );
 
@@ -105,7 +107,12 @@ function RootNavigator() {
     }
     const safeGetToken = async (): Promise<string | null> => {
       try {
-        return await getToken({ skipCache: true });
+        return await Promise.race([
+          getToken({ skipCache: true }),
+          new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), 5000);
+          }),
+        ]);
       } catch {
         return null;
       }
@@ -172,7 +179,7 @@ function RootNavigator() {
         return;
       }
 
-      if (meQuery.isPending) {
+      if (meQuery.isLoading) {
         return;
       }
 
@@ -191,22 +198,29 @@ function RootNavigator() {
         router.replace("/(customer)/(tabs)/home");
       }
     }
-  }, [allowRoleChange, isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isPending, meQuery.isSuccess, meQuery.data, role]);
+  }, [allowRoleChange, isLoaded, isSignedIn, sessionClaims, user?.publicMetadata, segments, navState?.key, meQuery.isLoading, meQuery.isSuccess, meQuery.data, role]);
 
   return null;
 }
 
 export default function RootLayout() {
   return (
-    <ClerkProvider
-      publishableKey={process.env["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]!}
-      tokenCache={tokenCache}
-    >
-      <QueryClientProvider client={queryClient}>
-        <Stack screenOptions={{ headerShown: false }} />
-        <RootNavigator />
-        <Toast />
-      </QueryClientProvider>
-    </ClerkProvider>
+    <View style={{ flex: 1, backgroundColor: appColors.surface.night }}>
+      <ClerkProvider
+        publishableKey={process.env["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]!}
+        tokenCache={tokenCache}
+      >
+        <QueryClientProvider client={queryClient}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: appColors.canvas.DEFAULT },
+            }}
+          />
+          <RootNavigator />
+          <Toast />
+        </QueryClientProvider>
+      </ClerkProvider>
+    </View>
   );
 }

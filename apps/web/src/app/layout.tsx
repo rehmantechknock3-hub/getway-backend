@@ -5,8 +5,8 @@ import { Providers } from "./providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title:       "Marketplace Admin",
-  description: "Service marketplace administration dashboard",
+  title: "WayNow Admin",
+  description: "WayNow marketplace administration console",
 };
 
 export default function RootLayout({
@@ -15,9 +15,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
-        <ClerkProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>
+        <ClerkProvider afterSignOutUrl="/sign-in">
           <Providers>
             {children}
             <Toaster />

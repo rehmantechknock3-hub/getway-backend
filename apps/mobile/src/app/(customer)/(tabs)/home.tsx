@@ -33,6 +33,7 @@ import { haversineDistance } from "@repo/utils";
 
 import { CategoryBrowseCard } from "../../../components/home/CategoryBrowseCard";
 import { HomeHeader } from "../../../components/home/HomeHeader";
+import { NearbyProvidersMap } from "../../../components/home/NearbyProvidersMap";
 import { PopularServicesRow } from "../../../components/home/PopularServicesRow";
 import {
   HOME_CATEGORIES,
@@ -42,6 +43,7 @@ import {
 } from "../../../data/home-browse";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
+import { requestDeviceLocation } from "../../../utils/device-location";
 
 const DISCOVERY_RADIUS_KM = 10;
 
@@ -266,35 +268,27 @@ export default function HomeScreen() {
   const [showProvidersList, setShowProvidersList] = useState(false);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [customerCoords, setCustomerCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [locationLabel, setLocationLabel] = useState("Set location");
+  const [locationLabel, setLocationLabel] = useState("Detecting…");
+  const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
 
   const refreshCustomerLocation = useCallback(async () => {
-    const perm = await Location.requestForegroundPermissionsAsync();
-    if (perm.status !== Location.PermissionStatus.GRANTED) {
-      setCustomerCoords(null);
-      return;
-    }
-
-    try {
-      const precise = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Highest,
-      });
-      setCustomerCoords({
-        lat: precise.coords.latitude,
-        lon: precise.coords.longitude,
-      });
-      return;
-    } catch {
-      // Fallback when highest accuracy is temporarily unavailable.
-    }
-
-    const fallback = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
+    const result = await requestDeviceLocation({
+      accuracy: Location.Accuracy.Highest,
+      context: { screen: "CustomerHome", action: "refreshCustomerLocation" },
     });
+    if (!result.ok) {
+      setLocationPermissionDenied(result.reason === "denied");
+      if (result.reason === "denied") {
+        setCustomerCoords(null);
+      }
+      return;
+    }
+    setLocationPermissionDenied(false);
     setCustomerCoords({
-      lat: fallback.coords.latitude,
-      lon: fallback.coords.longitude,
+      lat: result.data.coords.latitude,
+      lon: result.data.coords.longitude,
     });
+    setLocationLabel(result.data.shortLabel);
   }, []);
 
   const providersQueryEnabled = isLoaded && isSignedIn;
@@ -302,6 +296,10 @@ export default function HomeScreen() {
   const { data: me, refetch: refetchMe } = useMe({ enabled: providersQueryEnabled });
 
   const discoveryCoords = useMemo(() => {
+    // Live GPS first; saved primary location only if permission was denied / GPS unavailable.
+    if (customerCoords) {
+      return customerCoords;
+    }
     const primaryLat = me?.customerOnboarding?.primaryLatitude;
     const primaryLon = me?.customerOnboarding?.primaryLongitude;
     const hasPrimary =
@@ -312,17 +310,17 @@ export default function HomeScreen() {
     if (hasPrimary) {
       return { lat: primaryLat, lon: primaryLon };
     }
-    if (customerCoords) {
-      return customerCoords;
-    }
     return null;
   }, [me?.customerOnboarding?.primaryLatitude, me?.customerOnboarding?.primaryLongitude, customerCoords]);
 
   useEffect(() => {
+    if (customerCoords) return;
     let cancelled = false;
     void (async () => {
       if (!discoveryCoords) {
-        if (!cancelled) setLocationLabel("Set location");
+        if (!cancelled) {
+          setLocationLabel(locationPermissionDenied ? "Add location" : "Set location");
+        }
         return;
       }
       try {
@@ -344,7 +342,7 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [discoveryCoords]);
+  }, [discoveryCoords, customerCoords, locationPermissionDenied]);
 
   const { data: notificationPayload, refetch: refetchNotifications } = useNotifications(1, {
     enabled: providersQueryEnabled,
@@ -388,6 +386,17 @@ export default function HomeScreen() {
   } = usePublicProviders(discoveryCoords?.lat, discoveryCoords?.lon, DISCOVERY_RADIUS_KM, {
     enabled: providersQueryEnabled && feed === "discover" && !!discoveryCoords && providersListActive,
   });
+
+  /** Always load the 10 km nearby set for the home map + list under categories. */
+  const {
+    data: nearbyProviders,
+    isLoading: nearbyLoading,
+    isError: nearbyError,
+    refetch: refetchNearby,
+    isRefetching: nearbyRefetching,
+  } = usePublicProviders(discoveryCoords?.lat, discoveryCoords?.lon, DISCOVERY_RADIUS_KM, {
+    enabled: providersQueryEnabled && !providersListActive && !!discoveryCoords,
+  });
   const {
     data: favoritesPayload,
     isLoading: favoritesLoading,
@@ -405,6 +414,7 @@ export default function HomeScreen() {
   const listLoading = feed === "discover" ? isLoading : favoritesLoading;
   const listError = feed === "discover" ? isError : favoritesError;
   const listRefetching = feed === "discover" ? isRefetching : favoritesRefetching;
+  const browseRefreshing = !providersListActive && nearbyRefetching;
 
   const filteredList = useMemo(() => {
     if (!list?.length) return list ?? [];
@@ -425,6 +435,7 @@ export default function HomeScreen() {
           await refetchMe();
         } finally {
           if (providersListActive) await refetch();
+          else await refetchNearby();
         }
       })();
     } else {
@@ -484,8 +495,26 @@ export default function HomeScreen() {
   };
 
   const onPressLocation = () => {
-    if (!discoveryCoords) {
-      void Linking.openSettings();
+    if (locationPermissionDenied || !discoveryCoords) {
+      Alert.alert(
+        "Set your location",
+        "Allow location access for automatic detection, or add a location manually in your profile.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Add manually",
+            onPress: () => {
+              router.push("/(customer)/edit-info");
+            },
+          },
+          {
+            text: "Try GPS",
+            onPress: () => {
+              void refreshCustomerLocation();
+            },
+          },
+        ]
+      );
       return;
     }
     void refreshCustomerLocation();
@@ -504,7 +533,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={providersQueryEnabled && listRefetching}
+            refreshing={providersQueryEnabled && (providersListActive ? listRefetching : browseRefreshing)}
             onRefresh={onListRefresh}
             tintColor={appColors.onPrimary}
           />
@@ -523,6 +552,29 @@ export default function HomeScreen() {
           <>
             <PopularServicesRow selectedId={selectedPopularId} onSelect={onSelectPopular} />
 
+            <View className="px-5 mb-5 flex-row gap-3">
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={() => router.push("/(customer)/(tabs)/bookings")}
+                className="flex-1 bg-glow-blue rounded-2xl py-3.5 px-3 flex-row items-center justify-center gap-2"
+                accessibilityRole="button"
+                accessibilityLabel="View current bookings"
+              >
+                <Ionicons name="calendar-outline" size={18} color={appColors.onPrimary} />
+                <Text className="text-white text-sm font-semibold">View bookings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.88}
+                onPress={onViewAllServices}
+                className="flex-1 bg-surface-elevated border border-surface-border rounded-2xl py-3.5 px-3 flex-row items-center justify-center gap-2"
+                accessibilityRole="button"
+                accessibilityLabel="View all services"
+              >
+                <Ionicons name="grid-outline" size={18} color={appColors.onPrimary} />
+                <Text className="text-white text-sm font-semibold">View all services</Text>
+              </TouchableOpacity>
+            </View>
+
             <View className="px-5 mb-5">
               <Text className="text-white text-lg font-semibold mb-4">All Categories</Text>
               {HOME_CATEGORIES.map((category) => (
@@ -535,17 +587,69 @@ export default function HomeScreen() {
               ))}
             </View>
 
+            <View className="px-5 mb-4">
+              <NearbyProvidersMap
+                customerCoords={discoveryCoords}
+                providers={nearbyProviders ?? []}
+                radiusKm={DISCOVERY_RADIUS_KM}
+                isLoading={nearbyLoading}
+                onSelectProvider={(providerId) => {
+                  router.push(`/(customer)/provider/${providerId}` as const);
+                }}
+              />
+            </View>
+
             <View className="px-5 mb-8">
-              <TouchableOpacity
-                activeOpacity={0.88}
-                onPress={onViewAllServices}
-                className="bg-surface-elevated border border-surface-border rounded-2xl py-4 px-5 flex-row items-center justify-between"
-                accessibilityRole="button"
-                accessibilityLabel="View all services"
-              >
-                <Text className="text-white text-base font-semibold">View all services</Text>
-                <Ionicons name="chevron-forward" size={20} color={appColors.onPrimary} />
-              </TouchableOpacity>
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-white text-lg font-semibold">Providers near you</Text>
+                <Text className="text-surface-muted text-xs">
+                  {(nearbyProviders ?? []).length} within {DISCOVERY_RADIUS_KM} km
+                </Text>
+              </View>
+
+              {!discoveryCoords ? (
+                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
+                  <Text className="text-surface-soft text-sm leading-5 text-center">
+                    Turn on location to see providers within {DISCOVERY_RADIUS_KM} km.
+                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={onPressLocation}
+                    className="mt-4 bg-glow-blue rounded-2xl py-3 items-center"
+                  >
+                    <Text className="text-white font-semibold text-sm">Set location</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : nearbyLoading ? (
+                <View className="py-10 items-center">
+                  <ActivityIndicator color={appColors.glow.blue} />
+                </View>
+              ) : nearbyError ? (
+                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
+                  <Text className="text-surface-soft text-sm text-center mb-3">
+                    Could not load nearby providers.
+                  </Text>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => void refetchNearby()}
+                    className="bg-surface-elevated border border-surface-border rounded-2xl py-3 items-center"
+                  >
+                    <Text className="text-white font-semibold text-sm">Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (nearbyProviders ?? []).length === 0 ? (
+                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
+                  <Text className="text-surface-soft text-sm leading-5 text-center">
+                    No providers found within {DISCOVERY_RADIUS_KM} km right now. Try View all to browse farther.
+                  </Text>
+                </View>
+              ) : (
+                <View className="gap-3">
+                  {(nearbyProviders ?? []).map((p) => (
+                    <ProviderRow key={p.id} p={p} customerCoords={discoveryCoords} />
+                  ))}
+                </View>
+              )}
             </View>
           </>
         ) : (
@@ -666,16 +770,30 @@ export default function HomeScreen() {
               <View className="bg-surface-card rounded-3xl p-8 border border-surface-border items-center">
                 <Ionicons name="location-outline" size={36} color={appColors.surface.muted} />
                 <Text className="text-white font-bold text-lg text-center mt-3 mb-2">
-                  Set where to search
+                  {locationPermissionDenied ? "Location permission needed" : "Set where to search"}
                 </Text>
                 <Text className="text-surface-muted text-sm text-center leading-5 mb-5">
-                  Turn on location access, or save a primary location under Profile.
+                  {locationPermissionDenied
+                    ? "Allow location access to find nearby providers automatically, or add a location manually."
+                    : "Turn on location access, or save a primary location under Profile."}
                 </Text>
                 <TouchableOpacity
-                  className="bg-glow-blue rounded-2xl px-5 py-3"
+                  className="bg-glow-blue rounded-2xl px-5 py-3 mb-3 w-full items-center"
+                  onPress={() => void refreshCustomerLocation()}
+                >
+                  <Text className="text-white font-semibold text-sm">Use current location</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="bg-surface-elevated border border-surface-border rounded-2xl px-5 py-3 mb-3 w-full items-center"
+                  onPress={() => router.push("/(customer)/edit-info")}
+                >
+                  <Text className="text-white font-semibold text-sm">Add location manually</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  className="px-5 py-2"
                   onPress={() => void Linking.openSettings()}
                 >
-                  <Text className="text-white font-semibold text-sm">Open location settings</Text>
+                  <Text className="text-glow-blue font-semibold text-sm">Open location settings</Text>
                 </TouchableOpacity>
               </View>
             ) : !list?.length ? (

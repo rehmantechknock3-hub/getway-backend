@@ -2,15 +2,21 @@ import {
   BadRequestException,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Query,
   Req,
+  Body,
+  forwardRef,
 } from "@nestjs/common";
 import type { Request } from "express";
 import { z } from "zod";
 
+import { SendMessageBodySchema } from "@repo/schemas";
+
 import { Roles } from "../auth/roles.decorator";
+import { ChatGateway } from "../realtime/chat.gateway";
 
 import { MessagesService } from "./messages.service";
 
@@ -22,7 +28,11 @@ const ListMessagesQuerySchema = z.object({
 @Controller("messages")
 @Roles("CUSTOMER", "PROVIDER")
 export class MessagesController {
-  constructor(private readonly messagesService: MessagesService) {}
+  constructor(
+    private readonly messagesService: MessagesService,
+    @Inject(forwardRef(() => ChatGateway))
+    private readonly chatGateway: ChatGateway
+  ) {}
 
   @Get("conversations")
   async listConversations(@Req() req: Request) {
@@ -62,5 +72,34 @@ export class MessagesController {
       q.limit,
       req.requestId
     );
+  }
+
+  @Post("conversations/:conversationId/messages")
+  async sendMessage(
+    @Req() req: Request,
+    @Param("conversationId") conversationId: string,
+    @Body() body: unknown
+  ) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    const parsed = SendMessageBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    const msg = await this.messagesService.sendMessage(
+      clerkId,
+      {
+        conversationId,
+        content: parsed.data.content,
+        type: parsed.data.type,
+      },
+      req.requestId
+    );
+
+    // Fan-out to anyone currently in the room; offline peers pick this up via listMessages.
+    this.chatGateway.emitMessage(conversationId, msg);
+    return msg;
   }
 }

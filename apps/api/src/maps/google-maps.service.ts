@@ -166,6 +166,178 @@ export class GoogleMapsService {
     }
   }
 
+  async autocompletePlaces(input: {
+    query: string;
+    requestId?: string;
+  }): Promise<Array<{ description: string; placeId: string }>> {
+    const apiKey = this.getApiKey();
+    const q = input.query.trim();
+    if (!apiKey || q.length < 2) {
+      if (!apiKey) {
+        this.logger.warn(`Google Maps API key missing, skipping places autocomplete [rid:${input.requestId}]`);
+      }
+      return [];
+    }
+
+    try {
+      const url = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
+      url.searchParams.set("input", q);
+      url.searchParams.set("key", apiKey);
+
+      const response = await fetch(url.toString());
+      const json = (await response.json()) as {
+        status?: string;
+        predictions?: Array<{ description?: string; place_id?: string }>;
+      };
+
+      if (json.status !== "OK" && json.status !== "ZERO_RESULTS") {
+        this.logger.warn(
+          `Google places autocomplete failed (${json.status ?? "unknown"}) [rid:${input.requestId}]`,
+        );
+        return [];
+      }
+
+      return (json.predictions ?? [])
+        .filter(
+          (item): item is { description: string; place_id: string } =>
+            typeof item.description === "string" &&
+            item.description.length > 0 &&
+            typeof item.place_id === "string" &&
+            item.place_id.length > 0,
+        )
+        .slice(0, 8)
+        .map((item) => ({
+          description: item.description,
+          placeId: item.place_id,
+        }));
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed places autocomplete [rid:${input.requestId}]`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return [];
+    }
+  }
+
+  async resolvePlaceDetails(input: {
+    placeId: string;
+    requestId?: string;
+  }): Promise<{
+    address: string;
+    latitude: number;
+    longitude: number;
+    placeId: string;
+  } | null> {
+    const apiKey = this.getApiKey();
+    const placeId = input.placeId.trim();
+    if (!apiKey || !placeId) {
+      if (!apiKey) {
+        this.logger.warn(`Google Maps API key missing, skipping place details [rid:${input.requestId}]`);
+      }
+      return null;
+    }
+
+    try {
+      const url = new URL("https://maps.googleapis.com/maps/api/place/details/json");
+      url.searchParams.set("place_id", placeId);
+      url.searchParams.set("fields", "formatted_address,geometry/location,name");
+      url.searchParams.set("key", apiKey);
+
+      const response = await fetch(url.toString());
+      const json = (await response.json()) as {
+        status?: string;
+        result?: {
+          formatted_address?: string;
+          name?: string;
+          geometry?: { location?: { lat?: number; lng?: number } };
+        };
+      };
+
+      const loc = json.result?.geometry?.location;
+      const address =
+        json.result?.formatted_address?.trim() ||
+        json.result?.name?.trim() ||
+        "";
+
+      if (
+        json.status === "OK" &&
+        address &&
+        typeof loc?.lat === "number" &&
+        typeof loc?.lng === "number"
+      ) {
+        return {
+          address,
+          latitude: loc.lat,
+          longitude: loc.lng,
+          placeId,
+        };
+      }
+
+      this.logger.warn(
+        `Google place details failed (${json.status ?? "unknown"}) [rid:${input.requestId}]`,
+      );
+      return null;
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed place details [rid:${input.requestId}]`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return null;
+    }
+  }
+
+  async reverseGeocode(input: {
+    latitude: number;
+    longitude: number;
+    requestId?: string;
+  }): Promise<{ address: string; latitude: number; longitude: number } | null> {
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
+      this.logger.warn(`Google Maps API key missing, skipping reverse geocode [rid:${input.requestId}]`);
+      return null;
+    }
+
+    try {
+      const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
+      url.searchParams.set("latlng", `${input.latitude},${input.longitude}`);
+      url.searchParams.set("key", apiKey);
+
+      const response = await fetch(url.toString());
+      const json = (await response.json()) as {
+        status?: string;
+        results?: Array<{ formatted_address?: string }>;
+      };
+
+      const address = json.results?.[0]?.formatted_address?.trim();
+      if (json.status === "OK" && address) {
+        return {
+          address,
+          latitude: input.latitude,
+          longitude: input.longitude,
+        };
+      }
+
+      this.logger.warn(
+        `Google reverse geocode failed (${json.status ?? "unknown"}) [rid:${input.requestId}]`,
+      );
+      return {
+        address: `${input.latitude.toFixed(5)}, ${input.longitude.toFixed(5)}`,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      };
+    } catch (error: unknown) {
+      this.logger.error(
+        `Failed reverse geocode [rid:${input.requestId}]`,
+        error instanceof Error ? error.stack : undefined,
+      );
+      return {
+        address: `${input.latitude.toFixed(5)}, ${input.longitude.toFixed(5)}`,
+        latitude: input.latitude,
+        longitude: input.longitude,
+      };
+    }
+  }
+
   /**
    * If the provider has no usable coordinates in DB/onboarding, geocode the first shop address once
    * and persist lat/lng on `provider_profiles` and enriched `shopLocations` on the user JSON.

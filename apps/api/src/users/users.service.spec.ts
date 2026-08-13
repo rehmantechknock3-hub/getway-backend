@@ -574,7 +574,7 @@ describe("UsersService", () => {
         findUnique: vi.fn().mockResolvedValue({
           id: "u-p",
           role: "PROVIDER",
-          providerProfile: { id: "pp-1" },
+          providerProfile: { id: "pp-1", verificationStatus: "APPROVED" },
         }),
       },
       providerProfile: {
@@ -593,6 +593,27 @@ describe("UsersService", () => {
       data: { isOnline: true },
     });
     expect(findByClerkIdSpy).toHaveBeenCalledWith("clerk_provider");
+  });
+
+  it("updateProviderPresence blocks going online when not approved", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u-p",
+          role: "PROVIDER",
+          providerProfile: { id: "pp-1", verificationStatus: "PENDING" },
+        }),
+      },
+      providerProfile: {
+        update: vi.fn(),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+
+    await expect(service.updateProviderPresence("clerk_provider", true)).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(prisma.providerProfile.update).not.toHaveBeenCalled();
   });
 
   it("updateProviderPresence rejects non-provider users", async () => {

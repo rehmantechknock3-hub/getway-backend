@@ -18,9 +18,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 
 import {
   apiClient,
+  getApiBaseUrl,
   setAuthToken,
   useSubmitProviderOnboarding,
   useUpdateAvatar,
@@ -49,7 +51,7 @@ export default function ProviderOnboardingScreen() {
   const submitOnboarding = useSubmitProviderOnboarding();
   const uploadAvatar = useUpdateAvatar();
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
-  const [experienceYears, setExperienceYears] = useState("0");
+  const [experienceYears, setExperienceYears] = useState("");
   const [serviceArea, setServiceArea] = useState("");
   const [shopAddress, setShopAddress] = useState("");
   const [shopPlaceId, setShopPlaceId] = useState<string | undefined>(undefined);
@@ -146,6 +148,23 @@ export default function ProviderOnboardingScreen() {
     }
     if (isSubmitting) return;
 
+    const formatStepError = (step: string, error: unknown): string => {
+      if (isAxiosError(error)) {
+        const base = getApiBaseUrl() || "(no API URL)";
+        if (!error.response) {
+          return `${step} failed: network error talking to ${base}. Keep USB plugged in and retry.`;
+        }
+        const serverMessage =
+          typeof error.response.data === "object" &&
+          error.response.data != null &&
+          "message" in error.response.data
+            ? String((error.response.data as { message?: unknown }).message ?? error.message)
+            : error.message;
+        return `${step} failed (${error.response.status}): ${serverMessage}`;
+      }
+      return error instanceof Error ? error.message : `${step} failed`;
+    };
+
     setIsSubmitting(true);
     try {
       const token = await getToken({ skipCache: true });
@@ -153,11 +172,15 @@ export default function ProviderOnboardingScreen() {
         throw new Error("Your session expired. Please sign in again.");
       }
       setAuthToken(token);
-      await apiClient.post(
-        "/api/v1/auth/set-role",
-        { role: "PROVIDER" },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      try {
+        await apiClient.post(
+          "/api/v1/auth/set-role",
+          { role: "PROVIDER" },
+          { headers: { Authorization: `Bearer ${token}` }, timeout: 30_000 }
+        );
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Set role", error));
+      }
       await clerk.session?.reload();
       const refreshedToken = await getToken({ skipCache: true });
       if (!refreshedToken) {
@@ -185,27 +208,36 @@ export default function ProviderOnboardingScreen() {
         }
       }
 
-      const uploaded = await uploadAvatar.mutateAsync({
-        uri: localPhoto.uri,
-        mimeType: localPhoto.mimeType,
-        fileName: localPhoto.fileName,
-      });
+      let uploaded;
+      try {
+        uploaded = await uploadAvatar.mutateAsync({
+          uri: localPhoto.uri,
+          mimeType: localPhoto.mimeType,
+          fileName: localPhoto.fileName,
+        });
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Photo upload", error));
+      }
       const profilePhotoUrl = uploaded.avatarUrl;
       if (!profilePhotoUrl) {
         throw new Error("Photo upload succeeded but no image URL was returned.");
       }
 
-      await submitOnboarding.mutateAsync({
-        serviceCategories,
-        experienceYears: parsedExperience,
-        serviceArea: serviceArea.trim(),
-        shopAddress: locationsToSave[0]?.address ?? pendingAddress,
-        shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
-        shopLocations: locationsToSave,
-        hasTools,
-        serviceDescription: serviceDescription.trim(),
-        profilePhotoUrl,
-      });
+      try {
+        await submitOnboarding.mutateAsync({
+          serviceCategories,
+          experienceYears: parsedExperience,
+          serviceArea: serviceArea.trim(),
+          shopAddress: locationsToSave[0]?.address ?? pendingAddress,
+          shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
+          shopLocations: locationsToSave,
+          hasTools,
+          serviceDescription: serviceDescription.trim(),
+          profilePhotoUrl,
+        });
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Save profile", error));
+      }
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(provider)/(tabs)/services");
     } catch (error: unknown) {
@@ -315,8 +347,10 @@ export default function ProviderOnboardingScreen() {
             shopLocations={shopLocations}
             setShopLocations={setShopLocations}
             googleMapsApiKey={googleMapsApiKey}
+            enableDeviceLocation
+            autoDetectOnMount
             inputPlaceholder="Search your shop address"
-            mapDescription="Confirm this pin matches your shop location."
+            mapDescription="Confirm this pin matches your shop location. You can edit the address anytime before saving."
             mapEmptyMessage={
               googleMapsApiKey
                 ? "Search a shop address to preview it on map."

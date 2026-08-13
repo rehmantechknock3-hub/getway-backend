@@ -15,11 +15,14 @@ import { userKeys } from "../queries/users.queries";
 
 export type EnsureProviderListingResult = { created: boolean };
 
-type UploadAvatarInput = {
+type UploadAvatarUriInput = {
   uri: string;
   mimeType?: string | null;
   fileName?: string | null;
 };
+
+/** Web `File` or React Native `{ uri, … }` payload for multipart upload. */
+export type UploadAvatarInput = File | UploadAvatarUriInput;
 
 function refreshMeCache(queryClient: ReturnType<typeof useQueryClient>, user?: User) {
   if (user) {
@@ -61,16 +64,24 @@ export function useUpdateAvatar() {
   return useMutation({
     mutationFn: async (input: UploadAvatarInput) => {
       const formData = new FormData();
-      formData.append("file", {
-        uri: input.uri,
-        type: input.mimeType ?? "image/jpeg",
-        name: input.fileName ?? `avatar-${Date.now()}.jpg`,
-      } as never);
+      if (typeof File !== "undefined" && input instanceof File) {
+        formData.append("file", input);
+      } else {
+        const uriInput = input as UploadAvatarUriInput;
+        formData.append("file", {
+          uri: uriInput.uri,
+          type: uriInput.mimeType ?? "image/jpeg",
+          name: uriInput.fileName ?? `avatar-${Date.now()}.jpg`,
+        } as never);
+      }
 
       const { data } = await apiClient.post<User>("/api/v1/users/me/avatar/upload", formData, {
-        // Let the runtime attach multipart boundary (do not keep default application/json).
-        headers: { "Content-Type": undefined as unknown as string },
+        headers: {
+          Accept: "application/json",
+        },
         timeout: 60_000,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
       });
       return data;
     },

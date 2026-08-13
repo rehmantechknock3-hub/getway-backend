@@ -114,6 +114,7 @@ export const UserSchema = z.object({
     averageRating: z.number().min(0).max(5),
     totalReviews: z.number().int().min(0),
     isOnline: z.boolean(),
+    verificationStatus: z.enum(["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"]),
   }).optional(),
   createdAt:   z.coerce.date(),
   updatedAt:   z.coerce.date(),

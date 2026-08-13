@@ -1,8 +1,9 @@
 import { Redirect } from "expo-router";
-
 import { useAuth, useUser } from "@clerk/expo";
 
 import { useMe } from "@repo/api-client";
+
+import { BootScreen } from "../components/BootScreen";
 
 export default function IndexScreen() {
   const { isLoaded, isSignedIn, sessionClaims } = useAuth();
@@ -14,7 +15,7 @@ export default function IndexScreen() {
   const meQuery = useMe({ enabled: Boolean(isLoaded && isSignedIn && role) });
 
   if (!isLoaded) {
-    return null;
+    return <BootScreen />;
   }
 
   if (!isSignedIn) {
@@ -26,8 +27,10 @@ export default function IndexScreen() {
   }
 
   // After reload, `/` is restored before deep routes; wait for `/users/me` so we don't skip onboarding.
-  if (meQuery.isPending) {
-    return null;
+  // Use isLoading (pending AND fetching), not isPending — disabled queries are pending in TanStack v5
+  // and would otherwise render a blank screen forever.
+  if (meQuery.isLoading) {
+    return <BootScreen />;
   }
 
   if (meQuery.isSuccess && !meQuery.data.onboardingCompleted) {

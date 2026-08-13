@@ -2,7 +2,7 @@
   "name": "@repo/mobile",
   "version": "0.0.1",
   "private": true,
-  "main": "expo-router/entry",
+  "main": "index.js",
   "scripts": {
     "dev": "sh -ac 'set -a; . ../api/.env; set +a; pnpm exec expo start'",
     "dev:ios": "sh -ac 'set -a; . ../api/.env; set +a; pnpm exec expo start --ios'",
@@ -42,7 +42,7 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-toast-message": "^2.3.3",
-    "react-native-worklets": "~0.8.1",
+    "react-native-worklets": "~0.5.1",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {

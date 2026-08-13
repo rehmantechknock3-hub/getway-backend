@@ -1,56 +1,120 @@
-import { Image, View, Text, TouchableOpacity, StatusBar } from "react-native";
+import { Image, View, Text, TouchableOpacity, StatusBar, StyleSheet } from "react-native";
 import { Link } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { appColors } from "../../styles/colors";
 
 export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View className="flex-1 bg-surface-night" style={{ paddingTop: insets.top }}>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
       <StatusBar barStyle="light-content" />
 
-      <View className="flex-1 items-center justify-center px-8">
+      <View style={styles.hero}>
         <Image
           source={require("../../../assets/logoWa.png")}
-          className="w-56 h-56 mb-2"
+          style={styles.logo}
           resizeMode="contain"
           accessibilityLabel="WayNow logo"
         />
 
-        <Text className="text-surface-muted text-base text-center leading-relaxed" style={{ maxWidth: 280 }}>
-          Every service. One app.
-        </Text>
+        <Text style={styles.tagline}>Every service. One app.</Text>
       </View>
 
       <View
-        className="bg-canvas-raised rounded-t-3xl px-6 pt-8"
-        style={{ paddingBottom: Math.max(insets.bottom + 8, 24) }}
+        style={[
+          styles.sheet,
+          { paddingBottom: Math.max(insets.bottom + 8, 24) },
+        ]}
       >
         <Link href="/(auth)/sign-in" asChild>
-          <TouchableOpacity
-            className="w-full bg-primary-600 rounded-2xl py-4 items-center mb-3"
-            activeOpacity={0.85}
-          >
-            <Text className="text-white text-base font-semibold">Sign In</Text>
+          <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.85}>
+            <Text style={styles.primaryBtnText}>Sign In</Text>
           </TouchableOpacity>
         </Link>
 
         <Link href="/(auth)/sign-up" asChild>
-          <TouchableOpacity
-            className="w-full bg-canvas-sunken border border-ink-faint rounded-2xl py-4 items-center"
-            activeOpacity={0.85}
-          >
-            <Text className="text-ink text-base font-semibold">Create Account</Text>
+          <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.85}>
+            <Text style={styles.secondaryBtnText}>Create Account</Text>
           </TouchableOpacity>
         </Link>
 
-        <Text className="text-ink-subtle text-xs text-center mt-5">
+        <Text style={styles.legal}>
           By continuing you agree to our{" "}
-          <Text className="text-primary-600">Terms</Text>
+          <Text style={styles.legalLink}>Terms</Text>
           {" & "}
-          <Text className="text-primary-600">Privacy Policy</Text>
+          <Text style={styles.legalLink}>Privacy Policy</Text>
         </Text>
       </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: appColors.surface.night,
+  },
+  hero: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  logo: {
+    width: 224,
+    height: 224,
+    marginBottom: 8,
+  },
+  tagline: {
+    color: appColors.surface.muted,
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
+    maxWidth: 280,
+  },
+  sheet: {
+    backgroundColor: appColors.canvas.raised,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+  },
+  primaryBtn: {
+    width: "100%",
+    backgroundColor: appColors.primary[600],
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  primaryBtnText: {
+    color: appColors.onPrimary,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  secondaryBtn: {
+    width: "100%",
+    backgroundColor: appColors.canvas.sunken,
+    borderWidth: 1,
+    borderColor: appColors.ink.faint,
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  secondaryBtnText: {
+    color: appColors.ink.DEFAULT,
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  legal: {
+    color: appColors.ink.subtle,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 20,
+  },
+  legalLink: {
+    color: appColors.primary[600],
+  },
+});

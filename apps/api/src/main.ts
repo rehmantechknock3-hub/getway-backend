@@ -25,9 +25,11 @@ async function bootstrap() {
   app.useStaticAssets(uploadsRoot, { prefix: "/uploads/" });
 
   app.enableCors({
-    origin: [
-      configService.get<string>("WEB_URL") ?? "http://localhost:3000",
-    ],
+    // Dev mobile (Expo Go) may send an Origin; allow all non-production origins.
+    origin:
+      configService.get<string>("NODE_ENV") === "production"
+        ? [configService.get<string>("WEB_URL") ?? "http://localhost:3000"]
+        : true,
     credentials: true,
   });
   app.useWebSocketAdapter(new SocketIoAdapter(app, configService));

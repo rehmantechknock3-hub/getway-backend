@@ -12,6 +12,7 @@ describe("BookingsService", () => {
   const prisma = {
     user: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     service: {
       findFirst: vi.fn(),
@@ -25,6 +26,7 @@ describe("BookingsService", () => {
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    $transaction: vi.fn(),
   };
 
   const notificationsService = {
@@ -40,6 +42,9 @@ describe("BookingsService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cache.get.mockResolvedValue(undefined);
+    prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
+      fn(prisma),
+    );
     service = new BookingsService(
       prisma as never,
       notificationsService as never,
@@ -77,7 +82,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 99.5,
       title: "Test service",
-      provider: { isOnline: true },
+      provider: { isOnline: true, verificationStatus: "APPROVED" },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -137,7 +142,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 99.5,
       title: "Test service",
-      provider: { isOnline: true },
+      provider: { isOnline: true, verificationStatus: "APPROVED" },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -204,7 +209,7 @@ describe("BookingsService", () => {
       providerId: "pp-2",
       price: 50,
       title: "Other service",
-      provider: { isOnline: true },
+      provider: { isOnline: true, verificationStatus: "APPROVED" },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -254,7 +259,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 90,
       title: "Test service",
-      provider: { isOnline: false },
+      provider: { isOnline: false, verificationStatus: "APPROVED" },
     });
 
     await expect(
@@ -286,6 +291,9 @@ describe("BookingsService", () => {
         totalAmount: 10,
         createdAt,
         updatedAt: createdAt,
+        customer: { firstName: "Casey", lastName: "Customer" },
+        provider: { user: { firstName: "Pat", lastName: "Pro" } },
+        service: { title: "Exterior Wash" },
       },
     ]);
     prisma.booking.count.mockResolvedValue(1);
@@ -296,8 +304,50 @@ describe("BookingsService", () => {
     expect(result.data).toHaveLength(1);
     expect(result.data[0]?.id).toBe("b-x");
     expect(result.data[0]?.review).toBeNull();
+    expect(result.data[0]?.customerFirstName).toBe("Casey");
+    expect(result.data[0]?.providerLastName).toBe("Pro");
+    expect(result.data[0]?.serviceTitle).toBe("Exterior Wash");
     expect(prisma.booking.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ skip: 0, take: 20 })
+      expect.objectContaining({
+        where: {},
+        skip: 0,
+        take: 20,
+        include: expect.any(Object),
+      }),
+    );
+  });
+
+  it("listAll filters by status", async () => {
+    prisma.booking.findMany.mockResolvedValue([]);
+    prisma.booking.count.mockResolvedValue(0);
+
+    await service.listAll(1, 20, "COMPLETED");
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { status: "COMPLETED" },
+      }),
+    );
+    expect(prisma.booking.count).toHaveBeenCalledWith({
+      where: { status: "COMPLETED" },
+    });
+  });
+
+  it("listAll filters by scheduled date range", async () => {
+    prisma.booking.findMany.mockResolvedValue([]);
+    prisma.booking.count.mockResolvedValue(0);
+
+    await service.listAll(1, 20, undefined, "2026-08-01", "2026-08-12");
+
+    expect(prisma.booking.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          scheduledAt: {
+            gte: new Date("2026-08-01T00:00:00.000Z"),
+            lte: new Date("2026-08-12T23:59:59.999Z"),
+          },
+        },
+      }),
     );
   });
 
@@ -487,6 +537,63 @@ describe("BookingsService", () => {
       data: { status: "CANCELLED" },
     });
     expect(result.status).toBe("CANCELLED");
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it("updateStatusForProvider increments customer totalSpent on COMPLETED", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "PROVIDER",
+      providerProfile: { id: "pp-1" },
+    });
+    const t = new Date();
+    prisma.booking.findFirst
+      .mockResolvedValueOnce({
+        id: "b-1",
+        customerId: "cust-1",
+        providerId: "pp-1",
+        serviceId: "s",
+        status: "IN_PROGRESS",
+        scheduledAt: t,
+        address: "a",
+        latitude: 0,
+        longitude: 0,
+        notes: null,
+        totalAmount: 55.25,
+        createdAt: t,
+        updatedAt: t,
+        customer: { firstName: "A", lastName: "B" },
+        service: { title: "X" },
+      })
+      .mockResolvedValueOnce({
+        id: "b-1",
+        customerId: "cust-1",
+        providerId: "pp-1",
+        serviceId: "s",
+        status: "COMPLETED",
+        scheduledAt: t,
+        address: "a",
+        latitude: 0,
+        longitude: 0,
+        notes: null,
+        totalAmount: 55.25,
+        createdAt: t,
+        updatedAt: t,
+        customer: { firstName: "A", lastName: "B" },
+        service: { title: "X" },
+      });
+    prisma.booking.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.update.mockResolvedValue({ id: "cust-1" });
+
+    const result = await service.updateStatusForProvider("clerk-p", "b-1", {
+      status: "COMPLETED",
+    });
+
+    expect(result.status).toBe("COMPLETED");
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: "cust-1" },
+      data: { totalSpent: { increment: 55.25 } },
+    });
   });
 
   it("updateStatusForProvider rejects stale updates (double-accept race)", async () => {

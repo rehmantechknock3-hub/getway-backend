@@ -20,6 +20,7 @@ import { StorageModule }       from "./storage/storage.module";
 import { RealtimeModule }      from "./realtime/realtime.module";
 import { ReviewsModule }       from "./reviews/reviews.module";
 import { ProviderServicesModule } from "./provider-services/provider-services.module";
+import { AdminModule }            from "./admin/admin.module";
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ProviderServicesModule } from "./provider-services/provider-services.mo
     RealtimeModule,
     ReviewsModule,
     ProviderServicesModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ClerkAuthGuard },

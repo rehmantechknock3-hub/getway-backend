@@ -2,6 +2,8 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// In app/build.gradle: rootDir = android/, projectDir = android/app/
+// Expo JS app root is the parent of android/ (apps/mobile).
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
 
 /**
@@ -9,9 +11,14 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
-    entryFile = file(["node", "-e", "require('expo/scripts/resolveAppEntry')", projectRoot, "android", "absolute"].execute(null, rootDir).text.trim())
-    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
-    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
+    // Local entry under apps/mobile — avoids Metro relativizing into deep pnpm paths.
+    entryFile = new File(projectRoot, "index.js")
+    // Windows MAX_PATH: use short copy (repo/nm/rn) instead of deep pnpm path.
+    // rootDir is android/ → ../../../nm/rn → repo/nm/rn
+    def rnShort = new File(rootDir, "../../../nm/rn")
+    def rnResolved = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
+    reactNativeDir = rnShort.exists() ? rnShort.absoluteFile : rnResolved
+    hermesCommand = (rnShort.exists() ? rnShort.absoluteFile : rnResolved).getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
     codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim()).getParentFile().getAbsoluteFile()
 
     enableBundleCompression = (findProperty('android.enableBundleCompression') ?: false).toBoolean()
@@ -100,6 +107,19 @@ android {
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+
+        // Google Maps key for react-native-maps: env var first, then apps/api/.env (not committed).
+        def googleMapsApiKey = System.getenv("EXPO_PUBLIC_GOOGLE_MAPS_API_KEY") ?: ""
+        if (googleMapsApiKey.isEmpty()) {
+            def apiEnvFile = new File(projectRoot, "../api/.env")
+            if (apiEnvFile.exists()) {
+                def matcher = apiEnvFile.text =~ /(?m)^EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=["']?([^"'\r\n]*)["']?\s*$/
+                if (matcher.find()) {
+                    googleMapsApiKey = matcher.group(1).trim()
+                }
+            }
+        }
+        manifestPlaceholders = [googleMapsApiKey: googleMapsApiKey]
     }
     signingConfigs {
         debug {

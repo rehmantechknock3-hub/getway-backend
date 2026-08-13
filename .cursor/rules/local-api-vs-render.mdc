@@ -1,0 +1,31 @@
+---
+description: Local API for simulator/dev; Render only for production builds
+alwaysApply: true
+---
+
+# Mobile API target (local vs Render)
+
+## Default for day-to-day development
+- Always run the **local** Nest API (`pnpm --filter @repo/api dev`, port from `apps/api/.env`, currently **3010**).
+- Point the mobile app / emulator / simulator at that **local** API — never at Render during normal coding or debugging.
+- `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_SOCKET_URL` for local work live in `apps/api/.env` (mobile `dev` / `android` scripts source that file).
+
+### Android emulator
+Use `http://10.0.2.2:<PORT>` (host machine loopback from the emulator).
+
+### iOS simulator
+Use `http://127.0.0.1:<PORT>` or `http://localhost:<PORT>`.
+
+### Physical device
+Use the computer’s LAN IP, e.g. `http://192.168.x.x:<PORT>`.
+
+## Render is production-only
+- Use `https://getway-backend-rrjg.onrender.com` (or the current Render URL) **only** when building a release / production app binary.
+- Do **not** put the Render URL in the active local `EXPO_PUBLIC_API_URL` while developing in the simulator.
+- When preparing a production build, set `EXPO_PUBLIC_API_URL` / `EXPO_PUBLIC_SOCKET_URL` to Render for that build session (EAS/env or explicit override), then restore local URLs afterward for continued development.
+
+## Agent behavior
+When the user asks to run the simulator or debug the app:
+1. Ensure Postgres + local API are running.
+2. Start Expo with **local** API URLs (override any Render values loaded from env).
+3. Do not “helpfully” switch the simulator to Render unless the user is explicitly doing a production build.

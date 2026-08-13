@@ -1,14 +1,11 @@
-import { Platform } from "react-native";
-
 /**
  * Shared toast abstraction.
  *
  * - **Native** (iOS / Android): delegates to `react-native-toast-message`.
  * - **Web**: delegates to `sonner`.
  *
- * Both libraries must be installed in their respective apps. This module only
- * provides the unified API so the call-site never cares which library is used
- * and swapping either library later requires a single-file change.
+ * Do not statically import `react-native` here — Next.js/SWC cannot parse RN's
+ * Flow `import typeof` syntax and will fail the web build.
  *
  * @see BEST_PRACTICES.md §11 (Toast vs Alert)
  */
@@ -27,11 +24,20 @@ export function showToast(
   message: string,
   description?: string,
 ): void {
-  if (Platform.OS === "web") {
-    showWebToast(type, message, description);
-  } else {
+  if (isReactNativeRuntime()) {
     showNativeToast(type, message, description);
+  } else {
+    showWebToast(type, message, description);
   }
+}
+
+/** Hermes / RN sets `navigator.product`; Next and browsers do not. */
+function isReactNativeRuntime(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    // React Native sets this; browsers and Next.js do not.
+    (navigator as Navigator & { product?: string }).product === "ReactNative"
+  );
 }
 
 // ── Native (react-native-toast-message) ───────────────────────────────────

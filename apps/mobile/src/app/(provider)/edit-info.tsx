@@ -211,6 +211,8 @@ export default function ProviderEditInfoScreen() {
       <Text className="text-ink text-sm font-medium mb-2">Experience (years)</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+        placeholder="e.g. 3"
+        placeholderTextColor={appColors.ink.subtle}
         keyboardType="number-pad"
         style={textInputBaselineStyle}
         value={experienceYears}
@@ -233,8 +235,9 @@ export default function ProviderEditInfoScreen() {
         shopLocations={shopLocations}
         setShopLocations={setShopLocations}
         googleMapsApiKey={googleMapsApiKey}
+        enableDeviceLocation
         inputPlaceholder="Shop/office address"
-        mapDescription="Confirm these pins match your shop locations."
+        mapDescription="Confirm these pins match your shop locations. Edit or replace an address anytime, then save."
         mapEmptyMessage={
           googleMapsApiKey
             ? "Enter at least 3 characters in shop address to preview on map."

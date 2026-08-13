@@ -22,8 +22,12 @@ plugins {
   id("expo-autolinking-settings")
 }
 
+def patchedAutolinking = new File(rootDir, "autolinking.windows.json")
 extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
-  if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
+  if (patchedAutolinking.exists()) {
+    // Prefer pre-patched config with short Windows paths (pnpm MAX_PATH workaround).
+    ex.autolinkLibrariesFromConfigFile(patchedAutolinking)
+  } else if (System.getenv('EXPO_USE_COMMUNITY_AUTOLINKING') == '1') {
     ex.autolinkLibrariesFromCommand()
   } else {
     ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand)
@@ -37,3 +41,27 @@ expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)
+
+// Force short projectDirs for cmake-using modules (Windows MAX_PATH).
+// rootDir is apps/mobile/android → ../../../nm is repo/nm
+[
+  'react-native-worklets',
+  'react-native-screens',
+  'expo-modules-core',
+  'react-native-reanimated',
+  'solana-mobile_mobile-wallet-adapter-protocol',
+].each { name ->
+  def shortName = name == 'solana-mobile_mobile-wallet-adapter-protocol' ? 'solana-mwa' : name
+  def shortDir = new File(rootDir, "../../../nm/${shortName}/android")
+  if (shortDir.exists()) {
+    try {
+      // absoluteFile keeps Windows junctions on the short path (canonicalFile expands them).
+      project(":${name}").projectDir = shortDir.absoluteFile
+      println("[waynow] remapped :${name} -> ${project(":${name}").projectDir}")
+    } catch (Throwable ignored) {
+      println("[waynow] skip :${name} (${ignored.message})")
+    }
+  } else {
+    println("[waynow] missing short dir for :${name} at ${shortDir}")
+  }
+}

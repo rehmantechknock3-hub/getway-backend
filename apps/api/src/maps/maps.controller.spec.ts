@@ -68,4 +68,66 @@ describe("MapsController", () => {
       ],
     });
   });
+
+  it("returns place autocomplete predictions", async () => {
+    const googleMaps = {
+      autocompletePlaces: vi.fn().mockResolvedValue([
+        { description: "Lahore Fort", placeId: "abc" },
+      ]),
+    };
+    const controller = new MapsController(googleMaps as never);
+    const req = { auth: { sub: "clerk_test" }, requestId: "rid-3" } as never;
+
+    const result = await controller.placesAutocomplete(req, { q: "Lahore" });
+
+    expect(googleMaps.autocompletePlaces).toHaveBeenCalledWith({
+      query: "Lahore",
+      requestId: "rid-3",
+    });
+    expect(result).toEqual({
+      predictions: [{ description: "Lahore Fort", placeId: "abc" }],
+    });
+  });
+
+  it("returns place details", async () => {
+    const googleMaps = {
+      resolvePlaceDetails: vi.fn().mockResolvedValue({
+        address: "Lahore Fort, Lahore",
+        latitude: 31.588,
+        longitude: 74.315,
+        placeId: "abc",
+      }),
+    };
+    const controller = new MapsController(googleMaps as never);
+    const req = { auth: { sub: "clerk_test" }, requestId: "rid-4" } as never;
+
+    const result = await controller.placeDetails(req, { placeId: "abc" });
+
+    expect(result.placeId).toBe("abc");
+    expect(result.latitude).toBe(31.588);
+  });
+
+  it("returns reverse geocode result", async () => {
+    const googleMaps = {
+      reverseGeocode: vi.fn().mockResolvedValue({
+        address: "Pinned location",
+        latitude: 31.52,
+        longitude: 74.35,
+      }),
+    };
+    const controller = new MapsController(googleMaps as never);
+    const req = { auth: { sub: "clerk_test" }, requestId: "rid-5" } as never;
+
+    const result = await controller.reverseGeocode(req, {
+      latitude: "31.52",
+      longitude: "74.35",
+    });
+
+    expect(googleMaps.reverseGeocode).toHaveBeenCalledWith({
+      latitude: 31.52,
+      longitude: 74.35,
+      requestId: "rid-5",
+    });
+    expect(result.address).toBe("Pinned location");
+  });
 });

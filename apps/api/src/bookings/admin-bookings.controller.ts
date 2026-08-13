@@ -8,16 +8,34 @@ import {
   Req,
 } from "@nestjs/common";
 import type { Request } from "express";
-import { AdminCreateBookingSchema } from "@repo/schemas";
+import { AdminCreateBookingSchema, BookingStatus } from "@repo/schemas";
 import { z } from "zod";
 
 import { Roles } from "../auth/roles.decorator";
 import { BookingsService } from "./bookings.service";
 
-const AdminListBookingsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
-});
+const DateOnlySchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+
+const AdminListBookingsQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).optional().default(1),
+    limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+    status: BookingStatus.optional(),
+    from: DateOnlySchema.optional(),
+    to: DateOnlySchema.optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.from && val.to && val.from > val.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "`from` must be on or before `to`",
+        path: ["from"],
+      });
+    }
+  });
 
 @Controller("admin/bookings")
 @Roles("ADMIN")
@@ -39,8 +57,10 @@ export class AdminBookingsController {
   @Get()
   async list(@Query() rawQuery: Record<string, string | undefined>) {
     const parsed = AdminListBookingsQuerySchema.safeParse(rawQuery);
-    const q = parsed.success ? parsed.data : { page: 1, limit: 20 };
-
-    return this.bookingsService.listAll(q.page, q.limit);
+    if (!parsed.success) {
+      throw new BadRequestException("Invalid booking list filters");
+    }
+    const q = parsed.data;
+    return this.bookingsService.listAll(q.page, q.limit, q.status, q.from, q.to);
   }
 }
