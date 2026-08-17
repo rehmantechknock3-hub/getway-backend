@@ -50,6 +50,11 @@ enum MessageType {
   SYSTEM
 }
 
+enum ConversationKind {
+  BOOKING
+  PROVIDER_ADMIN
+}
+
 // ── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -266,16 +271,20 @@ model Payment {
 }
 
 model Conversation {
-  id            String    @id @default(uuid())
-  bookingId     String    @unique
-  booking       Booking   @relation(fields: [bookingId], references: [id])
-  customerId    String
+  id            String           @id @default(uuid())
+  kind          ConversationKind @default(BOOKING)
+  bookingId     String?          @unique
+  booking       Booking?         @relation(fields: [bookingId], references: [id])
+  /// Set to providerId for PROVIDER_ADMIN threads (one inbox thread per provider).
+  supportKey    String?          @unique
+  customerId    String?
   providerId    String
   lastMessageAt DateTime?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime         @default(now())
 
   messages      Message[]
 
+  @@index([providerId, kind])
   @@map("conversations")
 }
 

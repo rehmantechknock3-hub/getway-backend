@@ -1,4 +1,6 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { useState } from "react";
+
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { appColors } from "../../styles/colors";
@@ -11,7 +13,31 @@ type HomeHeaderProps = {
   onPressNotifications: () => void;
   /** When set, shows a back control to return to the browse home. */
   onBack?: () => void;
+  avatarUrl?: string | null;
+  profileName?: string;
+  onPressProfile?: () => void;
 };
+
+function HeaderAvatar({ uri, name }: { uri?: string | null; name: string }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = Boolean(uri) && !failed;
+  const initial = name.trim().charAt(0).toUpperCase() || "?";
+
+  return (
+    <View className="w-11 h-11 rounded-full bg-surface-elevated border border-surface-border items-center justify-center overflow-hidden">
+      {showImage ? (
+        <Image
+          source={{ uri: uri! }}
+          style={{ width: 44, height: 44 }}
+          onError={() => setFailed(true)}
+          accessibilityLabel={`${name} profile photo`}
+        />
+      ) : (
+        <Text className="text-white text-base font-bold">{initial}</Text>
+      )}
+    </View>
+  );
+}
 
 export function HomeHeader({
   title,
@@ -20,7 +46,12 @@ export function HomeHeader({
   onPressLocation,
   onPressNotifications,
   onBack,
+  avatarUrl,
+  profileName,
+  onPressProfile,
 }: HomeHeaderProps) {
+  const welcomeName = profileName?.trim() || "there";
+
   return (
     <View className="px-5 mb-6">
       <View className="flex-row items-start justify-between mb-3">
@@ -35,13 +66,37 @@ export function HomeHeader({
               <Ionicons name="arrow-back" size={22} color={appColors.onPrimary} />
             </TouchableOpacity>
           ) : null}
-          <Text
-            className="text-white text-3xl font-bold flex-1"
-            style={{ letterSpacing: -0.8 }}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
+          {onPressProfile && !onBack ? (
+            <TouchableOpacity
+              className="flex-1 flex-row items-center gap-3"
+              onPress={onPressProfile}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Open profile"
+            >
+              <HeaderAvatar uri={avatarUrl} name={welcomeName} />
+              <View className="flex-1">
+                <Text className="text-surface-soft text-sm" numberOfLines={1}>
+                  Welcome
+                </Text>
+                <Text
+                  className="text-white text-2xl font-bold"
+                  style={{ letterSpacing: -0.5 }}
+                  numberOfLines={1}
+                >
+                  {welcomeName}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <Text
+              className="text-white text-3xl font-bold flex-1"
+              style={{ letterSpacing: -0.8 }}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+          )}
         </View>
         <View className="relative">
           <TouchableOpacity

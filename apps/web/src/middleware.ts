@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher, clerkClient } from "@clerk/nextjs/
 import { NextResponse } from "next/server";
 
 import { isAdminRole, roleFromSessionClaims } from "./lib/admin-role";
+import { revokeIfSessionPastMaxAge } from "./lib/enforce-session-max-age";
 
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
@@ -17,11 +18,24 @@ export default clerkMiddleware(async (auth, request) => {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
+  const session = await auth();
+
+  if (session.sessionId) {
+    try {
+      const expired = await revokeIfSessionPastMaxAge(session.sessionId);
+      if (expired) {
+        if (isPublicRoute(request)) return NextResponse.next();
+        return NextResponse.redirect(new URL("/sign-in", request.url));
+      }
+    } catch {
+      // Clerk lookup failed — keep the existing JWT check below.
+    }
+  }
+
   if (isPublicRoute(request)) {
     return NextResponse.next();
   }
 
-  const session = await auth();
   if (!session.userId) {
     await auth.protect({
       unauthenticatedUrl: new URL("/sign-in", request.url).toString(),

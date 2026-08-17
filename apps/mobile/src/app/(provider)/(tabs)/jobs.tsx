@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -26,7 +26,19 @@ import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
 import { BookingStatusProgressDots } from "../../../components/BookingStatusTimeline";
+import { ChatAvatar } from "../../../components/ChatAvatar";
 import { appColors } from "../../../styles/colors";
+
+type JobFilter = "all" | "new" | "active" | "completed";
+
+function jobMatchesFilter(
+  job: ProviderBookingView,
+  filter: Exclude<JobFilter, "all">
+): boolean {
+  if (filter === "new") return job.status === "PENDING";
+  if (filter === "active") return job.status === "ACCEPTED" || job.status === "IN_PROGRESS";
+  return job.status === "COMPLETED";
+}
 
 function formatWhen(d: Date): string {
   return new Intl.DateTimeFormat(undefined, {
@@ -64,6 +76,45 @@ function statusBadge(status: ProviderBookingView["status"]): { label: string; bg
     default:
       return { label: status, bg: "bg-ink-faint", text: "text-ink-muted" };
   }
+}
+
+function QueueStatChip({
+  label,
+  count,
+  icon,
+  iconColor,
+  selected,
+  onPress,
+}: {
+  label: string;
+  count: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  iconColor: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      className={`flex-1 rounded-2xl px-3 py-3 items-center gap-1 min-w-0 border ${
+        selected ? "bg-primary-50 border-primary-600" : "bg-canvas-raised border-ink-faint"
+      }`}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}, ${count}. Filter bookings.`}
+    >
+      <Ionicons name={icon} size={20} color={iconColor} />
+      <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
+        {count}
+      </Text>
+      <Text
+        className={`text-xs text-center ${selected ? "text-primary-700 font-semibold" : "text-ink-subtle"}`}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
 }
 
 type ProviderJobRowProps = {
@@ -177,6 +228,7 @@ export default function JobsScreen() {
   const insets = useSafeAreaInsets();
   const { isLoaded, isSignedIn } = useAuth();
   const { user: clerkUser } = useUser();
+  const [jobFilter, setJobFilter] = useState<JobFilter>("all");
 
   const enabled = isLoaded && isSignedIn;
   const { data: me } = useMe({ enabled });
@@ -184,6 +236,7 @@ export default function JobsScreen() {
     me?.firstName?.trim() ||
     clerkUser?.firstName?.trim() ||
     "Provider";
+  const avatarUrl = me?.avatarUrl ?? me?.providerOnboarding?.profilePhotoUrl ?? null;
   const verificationStatus = me?.providerMetrics?.verificationStatus;
   const queueQuery = useProviderBookings(1, { enabled, scope: "queue" });
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
@@ -206,9 +259,20 @@ export default function JobsScreen() {
   const queueBookings = queueQuery.data?.data ?? [];
   const pastBookings = historyQuery.data?.data ?? [];
   const stats = queueQuery.data?.stats;
-  const isLoading = queueQuery.isLoading;
-  const isError = queueQuery.isError;
+  const isQueueLoading = queueQuery.isLoading;
+  const isHistoryLoading = historyQuery.isLoading;
+  const isError = jobFilter === "completed" ? historyQuery.isError : queueQuery.isError;
   const isRefetching = queueQuery.isRefetching || historyQuery.isRefetching;
+  const isListLoading =
+    jobFilter === "completed" ? !enabled || isHistoryLoading : !enabled || isQueueLoading;
+
+  const filteredJobs = useMemo(() => {
+    if (jobFilter === "all") return [];
+    const source = jobFilter === "completed" ? pastBookings : queueBookings;
+    return source.filter((job) => jobMatchesFilter(job, jobFilter));
+  }, [jobFilter, pastBookings, queueBookings]);
+
+  const allCount = (queueQuery.data?.total ?? 0) + (historyQuery.data?.total ?? 0);
 
   const runStatus = async (bookingId: string, status: ProviderBookingView["status"]) => {
     try {
@@ -240,12 +304,21 @@ export default function JobsScreen() {
         }
       >
         <View className="flex-row items-center justify-between px-5 mb-6">
-          <View>
-            <Text className="text-ink-muted text-sm">Hello,</Text>
-            <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-              {firstName}
-            </Text>
-          </View>
+          <TouchableOpacity
+            className="flex-1 flex-row items-center gap-3 pr-3"
+            onPress={() => router.push("/(provider)/(tabs)/profile")}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Open profile"
+          >
+            <ChatAvatar uri={avatarUrl} name={firstName} size="lg" />
+            <View className="flex-1">
+              <Text className="text-ink-muted text-sm">Welcome</Text>
+              <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }} numberOfLines={1}>
+                {firstName}
+              </Text>
+            </View>
+          </TouchableOpacity>
           <View className="relative">
             <TouchableOpacity
               className="w-11 h-11 rounded-full bg-canvas-raised border border-ink-faint items-center justify-center"
@@ -286,29 +359,98 @@ export default function JobsScreen() {
         ) : null}
 
         <View className="flex-row gap-2 px-5 mb-6">
-          <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="time-outline" size={20} color={appColors.semantic.warning} />
-            <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-              {enabled && !isLoading ? String(stats?.pending ?? 0) : "—"}
-            </Text>
-            <Text className="text-ink-subtle text-xs text-center">New</Text>
-          </View>
-          <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="briefcase-outline" size={20} color={appColors.semantic.info} />
-            <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-              {enabled && !isLoading ? String(stats?.active ?? 0) : "—"}
-            </Text>
-            <Text className="text-ink-subtle text-xs text-center">Active</Text>
-          </View>
-          <View className="flex-1 bg-canvas-raised border border-ink-faint rounded-2xl px-3 py-3 items-center gap-1 min-w-0">
-            <Ionicons name="checkmark-circle-outline" size={20} color={appColors.semantic.success} />
-            <Text className="text-xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
-              {enabled && !isLoading ? String(stats?.completed ?? 0) : "—"}
-            </Text>
-            <Text className="text-ink-subtle text-xs text-center">Completed</Text>
-          </View>
+          <QueueStatChip
+            label="All"
+            count={enabled && !isQueueLoading ? String(allCount) : "—"}
+            icon="layers-outline"
+            iconColor={appColors.primary[600]}
+            selected={jobFilter === "all"}
+            onPress={() => setJobFilter("all")}
+          />
+          <QueueStatChip
+            label="New"
+            count={enabled && !isQueueLoading ? String(stats?.pending ?? 0) : "—"}
+            icon="time-outline"
+            iconColor={appColors.semantic.warning}
+            selected={jobFilter === "new"}
+            onPress={() => setJobFilter("new")}
+          />
+          <QueueStatChip
+            label="Active"
+            count={enabled && !isQueueLoading ? String(stats?.active ?? 0) : "—"}
+            icon="briefcase-outline"
+            iconColor={appColors.semantic.info}
+            selected={jobFilter === "active"}
+            onPress={() => setJobFilter("active")}
+          />
+          <QueueStatChip
+            label="Completed"
+            count={enabled && !isQueueLoading ? String(stats?.completed ?? 0) : "—"}
+            icon="checkmark-circle-outline"
+            iconColor={appColors.semantic.success}
+            selected={jobFilter === "completed"}
+            onPress={() => setJobFilter("completed")}
+          />
         </View>
 
+        {jobFilter !== "all" ? (
+          <>
+            <View className="flex-row items-center justify-between px-5 mb-4">
+              <Text className="text-lg font-bold text-ink">
+                {jobFilter === "new"
+                  ? "New requests"
+                  : jobFilter === "active"
+                    ? "Active jobs"
+                    : "Completed"}
+              </Text>
+              <View className="bg-primary-50 px-2.5 py-1 rounded-full">
+                <Text className="text-primary-700 text-xs font-bold">
+                  {filteredJobs.length} booking{filteredJobs.length === 1 ? "" : "s"}
+                </Text>
+              </View>
+            </View>
+
+            {isListLoading ? (
+              <View className="py-16 items-center px-5">
+                <ActivityIndicator color={appColors.primary[600]} />
+              </View>
+            ) : isError ? (
+              <View className="mx-5 bg-canvas-raised rounded-2xl p-6 border border-ink-faint">
+                <Text className="text-ink text-center font-medium mb-2">Could not load jobs</Text>
+                <Text className="text-ink-muted text-sm text-center">
+                  Pull to refresh, or confirm you are signed in as a provider and the API is running.
+                </Text>
+              </View>
+            ) : filteredJobs.length === 0 ? (
+              <View className="mx-5 bg-canvas-raised rounded-2xl p-10 border border-ink-faint items-center">
+                <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-4">
+                  <Ionicons name="calendar-outline" size={30} color={appColors.primary[600]} />
+                </View>
+                <Text className="text-ink font-bold text-lg text-center mb-2">
+                  {jobFilter === "new"
+                    ? "No new requests"
+                    : jobFilter === "active"
+                      ? "No active jobs"
+                      : "No completed jobs"}
+                </Text>
+                <Text className="text-ink-muted text-sm text-center leading-5">
+                  {jobFilter === "new"
+                    ? "New booking requests from customers will show up here."
+                    : jobFilter === "active"
+                      ? "Accepted and in-progress jobs will show up here."
+                      : "Completed jobs will show up here after you finish a booking."}
+                </Text>
+              </View>
+            ) : (
+              <View className="px-5 gap-3">
+                {filteredJobs.map((job) => (
+                  <ProviderJobRow key={job.id} job={job} updatingId={updatingId} onRunStatus={runStatus} />
+                ))}
+              </View>
+            )}
+          </>
+        ) : (
+          <>
         <View className="flex-row items-center justify-between px-5 mb-4">
           <Text className="text-lg font-bold text-ink">Job queue</Text>
           <View className="bg-primary-50 px-2.5 py-1 rounded-full">
@@ -318,7 +460,7 @@ export default function JobsScreen() {
           </View>
         </View>
 
-        {!enabled || isLoading ? (
+        {!enabled || isQueueLoading ? (
           <View className="py-16 items-center px-5">
             <ActivityIndicator color={appColors.primary[600]} />
           </View>
@@ -348,7 +490,7 @@ export default function JobsScreen() {
           </View>
         )}
 
-        {!enabled || isLoading || isError ? null : (
+        {!enabled || isQueueLoading || isError ? null : (
           <View className="mt-8 px-5">
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-lg font-bold text-ink">Past bookings</Text>
@@ -380,6 +522,8 @@ export default function JobsScreen() {
               </View>
             )}
           </View>
+        )}
+          </>
         )}
       </ScrollView>
     </View>

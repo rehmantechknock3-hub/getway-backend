@@ -60,6 +60,24 @@ describe("MessagesController", () => {
     expect(service.getOrCreateConversation).toHaveBeenCalledWith("clerk-1", "booking-1", "rid-1");
   });
 
+  it("getOrCreateAdminThread delegates to service", async () => {
+    const service = { getOrCreateAdminThread: vi.fn().mockResolvedValue({
+      ...mockConversation,
+      id: "conv-admin",
+      kind: "PROVIDER_ADMIN",
+      bookingId: undefined,
+    }) };
+    const chatGateway = { emitMessage: vi.fn() };
+    const controller = new MessagesController(service as never, chatGateway as never);
+
+    const result = await controller.getOrCreateAdminThread(
+      { auth: { sub: "clerk-provider" }, requestId: "rid-1" } as never,
+    );
+
+    expect(result.id).toBe("conv-admin");
+    expect(service.getOrCreateAdminThread).toHaveBeenCalledWith("clerk-provider", "rid-1");
+  });
+
   it("listMessages delegates to service with default pagination", async () => {
     const service = {
       listMessages: vi.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 30 }),

@@ -11,20 +11,30 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAuth, useClerk } from "@clerk/expo";
+import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { apiClient, setAuthToken, useSubmitCustomerOnboarding, userKeys } from "@repo/api-client";
+import {
+  apiClient,
+  setAuthToken,
+  useSubmitCustomerOnboarding,
+  useUpdateAvatar,
+  useUpdateProfile,
+  userKeys,
+} from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
+import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 import { requestDeviceLocation } from "../../utils/device-location";
+import { promptPickProfilePhoto, type LocalProfilePhoto } from "../../utils/pick-profile-photo";
+import { isValidRequiredPhone, sanitizePhoneInput } from "../../utils/phone";
 
 const CAR_COMPANIES = [
   "Toyota",
@@ -47,9 +57,14 @@ export default function CustomerOnboardingScreen() {
   const params = useLocalSearchParams<{ allowRoleChange?: string }>();
   const { getToken } = useAuth();
   const clerk = useClerk();
+  const { user: clerkUser } = useUser();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitCustomerOnboarding();
+  const updateProfile = useUpdateProfile();
+  const uploadAvatar = useUpdateAvatar();
+  const [phone, setPhone] = useState("");
+  const [localPhoto, setLocalPhoto] = useState<LocalProfilePhoto | null>(null);
   const [primaryLocation, setPrimaryLocation] = useState("");
   const [carCompany, setCarCompany] = useState("");
   const [carModel, setCarModel] = useState("");
@@ -125,6 +140,17 @@ export default function CustomerOnboardingScreen() {
   }, [primaryLocation, googleMapsApiKey, locationFromDevice]);
 
   async function handleContinue() {
+    const trimmedPhone = sanitizePhoneInput(phone.trim());
+    const firstName = clerkUser?.firstName?.trim() ?? "";
+    const lastName = clerkUser?.lastName?.trim() ?? "";
+    if (!isValidRequiredPhone(trimmedPhone)) {
+      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
+      return;
+    }
+    if (!firstName || !lastName) {
+      showToast("error", "Your account is missing a name. Sign out and complete sign-up again.");
+      return;
+    }
     if (!primaryLocation.trim() || !carCompany.trim() || !carModel.trim()) {
       showToast("error", "Please provide location, car company, and model.");
       return;
@@ -149,6 +175,19 @@ export default function CustomerOnboardingScreen() {
         throw new Error("Could not refresh your session. Please try again.");
       }
       setAuthToken(refreshedToken);
+
+      await updateProfile.mutateAsync({
+        firstName,
+        lastName,
+        phone: trimmedPhone,
+      });
+      if (localPhoto) {
+        await uploadAvatar.mutateAsync({
+          uri: localPhoto.uri,
+          mimeType: localPhoto.mimeType,
+          fileName: localPhoto.fileName,
+        });
+      }
 
       await submitOnboarding.mutateAsync({
         primaryLocation: primaryLocation.trim(),
@@ -201,6 +240,34 @@ export default function CustomerOnboardingScreen() {
             </View>
           </View>
         </View>
+
+        <ProfilePhotoField
+          uri={localPhoto?.uri}
+          helperText="Optional. This photo appears on your profile."
+          onPress={() =>
+            promptPickProfilePhoto({
+              hasPhoto: Boolean(localPhoto),
+              screen: "CustomerOnboarding",
+              allowRemove: true,
+              onPicked: setLocalPhoto,
+              onRemoved: () => setLocalPhoto(null),
+            })
+          }
+        />
+
+        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
+        <TextInput
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
+          keyboardType="phone-pad"
+          placeholder="+1234567890"
+          placeholderTextColor={appColors.ink.subtle}
+          style={textInputBaselineStyle}
+          value={phone}
+          onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
+        />
+        <Text className="text-ink-muted text-xs mb-5 leading-5">
+          Required. Only you and admins can see this number — providers cannot.
+        </Text>
 
         <Text className="text-ink text-sm font-medium mb-2">Primary location</Text>
         <Text className="text-ink-muted text-xs mb-2 leading-4">

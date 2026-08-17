@@ -13,65 +13,68 @@ import {
 import type { Request } from "express";
 import { z } from "zod";
 
-import { SendMessageBodySchema } from "@repo/schemas";
+import { OpenAdminThreadSchema, SendMessageBodySchema } from "@repo/schemas";
 
 import { Roles } from "../auth/roles.decorator";
 import { ChatGateway } from "../realtime/chat.gateway";
 
 import { MessagesService } from "./messages.service";
 
-const ListMessagesQuerySchema = z.object({
+const ListQuerySchema = z.object({
   page:  z.coerce.number().int().min(1).optional().default(1),
   limit: z.coerce.number().int().min(1).max(50).optional().default(30),
 });
 
-@Controller("messages")
-@Roles("CUSTOMER", "PROVIDER")
-export class MessagesController {
+@Controller("admin/messages")
+@Roles("ADMIN")
+export class AdminMessagesController {
   constructor(
     private readonly messagesService: MessagesService,
     @Inject(forwardRef(() => ChatGateway))
-    private readonly chatGateway: ChatGateway
+    private readonly chatGateway: ChatGateway,
   ) {}
 
-  @Get("conversations")
-  async listConversations(@Req() req: Request) {
-    const clerkId = req.auth?.sub;
-    if (!clerkId) throw new BadRequestException("No authenticated user");
-
-    return this.messagesService.listConversations(clerkId);
-  }
-
-  @Post("conversations/:bookingId")
-  async getOrCreate(
+  @Get()
+  async listThreads(
     @Req() req: Request,
-    @Param("bookingId") bookingId: string
+    @Query() rawQuery: Record<string, string | undefined>,
   ) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    return this.messagesService.getOrCreateConversation(clerkId, bookingId, req.requestId);
+    const parsed = ListQuerySchema.safeParse(rawQuery);
+    const q = parsed.success ? parsed.data : { page: 1, limit: 30 };
+
+    return this.messagesService.listAdminThreads(clerkId, q.page, q.limit, req.requestId);
   }
 
-  @Post("admin-thread")
-  @Roles("PROVIDER")
-  async getOrCreateAdminThread(@Req() req: Request) {
+  @Post("threads")
+  async openThread(@Req() req: Request, @Body() body: unknown) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    return this.messagesService.getOrCreateAdminThread(clerkId, req.requestId);
+    const parsed = OpenAdminThreadSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.flatten());
+    }
+
+    return this.messagesService.getOrCreateAdminThreadForProvider(
+      clerkId,
+      parsed.data.providerUserId,
+      req.requestId,
+    );
   }
 
-  @Get("conversations/:conversationId/messages")
+  @Get(":conversationId/messages")
   async listMessages(
     @Req() req: Request,
     @Param("conversationId") conversationId: string,
-    @Query() rawQuery: Record<string, string | undefined>
+    @Query() rawQuery: Record<string, string | undefined>,
   ) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
 
-    const parsed = ListMessagesQuerySchema.safeParse(rawQuery);
+    const parsed = ListQuerySchema.safeParse(rawQuery);
     const q = parsed.success ? parsed.data : { page: 1, limit: 30 };
 
     return this.messagesService.listMessages(
@@ -79,15 +82,15 @@ export class MessagesController {
       conversationId,
       q.page,
       q.limit,
-      req.requestId
+      req.requestId,
     );
   }
 
-  @Post("conversations/:conversationId/messages")
+  @Post(":conversationId/messages")
   async sendMessage(
     @Req() req: Request,
     @Param("conversationId") conversationId: string,
-    @Body() body: unknown
+    @Body() body: unknown,
   ) {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
@@ -104,10 +107,9 @@ export class MessagesController {
         content: parsed.data.content,
         type: parsed.data.type,
       },
-      req.requestId
+      req.requestId,
     );
 
-    // Fan-out to anyone currently in the room; offline peers pick this up via listMessages.
     this.chatGateway.emitMessage(conversationId, msg);
     return msg;
   }

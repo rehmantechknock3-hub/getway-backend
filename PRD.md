@@ -55,9 +55,11 @@ Features:
 • Profile management
 Customer profile includes:
 • name
-• phone number
+• phone number (required)
+• profile photo
 • email
 • saved locations
+Phone numbers are visible to the account owner and to admins only. Customers and providers cannot see each other’s phone numbers.
 
 4.2 Favorites
 Customers can save preferred providers.
@@ -90,6 +92,7 @@ Provider profiles include:
 • profile photos
 • service descriptions
 • ratings and reviews
+Provider phone numbers are not shown on public profiles.
 
 6. Booking System
 Customers must be able to create bookings.
@@ -149,9 +152,12 @@ Providers must create an account.
 Registration includes:
 • account creation
 • provider profile setup
+• phone number (required)
+• profile photo
 • upload ID verification documents
 • upload service photos
 Providers require admin approval before activation.
+Phone numbers are visible to the provider and to admins only — not to customers.
 
 12. Provider Dashboard
 Providers will have a dashboard displaying:
@@ -231,9 +237,11 @@ Reports include:
 23. Messaging
 The platform will include a messaging system.
 Features:
-• chat between customer and provider
+• chat between customer and provider (per booking)
+• chat between provider and admin (one thread per provider) for payouts and support
 • real-time messaging
 • message notifications
+• admin dashboard inbox to read and reply to provider messages
 
 24. Real-Time System
 The system will support real-time updates.
@@ -480,7 +488,9 @@ Booking reports
 
 Revenue reports
 Messaging
-In-app chat between users
+In-app chat between customer and provider
+Provider–admin chat (payouts / support)
+Admin messages inbox
 Real-Time System
 Live booking updates
 

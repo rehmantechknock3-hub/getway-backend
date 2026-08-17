@@ -171,6 +171,7 @@ export default function ProviderProfileScreen() {
         <ProfileField label="Last name" value={lastName} />
         <ProfileField label="Email" value={accountEmail} />
         <ProfileField label="Phone number" value={phone} />
+        <Text className="text-ink-muted text-xs mb-1">Private — only you and admins can see this.</Text>
       </View>
 
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">

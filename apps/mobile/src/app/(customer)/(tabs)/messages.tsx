@@ -11,6 +11,7 @@ import { messageKeys, useConversations, useMe } from "@repo/api-client";
 import type { ConversationListItem } from "@repo/schemas";
 import { reportError } from "@repo/utils";
 
+import { ChatAvatar } from "../../../components/ChatAvatar";
 import { appColors } from "../../../styles/colors";
 
 function timeAgo(date: Date | string | undefined): string {
@@ -47,10 +48,12 @@ function ConversationRow({
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${name}`}
     >
-      <View className="w-11 h-11 rounded-full bg-primary-100 items-center justify-center mr-3">
-        <Text className="text-primary-700 font-bold text-base">
-          {item.otherPartyFirstName.charAt(0).toUpperCase()}
-        </Text>
+      <View className="mr-3">
+        <ChatAvatar
+          uri={item.otherPartyAvatarUrl}
+          name={name || item.otherPartyFirstName}
+          size="lg"
+        />
       </View>
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center justify-between mb-0.5">
@@ -148,7 +151,7 @@ export default function CustomerMessagesScreen() {
               myUserId={me?.id ?? ""}
               onPress={() =>
                 router.push(
-                  `/(customer)/conversation/${item.id}?bookingId=${item.bookingId}`
+                  `/(customer)/conversation/${item.id}?bookingId=${item.bookingId ?? ""}`
                 )
               }
             />

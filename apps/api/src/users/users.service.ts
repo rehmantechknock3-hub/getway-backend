@@ -19,6 +19,12 @@ import type { ClerkUserPayload } from "../auth/webhook.controller";
 import { GoogleMapsService } from "../maps/google-maps.service";
 import { PrismaService } from "../prisma/prisma.service";
 
+/** Own-profile + admin only. Public provider/booking payloads must never include this. */
+export function hasRequiredPhone(phone: string | null | undefined): boolean {
+  if (!phone) return false;
+  return phone.replace(/\D/g, "").length >= 6;
+}
+
 /** Clerk lists multiple emails; sync must use the user's primary, not `email_addresses[0]`. */
 export function resolveClerkPrimaryEmail(clerkUser: ClerkUserPayload): string {
   const primaryId = clerkUser.primary_email_address_id;
@@ -342,13 +348,12 @@ export class UsersService {
   }
 
   async updateProfile(clerkId: string, input: UpdateUserProfileInput) {
-    const phone = input.phone?.trim();
     await this.prisma.user.update({
       where: { clerkId },
       data: {
         firstName: input.firstName,
         lastName: input.lastName,
-        phone: phone && phone.length > 0 ? phone : null,
+        phone: input.phone.trim(),
       },
     });
     const user = await this.findByClerkId(clerkId);
@@ -378,7 +383,19 @@ export class UsersService {
     return user;
   }
 
+  private async requirePhoneForFirstOnboarding(clerkId: string) {
+    const existing = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { phone: true, onboardingCompleted: true },
+    });
+    if (existing?.onboardingCompleted) return;
+    if (!hasRequiredPhone(existing?.phone)) {
+      throw new BadRequestException("Phone number is required to complete onboarding");
+    }
+  }
+
   async updateCustomerOnboarding(clerkId: string, data: CustomerOnboarding, requestId?: string) {
+    await this.requirePhoneForFirstOnboarding(clerkId);
     const existing = await this.prisma.user.findUnique({
       where: { clerkId },
       select: { customerOnboarding: true },
@@ -428,6 +445,7 @@ export class UsersService {
   }
 
   async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding, requestId?: string) {
+    await this.requirePhoneForFirstOnboarding(clerkId);
     const geocodedLocations = await this.geocodeProviderLocations(
       data.shopLocations.map((location) => ({
         address: location.address,

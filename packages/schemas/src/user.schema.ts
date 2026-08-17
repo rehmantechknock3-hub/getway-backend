@@ -6,6 +6,9 @@ export type UserRole = z.infer<typeof UserRole>;
 export const SavedLocationSchema = z.object({
   label: z.string().min(1),
   address: z.string().min(1),
+  placeId: z.string().min(1).optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 export const CustomerOnboardingSchema = z.object({
@@ -35,7 +38,7 @@ const providerOnboardingFields = {
     .min(1)
     .max(10),
   hasTools: z.boolean(),
-  serviceDescription: z.string().min(1).max(500),
+  serviceDescription: z.string().max(500),
   profilePhotoUrl: z.string().url().optional(),
 };
 
@@ -95,6 +98,19 @@ export function safeParseProviderOnboardingJson(raw: unknown) {
   return ProviderOnboardingSchema.safeParse(raw);
 }
 
+/** Required phone for profile updates / first onboarding. Own profile + admin only. */
+export const PhoneNumberSchema = z
+  .string()
+  .trim()
+  .min(1, "Phone number is required")
+  .max(20)
+  .refine((value) => /^\+?\d+$/.test(value), {
+    message: "Phone must contain only + and digits",
+  })
+  .refine((value) => value.replace(/\D/g, "").length >= 6, {
+    message: "Phone must include at least 6 digits",
+  });
+
 export const UserSchema = z.object({
   id:          z.string().uuid(),
   clerkId:     z.string(),
@@ -102,7 +118,8 @@ export const UserSchema = z.object({
   email:       z.string().email(),
   firstName:   z.string().min(1),
   lastName:    z.string().min(1),
-  phone:       z.string().optional(),
+  /** Present on `/users/me` and admin APIs only — never on public provider/booking payloads. */
+  phone:       z.string().nullable().optional(),
   avatarUrl:   z.string().url().optional(),
   savedLocations: z.array(SavedLocationSchema).default([]),
   onboardingCompleted: z.boolean().default(false),
@@ -138,20 +155,7 @@ export const UpdateUserSchema = UserSchema.pick({
 export const UpdateUserProfileSchema = z.object({
   firstName: z.string().trim().min(1),
   lastName: z.string().trim().min(1),
-  phone: z
-    .string()
-    .trim()
-    .max(20)
-    .optional()
-    .refine((value) => value === undefined || value.length === 0 || /^\+?\d+$/.test(value), {
-      message: "Phone must contain only + and digits",
-    })
-    .refine((value) => {
-      if (value === undefined || value.length === 0) return true;
-      return value.replace(/\D/g, "").length >= 6;
-    }, {
-      message: "Phone must include at least 6 digits when provided",
-    }),
+  phone: PhoneNumberSchema,
 });
 
 export const UpdateSavedLocationsSchema = z.object({

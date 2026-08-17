@@ -8,6 +8,7 @@ export const NotificationType = z.enum([
   "BOOKING_COMPLETED",
   "BOOKING_CANCELLED",
   "PROVIDER_NEW_REVIEW",
+  "PROVIDER_ADMIN_MESSAGE",
 ]);
 export type NotificationType = z.infer<typeof NotificationType>;
 

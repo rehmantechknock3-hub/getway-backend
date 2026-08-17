@@ -134,6 +134,45 @@ function formatListedDistance(
   return null;
 }
 
+function EnableLocationCard({
+  radiusKm,
+  onEnable,
+}: {
+  radiusKm: number;
+  onEnable: () => void;
+}) {
+  return (
+    <View className="bg-surface-card border border-surface-border rounded-2xl p-5 items-center">
+      <Ionicons name="location-outline" size={32} color={appColors.surface.muted} />
+      <Text className="text-white font-semibold text-base text-center mt-3">
+        Enable location to see nearby
+      </Text>
+      <Text className="text-surface-muted text-sm text-center mt-2 leading-5">
+        Nearby providers stay hidden until you allow location. We use it to show who is within{" "}
+        {radiusKm} km of you.
+      </Text>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onEnable}
+        className="mt-4 w-full bg-glow-blue rounded-2xl py-3 items-center"
+        accessibilityRole="button"
+        accessibilityLabel="Enable location"
+      >
+        <Text className="text-white font-semibold text-sm">Enable location</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => void Linking.openSettings()}
+        className="mt-3 px-5 py-2"
+        accessibilityRole="button"
+        accessibilityLabel="Open location settings"
+      >
+        <Text className="text-glow-blue font-semibold text-sm">Open settings</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function ProviderRow({
   p,
   customerCoords,
@@ -294,24 +333,11 @@ export default function HomeScreen() {
   const providersQueryEnabled = isLoaded && isSignedIn;
 
   const { data: me, refetch: refetchMe } = useMe({ enabled: providersQueryEnabled });
+  const welcomeName = me?.firstName?.trim() || "there";
 
-  const discoveryCoords = useMemo(() => {
-    // Live GPS first; saved primary location only if permission was denied / GPS unavailable.
-    if (customerCoords) {
-      return customerCoords;
-    }
-    const primaryLat = me?.customerOnboarding?.primaryLatitude;
-    const primaryLon = me?.customerOnboarding?.primaryLongitude;
-    const hasPrimary =
-      typeof primaryLat === "number" &&
-      typeof primaryLon === "number" &&
-      Number.isFinite(primaryLat) &&
-      Number.isFinite(primaryLon);
-    if (hasPrimary) {
-      return { lat: primaryLat, lon: primaryLon };
-    }
-    return null;
-  }, [me?.customerOnboarding?.primaryLatitude, me?.customerOnboarding?.primaryLongitude, customerCoords]);
+  // Nearby is GPS-only. Do not fall back to a saved profile address — if they
+  // decline permission we ask them to enable location instead of listing providers.
+  const discoveryCoords = customerCoords;
 
   useEffect(() => {
     if (customerCoords) return;
@@ -319,7 +345,7 @@ export default function HomeScreen() {
     void (async () => {
       if (!discoveryCoords) {
         if (!cancelled) {
-          setLocationLabel(locationPermissionDenied ? "Add location" : "Set location");
+          setLocationLabel("Enable location");
         }
         return;
       }
@@ -352,27 +378,12 @@ export default function HomeScreen() {
     useCallback(() => {
       if (!providersQueryEnabled) return;
       void (async () => {
+        await refreshCustomerLocation();
         await refetchNotifications();
         await refetchMe();
       })();
-    }, [providersQueryEnabled, refetchNotifications, refetchMe])
+    }, [providersQueryEnabled, refreshCustomerLocation, refetchNotifications, refetchMe])
   );
-
-  useEffect(() => {
-    if (!providersQueryEnabled) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        await refreshCustomerLocation();
-        if (cancelled) return;
-      } catch {
-        // Keep last known location if a refresh attempt fails.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [providersQueryEnabled, refreshCustomerLocation]);
 
   const providersListActive = showProvidersList || filterKeywords != null;
 
@@ -497,18 +508,18 @@ export default function HomeScreen() {
   const onPressLocation = () => {
     if (locationPermissionDenied || !discoveryCoords) {
       Alert.alert(
-        "Set your location",
-        "Allow location access for automatic detection, or add a location manually in your profile.",
+        "Enable location",
+        "Turn on location access so we can show providers near you.",
         [
           { text: "Cancel", style: "cancel" },
           {
-            text: "Add manually",
+            text: "Open settings",
             onPress: () => {
-              router.push("/(customer)/edit-info");
+              void Linking.openSettings();
             },
           },
           {
-            text: "Try GPS",
+            text: "Try again",
             onPress: () => {
               void refreshCustomerLocation();
             },
@@ -546,6 +557,11 @@ export default function HomeScreen() {
           onPressLocation={onPressLocation}
           onPressNotifications={() => router.push("/(customer)/notifications")}
           onBack={providersListActive ? goBackToBrowse : undefined}
+          avatarUrl={me?.avatarUrl}
+          profileName={welcomeName}
+          onPressProfile={
+            providersListActive ? undefined : () => router.push("/(customer)/(tabs)/profile")
+          }
         />
 
         {!providersListActive ? (
@@ -587,68 +603,63 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            <View className="px-5 mb-4">
-              <NearbyProvidersMap
-                customerCoords={discoveryCoords}
-                providers={nearbyProviders ?? []}
-                radiusKm={DISCOVERY_RADIUS_KM}
-                isLoading={nearbyLoading}
-                onSelectProvider={(providerId) => {
-                  router.push(`/(customer)/provider/${providerId}` as const);
-                }}
-              />
-            </View>
-
             <View className="px-5 mb-8">
-              <View className="flex-row items-center justify-between mb-3">
-                <Text className="text-white text-lg font-semibold">Providers near you</Text>
-                <Text className="text-surface-muted text-xs">
-                  {(nearbyProviders ?? []).length} within {DISCOVERY_RADIUS_KM} km
-                </Text>
-              </View>
-
               {!discoveryCoords ? (
-                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
-                  <Text className="text-surface-soft text-sm leading-5 text-center">
-                    Turn on location to see providers within {DISCOVERY_RADIUS_KM} km.
-                  </Text>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={onPressLocation}
-                    className="mt-4 bg-glow-blue rounded-2xl py-3 items-center"
-                  >
-                    <Text className="text-white font-semibold text-sm">Set location</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : nearbyLoading ? (
-                <View className="py-10 items-center">
-                  <ActivityIndicator color={appColors.glow.blue} />
-                </View>
-              ) : nearbyError ? (
-                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
-                  <Text className="text-surface-soft text-sm text-center mb-3">
-                    Could not load nearby providers.
-                  </Text>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => void refetchNearby()}
-                    className="bg-surface-elevated border border-surface-border rounded-2xl py-3 items-center"
-                  >
-                    <Text className="text-white font-semibold text-sm">Retry</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (nearbyProviders ?? []).length === 0 ? (
-                <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
-                  <Text className="text-surface-soft text-sm leading-5 text-center">
-                    No providers found within {DISCOVERY_RADIUS_KM} km right now. Try View all to browse farther.
-                  </Text>
-                </View>
+                <>
+                  <Text className="text-white text-lg font-semibold mb-3">Providers near you</Text>
+                  <EnableLocationCard
+                    radiusKm={DISCOVERY_RADIUS_KM}
+                    onEnable={() => void refreshCustomerLocation()}
+                  />
+                </>
               ) : (
-                <View className="gap-3">
-                  {(nearbyProviders ?? []).map((p) => (
-                    <ProviderRow key={p.id} p={p} customerCoords={discoveryCoords} />
-                  ))}
-                </View>
+                <>
+                  <NearbyProvidersMap
+                    customerCoords={discoveryCoords}
+                    providers={nearbyProviders ?? []}
+                    radiusKm={DISCOVERY_RADIUS_KM}
+                    isLoading={nearbyLoading}
+                    onSelectProvider={(providerId) => {
+                      router.push(`/(customer)/provider/${providerId}` as const);
+                    }}
+                  />
+                  <View className="flex-row items-center justify-between mt-5 mb-3">
+                    <Text className="text-white text-lg font-semibold">Providers near you</Text>
+                    <Text className="text-surface-muted text-xs">
+                      {(nearbyProviders ?? []).length} within {DISCOVERY_RADIUS_KM} km
+                    </Text>
+                  </View>
+                  {nearbyLoading ? (
+                    <View className="py-10 items-center">
+                      <ActivityIndicator color={appColors.glow.blue} />
+                    </View>
+                  ) : nearbyError ? (
+                    <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
+                      <Text className="text-surface-soft text-sm text-center mb-3">
+                        Could not load nearby providers.
+                      </Text>
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => void refetchNearby()}
+                        className="bg-surface-elevated border border-surface-border rounded-2xl py-3 items-center"
+                      >
+                        <Text className="text-white font-semibold text-sm">Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (nearbyProviders ?? []).length === 0 ? (
+                    <View className="bg-surface-card border border-surface-border rounded-2xl p-5">
+                      <Text className="text-surface-soft text-sm leading-5 text-center">
+                        No providers found within {DISCOVERY_RADIUS_KM} km right now. Try View all to browse farther.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View className="gap-3">
+                      {(nearbyProviders ?? []).map((p) => (
+                        <ProviderRow key={p.id} p={p} customerCoords={discoveryCoords} />
+                      ))}
+                    </View>
+                  )}
+                </>
               )}
             </View>
           </>
@@ -767,35 +778,10 @@ export default function HomeScreen() {
                 ) : null}
               </View>
             ) : feed === "discover" && !discoveryCoords ? (
-              <View className="bg-surface-card rounded-3xl p-8 border border-surface-border items-center">
-                <Ionicons name="location-outline" size={36} color={appColors.surface.muted} />
-                <Text className="text-white font-bold text-lg text-center mt-3 mb-2">
-                  {locationPermissionDenied ? "Location permission needed" : "Set where to search"}
-                </Text>
-                <Text className="text-surface-muted text-sm text-center leading-5 mb-5">
-                  {locationPermissionDenied
-                    ? "Allow location access to find nearby providers automatically, or add a location manually."
-                    : "Turn on location access, or save a primary location under Profile."}
-                </Text>
-                <TouchableOpacity
-                  className="bg-glow-blue rounded-2xl px-5 py-3 mb-3 w-full items-center"
-                  onPress={() => void refreshCustomerLocation()}
-                >
-                  <Text className="text-white font-semibold text-sm">Use current location</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="bg-surface-elevated border border-surface-border rounded-2xl px-5 py-3 mb-3 w-full items-center"
-                  onPress={() => router.push("/(customer)/edit-info")}
-                >
-                  <Text className="text-white font-semibold text-sm">Add location manually</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  className="px-5 py-2"
-                  onPress={() => void Linking.openSettings()}
-                >
-                  <Text className="text-glow-blue font-semibold text-sm">Open location settings</Text>
-                </TouchableOpacity>
-              </View>
+              <EnableLocationCard
+                radiusKm={DISCOVERY_RADIUS_KM}
+                onEnable={() => void refreshCustomerLocation()}
+              />
             ) : !list?.length ? (
               <View className="bg-surface-card rounded-3xl p-8 border border-surface-border items-center">
                 {feed === "saved" ? (

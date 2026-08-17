@@ -57,6 +57,7 @@ export default function UsersPage() {
                   <tr>
                     <th className="px-5 py-3 font-medium">Name</th>
                     <th className="px-5 py-3 font-medium">Email</th>
+                    <th className="px-5 py-3 font-medium">Phone</th>
                     <th className="px-5 py-3 font-medium">Total spent</th>
                     <th className="px-5 py-3 font-medium">Joined</th>
                   </tr>
@@ -78,6 +79,7 @@ export default function UsersPage() {
                         </Link>
                       </td>
                       <td className="px-5 py-3 text-slate-600">{u.email}</td>
+                      <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{u.phone || "—"}</td>
                       <td className="px-5 py-3 font-medium text-slate-900">
                         ${(u.totalSpent ?? 0).toFixed(2)}
                       </td>

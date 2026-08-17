@@ -134,6 +134,7 @@ export default function ProvidersPage() {
                 <thead className="bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-5 py-3 font-medium">Provider</th>
+                    <th className="px-5 py-3 font-medium">Phone</th>
                     <th className="px-5 py-3 font-medium">Area</th>
                     <th className="px-5 py-3 font-medium">Status</th>
                     <th className="px-5 py-3 font-medium">Online</th>
@@ -160,6 +161,7 @@ export default function ProvidersPage() {
                             </p>
                           </Link>
                         </td>
+                        <td className="px-5 py-3 text-slate-600 whitespace-nowrap">{p.phone || "—"}</td>
                         <td className="px-5 py-3 text-slate-600">{p.serviceArea ?? "—"}</td>
                         <td className="px-5 py-3">
                           <StatusPill tone={statusTone(p.verificationStatus)}>

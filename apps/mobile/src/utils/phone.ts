@@ -16,3 +16,8 @@ export function sanitizePhoneInput(raw: string): string {
 export function countPhoneDigits(phone: string): number {
   return phone.replace(/\D/g, "").length;
 }
+
+export function isValidRequiredPhone(phone: string): boolean {
+  const trimmed = phone.trim();
+  return /^\+?\d+$/.test(trimmed) && countPhoneDigits(trimmed) >= 6;
+}

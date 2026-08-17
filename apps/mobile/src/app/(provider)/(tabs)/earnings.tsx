@@ -14,10 +14,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 
-import { useProviderBookings, useProviderPayoutSummary } from "@repo/api-client";
+import { useProviderBookings, useProviderPayoutSummary, useOrCreateAdminThread } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { ChatAvatar, wayNowLogoSource } from "../../../components/ChatAvatar";
 import { appColors } from "../../../styles/colors";
 
 type DateRangeFilter = "week" | "month" | "all";
@@ -48,6 +49,17 @@ export default function EarningsScreen() {
   const enabled = isLoaded && isSignedIn;
   const historyQuery = useProviderBookings(1, { enabled, scope: "history" });
   const payoutSummaryQuery = useProviderPayoutSummary(dateRange, { enabled });
+  const createAdminThread = useOrCreateAdminThread();
+
+  const openAdminChat = async () => {
+    try {
+      const thread = await createAdminThread.mutateAsync();
+      router.push(`/(provider)/conversation/${thread.id}`);
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderEarnings", action: "openAdminChat" });
+      showToast("error", "Could not open admin chat. Try again.");
+    }
+  };
   const stats = historyQuery.data?.stats;
 
   useFocusEffect(
@@ -110,7 +122,24 @@ export default function EarningsScreen() {
         />
       }
     >
-      <Text className="text-3xl font-bold text-ink mb-6" style={{ letterSpacing: -0.5 }}>Earnings</Text>
+      <Text className="text-3xl font-bold text-ink mb-4" style={{ letterSpacing: -0.5 }}>Earnings</Text>
+
+      <Pressable
+        onPress={() => void openAdminChat()}
+        disabled={createAdminThread.isPending}
+        className="flex-row items-center bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 mb-6"
+        accessibilityRole="button"
+        accessibilityLabel="Chat with Admin"
+      >
+        <View className="mr-3">
+          <ChatAvatar source={wayNowLogoSource} name="WayNow Admin" size="md" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-ink font-semibold text-sm">Chat with Admin</Text>
+          <Text className="text-ink-muted text-xs mt-0.5">Ask about payouts or your balance</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={appColors.ink.muted} />
+      </Pressable>
 
       {!enabled || historyQuery.isLoading ? (
         <View className="py-20 items-center">

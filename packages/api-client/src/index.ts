@@ -10,6 +10,7 @@ export type { ApiError } from "./client";
 
 // Queries
 export * from "./queries/admin-bookings.queries";
+export * from "./queries/admin-messages.queries";
 export * from "./queries/admin.queries";
 export * from "./queries/bookings.queries";
 export * from "./queries/provider-bookings.queries";

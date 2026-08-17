@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +30,7 @@ import type { Message } from "@repo/schemas";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { ChatAvatar, wayNowLogoSource } from "../../../components/ChatAvatar";
 import { useKeyboardBottomInset } from "../../../hooks/useKeyboardBottomInset";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
@@ -89,9 +91,19 @@ function DateSeparator({ date }: { date: Date | string }) {
   );
 }
 
-function OutgoingBubble({ msg }: { msg: ProcessedMessage }) {
+function OutgoingBubble({
+  msg,
+  avatarUrl,
+  name,
+}: {
+  msg: ProcessedMessage;
+  avatarUrl?: string | null;
+  name: string;
+}) {
   return (
-    <View className={`self-end max-w-[78%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}>
+    <View
+      className={`self-end flex-row items-end max-w-[86%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}
+    >
       <View
         className="bg-primary-600 px-3.5 pt-2.5 pb-2"
         style={{
@@ -104,38 +116,32 @@ function OutgoingBubble({ msg }: { msg: ProcessedMessage }) {
           {formatTime(msg.createdAt)}
         </Text>
       </View>
+      <View className="w-7 h-7 flex-shrink-0 ml-1.5 items-center justify-center">
+        {msg.isLast ? <ChatAvatar uri={avatarUrl} name={name} size="sm" /> : null}
+      </View>
     </View>
   );
 }
 
 function IncomingBubble({
   msg,
-  otherInitial,
+  avatarUrl,
+  avatarSource,
+  name,
 }: {
   msg: ProcessedMessage;
-  otherInitial: string;
+  avatarUrl?: string | null;
+  avatarSource?: ImageSourcePropType;
+  name: string;
 }) {
   return (
     <View
-      className={`self-start flex-row items-end max-w-[80%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}
+      className={`self-start flex-row items-end max-w-[86%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}
       style={{ paddingLeft: 8 }}
     >
       <View className="w-7 h-7 flex-shrink-0 mr-1.5 items-center justify-center">
         {msg.isLast ? (
-          <View
-            className="w-7 h-7 rounded-full items-center justify-center"
-            style={{ backgroundColor: appColors.primary[100] }}
-          >
-            <Text
-              style={{
-                color: appColors.primary[700],
-                fontSize: 11,
-                fontWeight: "700",
-              }}
-            >
-              {otherInitial.toUpperCase()}
-            </Text>
-          </View>
+          <ChatAvatar uri={avatarUrl} source={avatarSource} name={name} size="sm" />
         ) : null}
       </View>
 
@@ -196,16 +202,23 @@ export default function ProviderConversationScreen() {
 
   const { data: convList } = useConversations({ enabled: !isNew && enabled });
   const conversation = convList?.find((c) => c.id === realConversationId);
-  const otherInitial = conversation?.otherPartyFirstName?.charAt(0) ?? "?";
+  const isAdminChat =
+    conversation?.kind === "PROVIDER_ADMIN" || (!bookingId && !isNew);
   const otherName = conversation
     ? `${conversation.otherPartyFirstName} ${conversation.otherPartyLastName}`.trim()
-    : "Customer";
+    : isAdminChat
+      ? "WayNow Admin"
+      : "Customer";
+  const otherAvatarUrl = conversation?.otherPartyAvatarUrl ?? null;
+  const otherAvatarSource = isAdminChat ? wayNowLogoSource : undefined;
+  const myName = `${me?.firstName ?? ""} ${me?.lastName ?? ""}`.trim() || "You";
+  const myAvatarUrl = me?.avatarUrl ?? me?.providerOnboarding?.profilePhotoUrl ?? null;
 
   const { data: messagesData, isLoading } = useMessages(realConversationId, 1, {
     enabled: !isNew && !!realConversationId,
   });
   const appendMessage = useAppendMessage(realConversationId, 1);
-  const sendMessageMutation = useSendMessage(realConversationId, 1);
+  const sendMessageMutation = useSendMessage(realConversationId, 1, myDbId);
 
   const processedMessages = useMemo(
     () => processMessages(messagesData?.data ?? []),
@@ -303,8 +316,9 @@ export default function ProviderConversationScreen() {
     try {
       // Always persist over REST so offline peers still receive the message when they return.
       // Socket remains for live delivery to anyone currently in the room.
-      await sendMessageMutation.mutateAsync({ content: text, type: "TEXT" });
+      const sendPromise = sendMessageMutation.mutateAsync({ content: text, type: "TEXT" });
       setTimeout(() => scrollToBottom(true), 80);
+      await sendPromise;
     } catch (error: unknown) {
       setInputText(text);
       reportError(error, { screen: "ProviderConversation", action: "sendMessage" });
@@ -336,13 +350,13 @@ export default function ProviderConversationScreen() {
           <Ionicons name="chevron-back" size={28} color={appColors.primary[600]} />
         </TouchableOpacity>
 
-        <View
-          className="w-9 h-9 rounded-full items-center justify-center mr-3"
-          style={{ backgroundColor: appColors.primary[100] }}
-        >
-          <Text style={{ color: appColors.primary[700], fontSize: 15, fontWeight: "700" }}>
-            {otherInitial.toUpperCase()}
-          </Text>
+        <View className="mr-3">
+          <ChatAvatar
+            uri={otherAvatarUrl}
+            source={otherAvatarSource}
+            name={otherName}
+            size="md"
+          />
         </View>
 
         <View className="flex-1">
@@ -387,9 +401,14 @@ export default function ProviderConversationScreen() {
               <>
                 {showSeparator ? <DateSeparator date={item.createdAt} /> : null}
                 {isMine ? (
-                  <OutgoingBubble msg={item} />
+                  <OutgoingBubble msg={item} avatarUrl={myAvatarUrl} name={myName} />
                 ) : (
-                  <IncomingBubble msg={item} otherInitial={otherInitial} />
+                  <IncomingBubble
+                    msg={item}
+                    avatarUrl={otherAvatarUrl}
+                    avatarSource={otherAvatarSource}
+                    name={otherName}
+                  />
                 )}
               </>
             );
@@ -411,7 +430,9 @@ export default function ProviderConversationScreen() {
               </View>
               <Text className="text-ink font-semibold text-base mb-1">No messages yet</Text>
               <Text className="text-ink-muted text-sm text-center leading-5">
-                Your messages with this customer are private and secure.
+                {isAdminChat
+                  ? "Message WayNow Admin about payouts or account support."
+                  : "Your messages with this customer are private and secure."}
               </Text>
             </View>
           }
