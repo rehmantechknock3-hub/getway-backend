@@ -5,7 +5,7 @@ import { NotificationsService } from "./notifications.service";
 
 describe("NotificationsService", () => {
   const prisma = {
-    user: { findUnique: vi.fn() },
+    user: { findUnique: vi.fn(), findMany: vi.fn() },
     notification: {
       create: vi.fn(),
       findMany: vi.fn(),
@@ -133,5 +133,25 @@ describe("NotificationsService", () => {
         bookingId: "b-1",
       },
     });
+  });
+
+  it("notifies all admins of a provider message", async () => {
+    prisma.user.findMany.mockResolvedValue([{ id: "admin-1" }, { id: "admin-2" }]);
+    prisma.notification.create.mockResolvedValue({});
+
+    await service.notifyAdminsProviderMessage({
+      providerName: "Bob Jones",
+      preview: "Need payout",
+    });
+
+    expect(prisma.notification.create).toHaveBeenCalledTimes(2);
+    expect(prisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: "admin-1",
+          type: "PROVIDER_ADMIN_MESSAGE",
+        }),
+      }),
+    );
   });
 });

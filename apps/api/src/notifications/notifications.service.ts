@@ -155,6 +155,37 @@ export class NotificationsService {
     });
   }
 
+  async notifyAdminsProviderMessage(params: {
+    providerName: string;
+    preview: string;
+  }): Promise<void> {
+    const admins = await this.prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true },
+    });
+    const body = params.preview.slice(0, 120);
+    await Promise.all(
+      admins.map((admin) =>
+        this.createForUser(admin.id, {
+          type: "PROVIDER_ADMIN_MESSAGE",
+          title: `Message from ${params.providerName}`,
+          body,
+        }),
+      ),
+    );
+  }
+
+  async notifyProviderAdminReply(params: {
+    providerUserId: string;
+    preview: string;
+  }): Promise<void> {
+    await this.createForUser(params.providerUserId, {
+      type: "PROVIDER_ADMIN_MESSAGE",
+      title: "New message from WayNow Admin",
+      body: params.preview.slice(0, 120),
+    });
+  }
+
   async listForUser(
     clerkId: string,
     page: number,

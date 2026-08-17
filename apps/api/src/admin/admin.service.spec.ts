@@ -196,6 +196,7 @@ describe("AdminService", () => {
         email: "p@example.com",
         firstName: "Pat",
         lastName: "Pro",
+        phone: "+15551212",
         providerOnboarding: { serviceArea: "Downtown" },
       },
     });

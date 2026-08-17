@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { UsersController } from "./users.controller";
 
 describe("UsersController", () => {
+  it("rejects profile update without a phone number", async () => {
+    const service = {
+      updateProfile: vi.fn(),
+    };
+    const controller = new UsersController(service as never);
+
+    await expect(
+      controller.updateProfile({ auth: { sub: "clerk_1" } } as never, {
+        firstName: "A",
+        lastName: "B",
+      })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.updateProfile).not.toHaveBeenCalled();
+  });
+
   it("rejects profile updates without authenticated user", async () => {
     const service = {
       updateProfile: vi.fn(),
@@ -78,19 +93,23 @@ describe("UsersController", () => {
       }
     );
 
-    expect(service.updateProviderOnboarding).toHaveBeenCalledWith("clerk_2", {
-      serviceCategories: ["Car Wash", "Car Detailing"],
-      starterListingPrice: 40,
-      starterListingDurationMinutes: 90,
-      experienceYears: 3,
-      serviceArea: "DHA",
-      shopAddress: "DHA Main Market",
-      shopPlaceId: "place_abc1234567",
-      shopLocations: [{ address: "DHA Main Market", placeId: "place_abc1234567" }],
-      hasTools: true,
-      serviceDescription: "Interior and exterior detailing.",
-      profilePhotoUrl: "https://example.com/photo.jpg",
-    });
+    expect(service.updateProviderOnboarding).toHaveBeenCalledWith(
+      "clerk_2",
+      {
+        serviceCategories: ["Car Wash", "Car Detailing"],
+        starterListingPrice: 40,
+        starterListingDurationMinutes: 90,
+        experienceYears: 3,
+        serviceArea: "DHA",
+        shopAddress: "DHA Main Market",
+        shopPlaceId: "place_abc1234567",
+        shopLocations: [{ address: "DHA Main Market", placeId: "place_abc1234567" }],
+        hasTools: true,
+        serviceDescription: "Interior and exterior detailing.",
+        profilePhotoUrl: "https://example.com/photo.jpg",
+      },
+      "rid-prov"
+    );
   });
 
   it("ensureProviderListing delegates to service", async () => {
@@ -135,10 +154,25 @@ describe("UsersController", () => {
     expect(service.updateProviderPresence).toHaveBeenCalledWith("clerk_provider", true);
   });
 
-  it("findOne allows admin to access any user id", async () => {
+  it("findOne hides phone from non-admin callers", async () => {
+    const service = {
+      findByClerkId: vi.fn().mockResolvedValue({ id: "me", role: "CUSTOMER" }),
+      findById: vi.fn().mockResolvedValue({ id: "me", firstName: "Ada", phone: "+15551212" }),
+    };
+    const controller = new UsersController(service as never);
+
+    const out = await controller.findOne("me", {
+      auth: { sub: "clerk_me", public_metadata: { role: "CUSTOMER" } },
+    } as never);
+
+    expect(out).toEqual({ id: "me", firstName: "Ada" });
+    expect(out).not.toHaveProperty("phone");
+  });
+
+  it("findOne includes phone for admin", async () => {
     const service = {
       findByClerkId: vi.fn().mockResolvedValue({ id: "admin_user", role: "ADMIN" }),
-      findById: vi.fn().mockResolvedValue({ id: "user_x" }),
+      findById: vi.fn().mockResolvedValue({ id: "user_x", phone: "+15551212" }),
     };
     const controller = new UsersController(service as never);
 
@@ -146,9 +180,7 @@ describe("UsersController", () => {
       auth: { sub: "clerk_admin", public_metadata: { role: "ADMIN" } },
     } as never);
 
-    expect(out).toEqual({ id: "user_x" });
-    expect(service.findByClerkId).toHaveBeenCalledWith("clerk_admin");
-    expect(service.findById).toHaveBeenCalledWith("user_x");
+    expect(out).toEqual({ id: "user_x", phone: "+15551212" });
   });
 
   it("findOne blocks non-admin from accessing another user", async () => {

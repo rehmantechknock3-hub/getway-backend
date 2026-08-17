@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { ActivityIndicator, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StatusBar, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth, useUser } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,6 +11,7 @@ import { useMe } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { SavedLocationsInfoButton } from "../../../components/SavedLocationsInfoButton";
 import { appColors } from "../../../styles/colors";
 
 function ProfileField({ label, value }: { label: string; value: string }) {
@@ -57,6 +58,7 @@ export default function ProfileScreen() {
   const firstName = me?.firstName || clerkUser?.firstName?.trim() || "";
   const lastName = me?.lastName || clerkUser?.lastName?.trim() || "";
   const phone = me?.phone ?? "";
+  const avatarUrl = me?.avatarUrl ?? "";
   const savedLocations = me?.savedLocations ?? [];
   const primaryLocation = me?.customerOnboarding?.primaryLocation ?? "";
   const carCompany = me?.customerOnboarding?.carCompany ?? "";
@@ -111,9 +113,13 @@ export default function ProfileScreen() {
 
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <View className="flex-row items-center gap-3 mb-4">
-            <View className="w-11 h-11 rounded-full bg-primary-50 items-center justify-center border border-primary-100">
-              <Ionicons name="person-outline" size={22} color={appColors.primary[600]} />
-            </View>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} className="w-14 h-14 rounded-full bg-canvas-sunken" />
+            ) : (
+              <View className="w-14 h-14 rounded-full bg-primary-50 items-center justify-center border border-primary-100">
+                <Ionicons name="person-outline" size={22} color={appColors.primary[600]} />
+              </View>
+            )}
             <View className="flex-1">
               <Text className="text-ink text-lg font-semibold">
                 {firstName || "Your"} {lastName || "Profile"}
@@ -126,18 +132,22 @@ export default function ProfileScreen() {
           <ProfileField label="Last name" value={lastName} />
           <ProfileField label="Email" value={accountEmail} />
           <ProfileField label="Phone number" value={phone} />
+          <Text className="text-ink-muted text-xs mb-1">Private — only you and admins can see this.</Text>
         </View>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
-          <View className="flex-row items-center gap-2 mb-4">
-            <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
-            <Text className="text-lg font-bold text-ink">Saved Locations</Text>
+          <View className="flex-row items-center justify-between mb-4">
+            <View className="flex-row items-center gap-2 flex-1 pr-2">
+              <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
+              <Text className="text-lg font-bold text-ink">Saved Locations</Text>
+              <SavedLocationsInfoButton />
+            </View>
           </View>
 
           {savedLocations.length === 0 ? (
-            <Text className="text-ink-muted text-sm">No saved locations yet.</Text>
+            <Text className="text-ink-muted text-sm mb-4">No saved locations yet.</Text>
           ) : (
-            <View className="gap-3">
+            <View className="gap-3 mb-4">
               {savedLocations.map((location, index) => (
                 <View key={`${location.label}-${index}`} className="bg-canvas border border-ink-faint rounded-2xl p-3.5">
                   <Text className="text-ink font-semibold text-sm mb-1">{location.label}</Text>
@@ -146,6 +156,17 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
+
+          <TouchableOpacity
+            className="bg-primary-50 border border-primary-100 rounded-2xl py-3 items-center active:opacity-90"
+            onPress={() => router.push("/(customer)/saved-locations")}
+            accessibilityRole="button"
+            accessibilityLabel={savedLocations.length === 0 ? "Add saved location" : "Manage saved locations"}
+          >
+            <Text className="text-primary-600 font-semibold">
+              {savedLocations.length === 0 ? "Add location" : "Manage locations"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">

@@ -2,8 +2,6 @@ import { useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
-  Image,
   ScrollView,
   StatusBar,
   Switch,
@@ -12,10 +10,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useAuth, useClerk } from "@clerk/expo";
+import { useAuth, useClerk, useUser } from "@clerk/expo";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
@@ -26,30 +23,31 @@ import {
   setAuthToken,
   useSubmitProviderOnboarding,
   useUpdateAvatar,
+  useUpdateProfile,
   userKeys,
 } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
+import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { ProviderServiceCategoriesField } from "../../components/ProviderServiceCategoriesField";
 import { ShopAddressField } from "../../components/ShopAddressField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
-
-type LocalPhoto = {
-  uri: string;
-  mimeType?: string | null;
-  fileName?: string | null;
-};
+import { promptPickProfilePhoto, type LocalProfilePhoto } from "../../utils/pick-profile-photo";
+import { isValidRequiredPhone, sanitizePhoneInput } from "../../utils/phone";
 
 export default function ProviderOnboardingScreen() {
   const params = useLocalSearchParams<{ allowRoleChange?: string }>();
   const { getToken } = useAuth();
   const clerk = useClerk();
+  const { user: clerkUser } = useUser();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const submitOnboarding = useSubmitProviderOnboarding();
+  const updateProfile = useUpdateProfile();
   const uploadAvatar = useUpdateAvatar();
+  const [phone, setPhone] = useState("");
   const [serviceCategories, setServiceCategories] = useState<string[]>([]);
   const [experienceYears, setExperienceYears] = useState("");
   const [serviceArea, setServiceArea] = useState("");
@@ -60,75 +58,43 @@ export default function ProviderOnboardingScreen() {
   >([]);
   const [hasTools, setHasTools] = useState(true);
   const [serviceDescription, setServiceDescription] = useState("");
-  const [localPhoto, setLocalPhoto] = useState<LocalPhoto | null>(null);
+  const [localPhoto, setLocalPhoto] = useState<LocalProfilePhoto | null>(null);
   // Covers the full handleContinue flow (set-role + session reload + geocode + upload + onboarding + nav),
   // not just the mutation — the pre-mutation calls take most of the wall-clock time.
   const [isSubmitting, setIsSubmitting] = useState(false);
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   const allowRoleChange = params.allowRoleChange === "1";
 
-  async function pickProfilePhoto(source: "library" | "camera") {
-    try {
-      if (source === "library") {
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-          showToast("error", "Photo access needed", "Allow photo library access to upload your profile picture.");
-          return;
-        }
-      } else {
-        const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) {
-          showToast("error", "Camera access needed", "Allow camera access to take your profile picture.");
-          return;
-        }
-      }
-
-      const result =
-        source === "library"
-          ? await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ["images"],
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.85,
-            })
-          : await ImagePicker.launchCameraAsync({
-              allowsEditing: true,
-              aspect: [1, 1],
-              quality: 0.85,
-            });
-
-      if (result.canceled || !result.assets[0]) return;
-      const asset = result.assets[0];
-      setLocalPhoto({
-        uri: asset.uri,
-        mimeType: asset.mimeType ?? "image/jpeg",
-        fileName: asset.fileName ?? `provider-avatar-${Date.now()}.jpg`,
-      });
-    } catch (error: unknown) {
-      reportError(error, { screen: "ProviderOnboarding", action: "pickProfilePhoto", extra: { source } });
-      showToast("error", "Could not open photos", "Please try again.");
-    }
-  }
-
-  function promptPickProfilePhoto() {
-    Alert.alert("Profile photo", "Add a photo customers will see on your profile.", [
-      { text: "Choose from library", onPress: () => void pickProfilePhoto("library") },
-      { text: "Take photo", onPress: () => void pickProfilePhoto("camera") },
-      ...(localPhoto
-        ? [{ text: "Remove photo", style: "destructive" as const, onPress: () => setLocalPhoto(null) }]
-        : []),
-      { text: "Cancel", style: "cancel" },
-    ]);
+  function handlePickPhoto() {
+    promptPickProfilePhoto({
+      hasPhoto: Boolean(localPhoto),
+      screen: "ProviderOnboarding",
+      message: "Add a photo customers will see on your profile.",
+      allowRemove: true,
+      onPicked: setLocalPhoto,
+      onRemoved: () => setLocalPhoto(null),
+    });
   }
 
   async function handleContinue() {
     const parsedExperience = Number.parseInt(experienceYears, 10);
+    const trimmedPhone = sanitizePhoneInput(phone.trim());
+    const firstName = clerkUser?.firstName?.trim() ?? "";
+    const lastName = clerkUser?.lastName?.trim() ?? "";
     const pendingAddress = shopAddress.trim();
     const normalizedLocations =
       pendingAddress.length > 0 &&
       !shopLocations.some((location) => location.address.toLowerCase() === pendingAddress.toLowerCase())
         ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
         : shopLocations;
+    if (!isValidRequiredPhone(trimmedPhone)) {
+      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
+      return;
+    }
+    if (!firstName || !lastName) {
+      showToast("error", "Your account is missing a name. Sign out and complete sign-up again.");
+      return;
+    }
     if (!localPhoto) {
       showToast("error", "Add a profile photo", "Customers need a photo to recognize your profile.");
       return;
@@ -187,6 +153,16 @@ export default function ProviderOnboardingScreen() {
         throw new Error("Could not refresh your session. Please try again.");
       }
       setAuthToken(refreshedToken);
+
+      try {
+        await updateProfile.mutateAsync({
+          firstName,
+          lastName,
+          phone: trimmedPhone,
+        });
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Save phone number", error));
+      }
 
       let locationsToSave = normalizedLocations;
       if (googleMapsApiKey) {
@@ -283,37 +259,25 @@ export default function ProviderOnboardingScreen() {
           </View>
         </View>
 
-        <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5 items-center">
-          <Text className="text-ink text-sm font-medium mb-3 self-start">Profile photo</Text>
-          <TouchableOpacity
-            onPress={promptPickProfilePhoto}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Add profile photo"
-            className="w-28 h-28 rounded-2xl bg-canvas-sunken border border-ink-faint items-center justify-center overflow-hidden mb-3"
-          >
-            {localPhoto ? (
-              <Image source={{ uri: localPhoto.uri }} className="w-full h-full" />
-            ) : (
-              <View className="items-center">
-                <Ionicons name="camera-outline" size={28} color={appColors.primary[600]} />
-                <Text className="text-primary-600 text-xs font-semibold mt-1">Add photo</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={promptPickProfilePhoto}
-            className="bg-primary-50 border border-primary-100 rounded-2xl px-4 py-2.5"
-            activeOpacity={0.85}
-          >
-            <Text className="text-primary-600 font-semibold text-sm">
-              {localPhoto ? "Change photo" : "Upload profile photo"}
-            </Text>
-          </TouchableOpacity>
-          <Text className="text-ink-muted text-xs text-center mt-3 leading-5">
-            Required. Customers see this on your provider profile.
-          </Text>
-        </View>
+        <ProfilePhotoField
+          uri={localPhoto?.uri}
+          helperText="Required. Customers see this on your provider profile."
+          onPress={handlePickPhoto}
+        />
+
+        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
+        <TextInput
+          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
+          keyboardType="phone-pad"
+          placeholder="+1234567890"
+          placeholderTextColor={appColors.ink.subtle}
+          style={textInputBaselineStyle}
+          value={phone}
+          onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
+        />
+        <Text className="text-ink-muted text-xs mb-5 leading-5">
+          Required. Only you and admins can see this number — customers cannot.
+        </Text>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <ProviderServiceCategoriesField value={serviceCategories} onChange={setServiceCategories} />

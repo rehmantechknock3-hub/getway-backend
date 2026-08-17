@@ -20,20 +20,11 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import sharp from "sharp";
 import { z } from "zod";
 
-import { UpdateOnboardingSchema, UpdateUserProfileSchema } from "@repo/schemas";
+import { UpdateOnboardingSchema, UpdateSavedLocationsSchema, UpdateUserProfileSchema } from "@repo/schemas";
 
 import { ClerkAuthGuard } from "../auth/clerk.guard";
 import { Roles } from "../auth/roles.decorator";
 import { UsersService } from "./users.service";
-
-const UpdateSavedLocationsSchema = z.object({
-  savedLocations: z.array(
-    z.object({
-      label: z.string().min(1),
-      address: z.string().min(1),
-    })
-  ).max(10),
-});
 
 const UpdateAvatarSchema = z.object({
   avatarUrl: z.string().min(1).max(5000000),
@@ -180,6 +171,10 @@ export class UsersController {
       throw new ForbiddenException("Cannot access other users' profiles");
     }
 
-    return this.usersService.findById(id);
+    const user = await this.usersService.findById(id);
+    if (me.role === "ADMIN") return user;
+    const { phone: _hiddenPhone, ...withoutPhone } = user;
+    void _hiddenPhone;
+    return withoutPhone;
   }
 }

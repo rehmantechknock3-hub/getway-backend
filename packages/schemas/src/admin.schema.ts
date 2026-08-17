@@ -44,6 +44,7 @@ export const AdminUserRowSchema = z.object({
   firstName: z.string(),
   lastName: z.string(),
   role: UserRole,
+  /** Admin-only. Never returned on customer/provider public APIs. */
   phone: z.string().nullable(),
   createdAt: z.coerce.date(),
   onboardingCompleted: z.boolean(),
@@ -108,6 +109,8 @@ export const AdminProviderRowSchema = z.object({
   email: z.string().email(),
   firstName: z.string(),
   lastName: z.string(),
+  /** Admin-only. Never returned on customer/provider public APIs. */
+  phone: z.string().nullable(),
   verificationStatus: z.enum(["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"]),
   isOnline: z.boolean(),
   averageRating: z.number(),

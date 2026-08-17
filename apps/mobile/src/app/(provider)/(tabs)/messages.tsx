@@ -7,10 +7,12 @@ import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { messageKeys, useConversations, useMe } from "@repo/api-client";
+import { messageKeys, useConversations, useMe, useOrCreateAdminThread } from "@repo/api-client";
 import type { ConversationListItem } from "@repo/schemas";
+import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { ChatAvatar, wayNowLogoSource } from "../../../components/ChatAvatar";
 import { appColors } from "../../../styles/colors";
 
 function timeAgo(date: Date | string | undefined): string {
@@ -47,10 +49,12 @@ function ConversationRow({
       accessibilityRole="button"
       accessibilityLabel={`Open conversation with ${name}`}
     >
-      <View className="w-11 h-11 rounded-full bg-primary-100 items-center justify-center mr-3">
-        <Text className="text-primary-700 font-bold text-base">
-          {item.otherPartyFirstName.charAt(0).toUpperCase()}
-        </Text>
+      <View className="mr-3">
+        <ChatAvatar
+          uri={item.otherPartyAvatarUrl}
+          name={name || item.otherPartyFirstName}
+          size="lg"
+        />
       </View>
       <View className="flex-1 min-w-0">
         <View className="flex-row items-center justify-between mb-0.5">
@@ -87,6 +91,20 @@ export default function ProviderMessagesScreen() {
   const enabled = isLoaded && isSignedIn;
   const { data, isLoading, isError, refetch } = useConversations({ enabled });
   const { data: me } = useMe({ enabled, clerkUserId });
+  const createAdminThread = useOrCreateAdminThread();
+
+  const customerThreads = (data ?? []).filter((item) => item.kind !== "PROVIDER_ADMIN");
+  const adminThread = (data ?? []).find((item) => item.kind === "PROVIDER_ADMIN");
+
+  const openAdminChat = async () => {
+    try {
+      const thread = await createAdminThread.mutateAsync();
+      router.push(`/(provider)/conversation/${thread.id}`);
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderMessages", action: "openAdminChat" });
+      showToast("error", "Could not open admin chat. Try again.");
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +125,33 @@ export default function ProviderMessagesScreen() {
         </Text>
       </View>
 
+      <TouchableOpacity
+        onPress={() => void openAdminChat()}
+        disabled={createAdminThread.isPending}
+        className="flex-row items-center mx-5 mb-3 px-4 py-3 rounded-2xl bg-primary-50 border border-primary-100"
+        accessibilityRole="button"
+        accessibilityLabel="Chat with Admin"
+      >
+        <View className="mr-3">
+          <ChatAvatar source={wayNowLogoSource} name="WayNow Admin" size="lg" />
+        </View>
+        <View className="flex-1 min-w-0">
+          <Text className="text-ink font-semibold text-sm">Chat with Admin</Text>
+          <Text className="text-ink-muted text-xs mt-0.5" numberOfLines={1}>
+            {adminThread?.lastMessageContent ?? "Ask about payouts or account support"}
+          </Text>
+        </View>
+        {adminThread && adminThread.unreadCount > 0 ? (
+          <View className="bg-primary-600 rounded-full min-w-[20px] h-5 items-center justify-center px-1">
+            <Text className="text-white text-xs font-bold">
+              {adminThread.unreadCount > 99 ? "99+" : adminThread.unreadCount}
+            </Text>
+          </View>
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={appColors.ink.muted} />
+        )}
+      </TouchableOpacity>
+
       {!enabled || isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator color={appColors.primary[600]} />
@@ -125,19 +170,19 @@ export default function ProviderMessagesScreen() {
             <Text className="text-white font-semibold text-sm">Retry</Text>
           </TouchableOpacity>
         </View>
-      ) : (data?.length ?? 0) === 0 ? (
+      ) : customerThreads.length === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
           <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-1">
             <Ionicons name="chatbubbles-outline" size={32} color={appColors.primary[600]} />
           </View>
-          <Text className="text-ink font-semibold text-base mt-4">No messages yet</Text>
+          <Text className="text-ink font-semibold text-base mt-4">No customer messages yet</Text>
           <Text className="text-ink-muted text-sm text-center mt-2 leading-5">
             Customer messages will appear here once they start a conversation from a booking.
           </Text>
         </View>
       ) : (
         <FlatList
-          data={data}
+          data={customerThreads}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <ConversationRow
@@ -145,7 +190,7 @@ export default function ProviderMessagesScreen() {
               myUserId={me?.id ?? ""}
               onPress={() =>
                 router.push(
-                  `/(provider)/conversation/${item.id}?bookingId=${item.bookingId}`
+                  `/(provider)/conversation/${item.id}?bookingId=${item.bookingId ?? ""}`
                 )
               }
             />

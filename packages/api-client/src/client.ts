@@ -61,15 +61,17 @@ export function setAuthToken(token: string | null): void {
 // ── Request interceptor: optional fresh Clerk token + Request-ID ────────────
 
 apiClient.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
-  const hasExplicitAuthorization = Boolean(config.headers.Authorization);
-  if (authTokenResolver && !hasExplicitAuthorization) {
+  // Always refresh when a resolver is registered. Axios merges `defaults.headers`
+  // onto `config.headers` before this runs, so a stale `Authorization` from
+  // `setAuthToken()` would otherwise skip the resolver and 401 after ~60s.
+  if (authTokenResolver) {
     try {
       const token = await authTokenResolver();
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch {
-      // Preserve any explicit/default Authorization header already attached by the app.
+      // Keep any existing Authorization header if Clerk is briefly unavailable.
     }
   }
 

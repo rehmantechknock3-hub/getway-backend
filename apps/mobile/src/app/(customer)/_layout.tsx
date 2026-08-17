@@ -62,6 +62,13 @@ export default function CustomerLayout() {
           title: "Edit info",
         }}
       />
+      <Stack.Screen
+        name="saved-locations"
+        options={{
+          ...lightHeader,
+          title: "Saved locations",
+        }}
+      />
     </Stack>
   );
 }

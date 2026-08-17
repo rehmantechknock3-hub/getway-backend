@@ -3,10 +3,15 @@ import { z } from "zod";
 export const MessageType = z.enum(["TEXT", "IMAGE", "SYSTEM"]);
 export type MessageType = z.infer<typeof MessageType>;
 
+export const ConversationKind = z.enum(["BOOKING", "PROVIDER_ADMIN"]);
+export type ConversationKind = z.infer<typeof ConversationKind>;
+
 export const ConversationSchema = z.object({
   id:            z.string().uuid(),
-  bookingId:     z.string().uuid(),
-  customerId:    z.string().uuid(),
+  kind:          ConversationKind.default("BOOKING"),
+  bookingId:     z.string().uuid().nullable().optional(),
+  supportKey:    z.string().uuid().nullable().optional(),
+  customerId:    z.string().uuid().nullable().optional(),
   providerId:    z.string().uuid(),
   lastMessageAt: z.coerce.date().optional(),
   createdAt:     z.coerce.date(),
@@ -50,9 +55,23 @@ export const MessageListResponseSchema = z.object({
   limit: z.number().int(),
 });
 
-export type Conversation         = z.infer<typeof ConversationSchema>;
-export type Message              = z.infer<typeof MessageSchema>;
-export type ConversationListItem = z.infer<typeof ConversationListItemSchema>;
-export type SendMessageInput     = z.infer<typeof SendMessageSchema>;
-export type SendMessageBody      = z.infer<typeof SendMessageBodySchema>;
-export type MessageListResponse  = z.infer<typeof MessageListResponseSchema>;
+export const AdminMessageThreadListSchema = z.object({
+  data:  z.array(ConversationListItemSchema),
+  total: z.number().int(),
+  page:  z.number().int(),
+  limit: z.number().int(),
+});
+
+/** Body for POST /admin/messages/threads */
+export const OpenAdminThreadSchema = z.object({
+  providerUserId: z.string().uuid(),
+});
+
+export type Conversation              = z.infer<typeof ConversationSchema>;
+export type Message                   = z.infer<typeof MessageSchema>;
+export type ConversationListItem      = z.infer<typeof ConversationListItemSchema>;
+export type SendMessageInput          = z.infer<typeof SendMessageSchema>;
+export type SendMessageBody           = z.infer<typeof SendMessageBodySchema>;
+export type MessageListResponse       = z.infer<typeof MessageListResponseSchema>;
+export type AdminMessageThreadList    = z.infer<typeof AdminMessageThreadListSchema>;
+export type OpenAdminThreadInput      = z.infer<typeof OpenAdminThreadSchema>;

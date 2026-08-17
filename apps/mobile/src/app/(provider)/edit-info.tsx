@@ -5,16 +5,48 @@ import { useUser } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useMe, useSubmitProviderOnboarding, useUpdateProfile } from "@repo/api-client";
+import { isAxiosError } from "axios";
+
+import { useMe, useSubmitProviderOnboarding, useUpdateAvatar, useUpdateProfile } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
 import { ShopAddressField } from "../../components/ShopAddressField";
+import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { ProviderServiceCategoriesField } from "../../components/ProviderServiceCategoriesField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
-import { countPhoneDigits, sanitizePhoneInput } from "../../utils/phone";
+import { promptPickProfilePhoto } from "../../utils/pick-profile-photo";
+import { isValidRequiredPhone, sanitizePhoneInput } from "../../utils/phone";
 import { normalizeProviderServiceCategories } from "../../utils/provider-onboarding";
+
+function optionalPlaceId(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length >= 10 ? trimmed : undefined;
+}
+
+function optionalHttpUrl(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError(error)) {
+    const data = error.response?.data;
+    if (typeof data === "object" && data != null && "message" in data) {
+      const message = (data as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim().length > 0) return message;
+    }
+    if (error.response?.status === 401) return "Session expired. Please try again.";
+  }
+  return error instanceof Error ? error.message : fallback;
+}
 
 export default function ProviderEditInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -22,6 +54,7 @@ export default function ProviderEditInfoScreen() {
   const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
   const updateProfile = useUpdateProfile();
+  const uploadAvatar = useUpdateAvatar();
   const updateProviderOnboarding = useSubmitProviderOnboarding();
 
   const [firstName, setFirstName] = useState("");
@@ -74,21 +107,21 @@ export default function ProviderEditInfoScreen() {
       return;
     }
     const trimmedPhone = sanitizePhoneInput(phone.trim());
-    if (trimmedPhone.length > 0 && countPhoneDigits(trimmedPhone) < 6) {
-      showToast("error", "Phone number must include at least 6 digits.");
+    if (!isValidRequiredPhone(trimmedPhone)) {
+      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
       return;
     }
     try {
       await updateProfile.mutateAsync({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        phone: trimmedPhone.length > 0 ? trimmedPhone : undefined,
+        phone: trimmedPhone,
       });
       showToast("success", "Profile updated successfully.");
       router.back();
     } catch (error: unknown) {
       reportError(error, { screen: "ProviderEditInfo", action: "handleSaveProfile" });
-      showToast("error", error instanceof Error ? error.message : "Failed to save profile");
+      showToast("error", apiErrorMessage(error, "Failed to save profile"));
     }
   }
 
@@ -124,22 +157,28 @@ export default function ProviderEditInfoScreen() {
         }
       }
 
+      const primaryPlaceId = optionalPlaceId(locationsToSave[0]?.placeId ?? shopPlaceId);
       await updateProviderOnboarding.mutateAsync({
         serviceCategories,
         experienceYears: parsedExperience,
         serviceArea: serviceArea.trim(),
         shopAddress: locationsToSave[0]?.address ?? pendingAddress,
-        shopPlaceId: locationsToSave[0]?.placeId ?? shopPlaceId,
-        shopLocations: locationsToSave,
+        shopPlaceId: primaryPlaceId,
+        shopLocations: locationsToSave.map((location) => ({
+          address: location.address,
+          placeId: optionalPlaceId(location.placeId),
+          latitude: location.latitude,
+          longitude: location.longitude,
+        })),
         hasTools,
         serviceDescription: serviceDescription.trim(),
-        profilePhotoUrl: profilePhotoUrl.trim() ? profilePhotoUrl.trim() : undefined,
+        profilePhotoUrl: optionalHttpUrl(profilePhotoUrl),
       });
       showToast("success", "Provider details updated successfully.");
       router.back();
     } catch (error: unknown) {
       reportError(error, { screen: "ProviderEditInfo", action: "handleSaveProviderInfo" });
-      showToast("error", error instanceof Error ? error.message : "Failed to save provider details");
+      showToast("error", apiErrorMessage(error, "Failed to save provider details"));
     }
   }
 
@@ -158,6 +197,30 @@ export default function ProviderEditInfoScreen() {
       keyboardShouldPersistTaps="always"
       showsVerticalScrollIndicator={false}
     >
+      <ProfilePhotoField
+        uri={me?.avatarUrl ?? profilePhotoUrl}
+        isUploading={uploadAvatar.isPending}
+        helperText="Customers see this on your provider profile."
+        onPress={() =>
+          promptPickProfilePhoto({
+            hasPhoto: Boolean(me?.avatarUrl ?? profilePhotoUrl),
+            screen: "ProviderEditInfo",
+            onPicked: (photo) => {
+              void (async () => {
+                try {
+                  const uploaded = await uploadAvatar.mutateAsync(photo);
+                  if (uploaded.avatarUrl) setProfilePhotoUrl(uploaded.avatarUrl);
+                  showToast("success", "Profile photo updated.");
+                } catch (error: unknown) {
+                  reportError(error, { screen: "ProviderEditInfo", action: "uploadAvatar" });
+                  showToast("error", error instanceof Error ? error.message : "Failed to upload photo");
+                }
+              })();
+            },
+          })
+        }
+      />
+
       <Text className="text-ink text-sm font-medium mb-2 mt-2">First name</Text>
       <TextInput
         className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
@@ -182,14 +245,17 @@ export default function ProviderEditInfoScreen() {
         Same as your sign-in email. Update it in your account settings if needed.
       </Text>
 
-      <Text className="text-ink text-sm font-medium mb-2">Phone number (optional)</Text>
+      <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
       <TextInput
-        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-6"
+        className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
         keyboardType="phone-pad"
         style={textInputBaselineStyle}
         value={phone}
         onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
       />
+      <Text className="text-ink-muted text-xs mb-6 leading-5">
+        Required. Only you and admins can see this number — customers cannot.
+      </Text>
 
       <TouchableOpacity
         className="bg-primary-600 rounded-2xl py-3.5 items-center mb-8"

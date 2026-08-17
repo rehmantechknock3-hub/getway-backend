@@ -6,15 +6,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useMe, useSubmitCustomerOnboarding, useUpdateProfile, useUpdateSavedLocations } from "@repo/api-client";
+import { useMe, useSubmitCustomerOnboarding, useUpdateAvatar, useUpdateProfile } from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
+import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
 import { requestDeviceLocation } from "../../utils/device-location";
-import { countPhoneDigits, sanitizePhoneInput } from "../../utils/phone";
+import { promptPickProfilePhoto } from "../../utils/pick-profile-photo";
+import { isValidRequiredPhone, sanitizePhoneInput } from "../../utils/phone";
 
 export default function CustomerEditInfoScreen() {
   const insets = useSafeAreaInsets();
@@ -22,13 +24,12 @@ export default function CustomerEditInfoScreen() {
   const { user: clerkUser } = useUser();
   const { data: me, isLoading } = useMe();
   const updateProfile = useUpdateProfile();
-  const updateSavedLocations = useUpdateSavedLocations();
+  const uploadAvatar = useUpdateAvatar();
   const updateCustomerOnboarding = useSubmitCustomerOnboarding();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
-  const [savedLocations, setSavedLocations] = useState<Array<{ id: string; label: string; address: string }>>([]);
   const [primaryLocation, setPrimaryLocation] = useState("");
   const [primaryPreviewLatitude, setPrimaryPreviewLatitude] = useState<number | undefined>(undefined);
   const [primaryPreviewLongitude, setPrimaryPreviewLongitude] = useState<number | undefined>(undefined);
@@ -75,13 +76,6 @@ export default function CustomerEditInfoScreen() {
     setFirstName(me.firstName || clerkFirst);
     setLastName(me.lastName || clerkLast);
     setPhone(sanitizePhoneInput(me.phone ?? ""));
-    setSavedLocations(
-      (me.savedLocations ?? []).map((location, index) => ({
-        id: `existing-${index}`,
-        label: location.label,
-        address: location.address,
-      }))
-    );
     setPrimaryLocation(me.customerOnboarding?.primaryLocation ?? "");
     setLocationFromDevice(false);
     setCarCompany(me.customerOnboarding?.carCompany ?? "");
@@ -113,54 +107,27 @@ export default function CustomerEditInfoScreen() {
     return () => clearTimeout(timeout);
   }, [primaryLocation, googleMapsApiKey, locationFromDevice]);
 
-  function updateLocation(index: number, key: "label" | "address", value: string) {
-    setSavedLocations((prev) =>
-      prev.map((location, i) => (i === index ? { ...location, [key]: value } : location))
-    );
-  }
-
-  function addLocation() {
-    setSavedLocations((prev) => [...prev, { id: `new-${Date.now()}-${prev.length}`, label: "", address: "" }]);
-  }
-
-  function removeLocation(index: number) {
-    setSavedLocations((prev) => prev.filter((_, i) => i !== index));
-  }
-
   async function handleSaveProfile() {
     if (!firstName.trim() || !lastName.trim()) {
       showToast("error", "First and last name are required.");
       return;
     }
     const trimmedPhone = sanitizePhoneInput(phone.trim());
-    if (trimmedPhone.length > 0 && countPhoneDigits(trimmedPhone) < 6) {
-      showToast("error", "Phone number must include at least 6 digits.");
+    if (!isValidRequiredPhone(trimmedPhone)) {
+      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
       return;
     }
     try {
       await updateProfile.mutateAsync({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        phone: trimmedPhone.length > 0 ? trimmedPhone : undefined,
+        phone: trimmedPhone,
       });
       showToast("success", "Profile updated successfully.");
       router.back();
     } catch (error: unknown) {
       reportError(error, { screen: "CustomerEditInfo", action: "handleSaveProfile" });
       showToast("error", error instanceof Error ? error.message : "Failed to save profile");
-    }
-  }
-
-  async function handleSaveLocations() {
-    const cleanLocations = savedLocations
-      .map((location) => ({ label: location.label.trim(), address: location.address.trim() }))
-      .filter((location) => location.label && location.address);
-    try {
-      await updateSavedLocations.mutateAsync(cleanLocations);
-      showToast("success", "Locations updated successfully.");
-    } catch (error: unknown) {
-      reportError(error, { screen: "CustomerEditInfo", action: "handleSaveLocations" });
-      showToast("error", error instanceof Error ? error.message : "Failed to save locations");
     }
   }
 
@@ -199,6 +166,29 @@ export default function CustomerEditInfoScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      <ProfilePhotoField
+        uri={me?.avatarUrl}
+        isUploading={uploadAvatar.isPending}
+        helperText="Optional. This photo appears on your profile."
+        onPress={() =>
+          promptPickProfilePhoto({
+            hasPhoto: Boolean(me?.avatarUrl),
+            screen: "CustomerEditInfo",
+            onPicked: (photo) => {
+              void (async () => {
+                try {
+                  await uploadAvatar.mutateAsync(photo);
+                  showToast("success", "Profile photo updated.");
+                } catch (error: unknown) {
+                  reportError(error, { screen: "CustomerEditInfo", action: "uploadAvatar" });
+                  showToast("error", error instanceof Error ? error.message : "Failed to upload photo");
+                }
+              })();
+            },
+          })
+        }
+      />
+
       <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5 mt-2">
         <View className="flex-row items-center gap-3 mb-4">
           <View className="w-11 h-11 rounded-2xl bg-primary-50 items-center justify-center border border-primary-100">
@@ -234,14 +224,17 @@ export default function CustomerEditInfoScreen() {
           Same as your sign-in email. Update it in your account settings if needed.
         </Text>
 
-        <Text className="text-ink text-sm font-medium mb-2">Phone number (optional)</Text>
+        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
         <TextInput
-          className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-4"
+          className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
           keyboardType="phone-pad"
           style={textInputBaselineStyle}
           value={phone}
           onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
         />
+        <Text className="text-ink-muted text-xs mb-4 leading-5">
+          Required. Only you and admins can see this number.
+        </Text>
 
         <TouchableOpacity
           className="bg-primary-600 rounded-2xl py-3.5 items-center"
@@ -253,63 +246,6 @@ export default function CustomerEditInfoScreen() {
             <ActivityIndicator color={appColors.onPrimary} />
           ) : (
             <Text className="text-white font-semibold">Save Profile</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
-        <View className="flex-row items-center justify-between mb-4">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="location-outline" size={18} color={appColors.primary[600]} />
-            <Text className="text-lg font-bold text-ink">Saved Locations</Text>
-          </View>
-          <TouchableOpacity onPress={addLocation} className="bg-primary-50 border border-primary-100 rounded-2xl px-3 py-1.5">
-            <Text className="text-primary-600 font-semibold text-sm">+ Add</Text>
-          </TouchableOpacity>
-        </View>
-
-        {savedLocations.length === 0 ? (
-          <View className="border border-dashed border-ink-faint rounded-2xl p-4">
-            <Text className="text-ink-muted text-sm">No saved locations yet. Add Home or Office to speed up bookings.</Text>
-          </View>
-        ) : (
-          <View className="gap-3">
-            {savedLocations.map((location, index) => (
-              <View key={`${location.id}-${index}`} className="bg-canvas border border-ink-faint rounded-2xl p-3.5">
-                <TextInput
-                  className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2"
-                  placeholder="Label (Home, Office)"
-                  placeholderTextColor={appColors.ink.subtle}
-                  style={textInputBaselineStyle}
-                  value={location.label}
-                  onChangeText={(value) => updateLocation(index, "label", value)}
-                />
-                <TextInput
-                  className="bg-canvas-raised border border-ink-faint rounded-xl px-3 py-2.5 text-ink text-sm mb-2.5"
-                  placeholder="Full address"
-                  placeholderTextColor={appColors.ink.subtle}
-                  style={textInputBaselineStyle}
-                  value={location.address}
-                  onChangeText={(value) => updateLocation(index, "address", value)}
-                />
-                <TouchableOpacity onPress={() => removeLocation(index)} className="self-start">
-                  <Text className="text-destructive font-medium">Remove</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <TouchableOpacity
-          className="bg-primary-600 rounded-2xl py-3.5 items-center mt-4"
-          onPress={handleSaveLocations}
-          disabled={updateSavedLocations.isPending}
-          style={{ opacity: updateSavedLocations.isPending ? 0.6 : 1 }}
-        >
-          {updateSavedLocations.isPending ? (
-            <ActivityIndicator color={appColors.onPrimary} />
-          ) : (
-            <Text className="text-white font-semibold">Save Locations</Text>
           )}
         </TouchableOpacity>
       </View>

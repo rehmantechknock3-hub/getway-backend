@@ -65,7 +65,7 @@ export const CreateServiceSchema = ServiceSchema.pick({
   duration:    true,
 });
 
-/** Public card row for customer discovery (list). */
+/** Public card row for customer discovery (list). Phone is intentionally omitted. */
 export const ProviderPublicSummarySchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),

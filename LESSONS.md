@@ -45,7 +45,14 @@ _No other entries yet._
 
 ## Next.js / Web
 
-_No entries yet._
+### Admin dashboard 401s when switching screens or refocusing tab
+
+- **Symptom** — Console spam: `GET /api/v1/admin/stats 401` (and other admin routes) when leaving a tab, coming back, or navigating between dashboard pages. UI shows empty/error states.
+- **Root cause** — Web only called `setAuthToken()` once. Clerk session JWTs expire in ~60s. Axios kept sending the stale `Authorization` header; mobile already used `setAuthTokenResolver` for a fresh token per request.
+- **Fix** — Register `setAuthTokenResolver(() => getToken({ skipCache: true }))` from `AdminApiAuthBridge` (dashboard shell) and `useAdminApiReady`. Clear resolver + token on sign-out.
+- **Tags** — `clerk`, `web`, `admin`, `axios`, `401`, `session`
+
+_No other entries yet._
 
 ## Auth / Clerk
 

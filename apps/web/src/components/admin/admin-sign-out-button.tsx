@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
-import { setAuthToken } from "@repo/api-client";
+import { setAuthToken, setAuthTokenResolver } from "@repo/api-client";
 import { safeClerkCall } from "@repo/utils";
 
 type AdminSignOutButtonProps = {
@@ -25,6 +25,7 @@ export function AdminSignOutButton({ variant = "sidebar" }: AdminSignOutButtonPr
     setError(null);
     setBusy(true);
     try {
+      setAuthTokenResolver(null);
       setAuthToken(null);
       const result = await safeClerkCall(() =>
         signOut({ redirectUrl: "/sign-in" }),

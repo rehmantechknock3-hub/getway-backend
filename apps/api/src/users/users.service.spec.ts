@@ -1,7 +1,15 @@
-import { NotFoundException } from "@nestjs/common";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { describe, expect, it, vi } from "vitest";
 
-import { resolveClerkPrimaryEmail, UsersService } from "./users.service";
+import { hasRequiredPhone, resolveClerkPrimaryEmail, UsersService } from "./users.service";
+
+describe("hasRequiredPhone", () => {
+  it("requires at least 6 digits", () => {
+    expect(hasRequiredPhone("+123456")).toBe(true);
+    expect(hasRequiredPhone("12345")).toBe(false);
+    expect(hasRequiredPhone(null)).toBe(false);
+  });
+});
 
 describe("resolveClerkPrimaryEmail", () => {
   it("uses primary_email_address_id when present", () => {
@@ -108,7 +116,7 @@ describe("UsersService", () => {
     expect(out).toEqual(refreshed);
   });
 
-  it("updateProfile clears phone when omitted or empty", async () => {
+  it("updateProfile persists required phone", async () => {
     const prisma = {
       user: {
         update: vi.fn().mockResolvedValue({ id: "u1" }),
@@ -120,7 +128,7 @@ describe("UsersService", () => {
     await service.updateProfile("clerk_1", {
       firstName: "Saad",
       lastName: "Nadeem",
-      phone: "",
+      phone: "123456789",
     });
 
     expect(prisma.user.update).toHaveBeenCalledWith({
@@ -128,7 +136,7 @@ describe("UsersService", () => {
       data: {
         firstName: "Saad",
         lastName: "Nadeem",
-        phone: null,
+        phone: "123456789",
       },
     });
   });
@@ -169,29 +177,20 @@ describe("UsersService", () => {
   });
 
   describe("updateCustomerOnboarding", () => {
-    let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      fetchSpy = vi.spyOn(globalThis, "fetch");
-    });
-
-    afterEach(() => {
-      fetchSpy.mockRestore();
-    });
-
     it("persists geocoded primaryLatitude and primaryLongitude when Google returns OK", async () => {
-      const findUnique = vi.fn().mockResolvedValue({ customerOnboarding: null });
+      const findUnique = vi.fn().mockResolvedValue({
+        customerOnboarding: null,
+        phone: "1234567890",
+        onboardingCompleted: false,
+      });
       const update = vi.fn().mockResolvedValue({ id: "u1" });
       const prisma = { user: { findUnique, update } };
-      const configGet = vi.fn((key: string) => (key === "GOOGLE_MAPS_API_KEY" ? "test-key" : undefined));
-      fetchSpy.mockResolvedValue({
-        json: async () => ({
-          status: "OK",
-          results: [{ geometry: { location: { lat: 31.52, lng: 74.35 } } }],
-        }),
-      } as Response);
+      const googleMaps = {
+        geocodeAddress: vi.fn().mockResolvedValue({ latitude: 31.52, longitude: 74.35 }),
+      };
 
-      const service = new UsersService(prisma as never, { get: configGet } as never);
+      const service = new UsersService(prisma as never, googleMaps as never);
+      vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1" } as never);
       await service.updateCustomerOnboarding(
         "clerk_cust",
         { primaryLocation: "Lahore", carCompany: "Toyota", carModel: "2020" },
@@ -222,15 +221,15 @@ describe("UsersService", () => {
           primaryLatitude: 10.1,
           primaryLongitude: 20.2,
         },
+        phone: "1234567890",
+        onboardingCompleted: true,
       });
       const update = vi.fn().mockResolvedValue({ id: "u1" });
       const prisma = { user: { findUnique, update } };
-      const configGet = vi.fn((key: string) => (key === "GOOGLE_MAPS_API_KEY" ? "test-key" : undefined));
-      fetchSpy.mockResolvedValue({
-        json: async () => ({ status: "ZERO_RESULTS", results: [] }),
-      } as Response);
+      const googleMaps = { geocodeAddress: vi.fn().mockResolvedValue(null) };
 
-      const service = new UsersService(prisma as never, { get: configGet } as never);
+      const service = new UsersService(prisma as never, googleMaps as never);
+      vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1" } as never);
       await service.updateCustomerOnboarding(
         "clerk_cust",
         { primaryLocation: "Same Town", carCompany: "Honda", carModel: "2019" },
@@ -250,6 +249,25 @@ describe("UsersService", () => {
           },
         },
       });
+    });
+
+    it("rejects first-time onboarding when phone is missing", async () => {
+      const findUnique = vi.fn().mockResolvedValue({
+        customerOnboarding: null,
+        phone: null,
+        onboardingCompleted: false,
+      });
+      const prisma = { user: { findUnique, update: vi.fn() } };
+      const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+
+      await expect(
+        service.updateCustomerOnboarding("clerk_cust", {
+          primaryLocation: "Lahore",
+          carCompany: "Toyota",
+          carModel: "2020",
+        })
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 
@@ -271,9 +289,14 @@ describe("UsersService", () => {
       },
     };
     const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ phone: "1234567890", onboardingCompleted: false }),
+      },
       $transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
     };
-    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    const googleMaps = { geocodeAddress: vi.fn().mockResolvedValue(undefined) };
+    const service = new UsersService(prisma as never, googleMaps as never);
+    vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1" } as never);
 
     await service.updateProviderOnboarding("clerk_3", {
       serviceCategories: ["Car Wash"],
@@ -344,6 +367,9 @@ describe("UsersService", () => {
       },
     };
     const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ phone: "1234567890", onboardingCompleted: false }),
+      },
       $transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
     };
     const service = new UsersService(prisma as never, { get: vi.fn() } as never);
@@ -407,9 +433,14 @@ describe("UsersService", () => {
       },
     };
     const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ phone: "1234567890", onboardingCompleted: false }),
+      },
       $transaction: vi.fn(async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx)),
     };
-    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    const googleMaps = { geocodeAddress: vi.fn().mockResolvedValue(undefined) };
+    const service = new UsersService(prisma as never, googleMaps as never);
+    vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u1" } as never);
 
     await service.updateProviderOnboarding("clerk_draft", {
       serviceCategories: ["Paint"],

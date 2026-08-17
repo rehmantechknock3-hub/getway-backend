@@ -5,11 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { AdminAccountBox } from "./admin-account-box";
+import { AdminApiAuthBridge } from "./admin-api-auth-bridge";
 import { AdminSignOutButton } from "./admin-sign-out-button";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "◈" },
   { href: "/dashboard/bookings", label: "Bookings", icon: "◎" },
+  { href: "/dashboard/messages", label: "Messages", icon: "✉" },
   { href: "/dashboard/users", label: "Users", icon: "◉" },
   { href: "/dashboard/providers", label: "Providers", icon: "◇" },
   { href: "/dashboard/services", label: "Services", icon: "⬡" },
@@ -27,6 +29,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-brand-mist">
+      <AdminApiAuthBridge />
       <aside className="relative sticky top-0 z-20 flex h-screen w-[280px] shrink-0 flex-col overflow-hidden bg-brand-night text-white shadow-xl shadow-brand-night/40">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-brand-violet/20 via-transparent to-brand-blue/20" />
         <div className="pointer-events-none absolute -left-16 top-10 h-40 w-40 rounded-full bg-brand-violet/30 blur-3xl" />
