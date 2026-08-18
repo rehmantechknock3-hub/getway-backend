@@ -11,6 +11,9 @@ describe("ProvidersService", () => {
     service: {
       findMany: vi.fn(),
     },
+    booking: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   };
 
   const googleMaps = {
@@ -442,6 +445,38 @@ describe("ProvidersService", () => {
   it("findPublicDetail throws when missing", async () => {
     prisma.providerProfile.findFirst.mockResolvedValue(null);
     await expect(service.findPublicDetail("missing")).rejects.toThrow("not found");
+  });
+
+  it("findPublicDetail includes booked slots without customer identity", async () => {
+    const scheduledAt = new Date("2026-08-20T10:00:00.000Z");
+    prisma.providerProfile.findFirst.mockResolvedValue({
+      id: "pp-1",
+      userId: "u-1",
+      bio: null,
+      verificationStatus: "APPROVED",
+      isOnline: true,
+      averageRating: 5,
+      totalReviews: 1,
+      latitude: null,
+      longitude: null,
+      availabilityDays: [{ date: "2026-08-20", enabled: true, startHour: 9, endHour: 18 }],
+      user: {
+        id: "u-1",
+        firstName: "Ada",
+        lastName: "Lovelace",
+        avatarUrl: null,
+        providerOnboarding: null,
+      },
+      services: [],
+    });
+    prisma.booking.findMany.mockResolvedValue([
+      { scheduledAt, service: { duration: 60 } },
+    ]);
+
+    const result = await service.findPublicDetail("pp-1");
+
+    expect(result.bookedSlots).toEqual([{ scheduledAt, durationMinutes: 60 }]);
+    expect(result).not.toHaveProperty("customerId");
   });
 
   it("listActiveServices returns mapped offers", async () => {

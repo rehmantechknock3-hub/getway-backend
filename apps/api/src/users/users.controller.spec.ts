@@ -154,6 +154,21 @@ describe("UsersController", () => {
     expect(service.updateProviderPresence).toHaveBeenCalledWith("clerk_provider", true);
   });
 
+  it("updates provider availability calendar for authenticated provider", async () => {
+    const service = {
+      updateProviderAvailability: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const controller = new UsersController(service as never);
+    const days = [{ date: "2026-08-20", enabled: true, startHour: 9, endHour: 18 }];
+
+    await controller.updateProviderAvailability(
+      { auth: { sub: "clerk_provider" } } as never,
+      { days }
+    );
+
+    expect(service.updateProviderAvailability).toHaveBeenCalledWith("clerk_provider", days);
+  });
+
   it("findOne hides phone from non-admin callers", async () => {
     const service = {
       findByClerkId: vi.fn().mockResolvedValue({ id: "me", role: "CUSTOMER" }),

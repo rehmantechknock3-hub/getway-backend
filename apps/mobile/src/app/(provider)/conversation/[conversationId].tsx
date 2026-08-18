@@ -8,7 +8,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  type ImageSourcePropType,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,135 +30,18 @@ import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
 import { ChatAvatar, wayNowLogoSource } from "../../../components/ChatAvatar";
+import {
+  ChatThreadBackdrop,
+  DateSeparator,
+  IncomingBubble,
+  OutgoingBubble,
+  isDifferentDay,
+  processMessages,
+  type ProcessedMessage,
+} from "../../../components/ChatBubbles";
 import { useKeyboardBottomInset } from "../../../hooks/useKeyboardBottomInset";
 import { appColors } from "../../../styles/colors";
 import { textInputBaselineStyle } from "../../../styles/text-input";
-
-// ── Types ────────────────────────────────────────────────────────────────────
-
-type ProcessedMessage = Message & {
-  isFirst: boolean;
-  isLast: boolean;
-};
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function processMessages(msgs: Message[]): ProcessedMessage[] {
-  return msgs.map((msg, i) => ({
-    ...msg,
-    isFirst: !msgs[i - 1] || msgs[i - 1]!.senderId !== msg.senderId,
-    isLast:  !msgs[i + 1] || msgs[i + 1]!.senderId !== msg.senderId,
-  }));
-}
-
-function formatTime(date: Date | string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date instanceof Date ? date : new Date(date));
-}
-
-function formatDateLabel(date: Date | string): string {
-  const d = date instanceof Date ? date : new Date(date);
-  const today = new Date();
-  const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  if (d.toDateString() === today.toDateString()) return "Today";
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: d.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
-  }).format(d);
-}
-
-function isDifferentDay(a: Date | string, b: Date | string): boolean {
-  return new Date(a).toDateString() !== new Date(b).toDateString();
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function DateSeparator({ date }: { date: Date | string }) {
-  return (
-    <View className="flex-row items-center my-3 px-4">
-      <View className="flex-1 h-px bg-ink-faint" />
-      <Text className="text-ink-subtle text-xs mx-3 font-medium">
-        {formatDateLabel(date)}
-      </Text>
-      <View className="flex-1 h-px bg-ink-faint" />
-    </View>
-  );
-}
-
-function OutgoingBubble({
-  msg,
-  avatarUrl,
-  name,
-}: {
-  msg: ProcessedMessage;
-  avatarUrl?: string | null;
-  name: string;
-}) {
-  return (
-    <View
-      className={`self-end flex-row items-end max-w-[86%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}
-    >
-      <View
-        className="bg-primary-600 px-3.5 pt-2.5 pb-2"
-        style={{
-          borderRadius: 18,
-          borderBottomRightRadius: msg.isLast ? 4 : 18,
-        }}
-      >
-        <Text className="text-white text-sm leading-5">{msg.content}</Text>
-        <Text className="text-primary-100 text-xs text-right mt-1">
-          {formatTime(msg.createdAt)}
-        </Text>
-      </View>
-      <View className="w-7 h-7 flex-shrink-0 ml-1.5 items-center justify-center">
-        {msg.isLast ? <ChatAvatar uri={avatarUrl} name={name} size="sm" /> : null}
-      </View>
-    </View>
-  );
-}
-
-function IncomingBubble({
-  msg,
-  avatarUrl,
-  avatarSource,
-  name,
-}: {
-  msg: ProcessedMessage;
-  avatarUrl?: string | null;
-  avatarSource?: ImageSourcePropType;
-  name: string;
-}) {
-  return (
-    <View
-      className={`self-start flex-row items-end max-w-[86%] ${msg.isLast ? "mb-2" : "mb-0.5"}`}
-      style={{ paddingLeft: 8 }}
-    >
-      <View className="w-7 h-7 flex-shrink-0 mr-1.5 items-center justify-center">
-        {msg.isLast ? (
-          <ChatAvatar uri={avatarUrl} source={avatarSource} name={name} size="sm" />
-        ) : null}
-      </View>
-
-      <View
-        className="bg-canvas-raised px-3.5 pt-2.5 pb-2 border border-ink-faint"
-        style={{
-          borderRadius: 18,
-          borderBottomLeftRadius: msg.isLast ? 4 : 18,
-        }}
-      >
-        <Text className="text-ink text-sm leading-5">{msg.content}</Text>
-        <Text className="text-ink-subtle text-right mt-1" style={{ fontSize: 10 }}>
-          {formatTime(msg.createdAt)}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 // ── Main screen ───────────────────────────────────────────────────────────────
 
@@ -380,72 +262,66 @@ export default function ProviderConversationScreen() {
       </View>
 
       {/* ── Messages ────────────────────────────────────────────────────── */}
-      {isLoading ? (
-        <View
-          className="flex-1 items-center justify-center"
-          style={{ marginBottom: composerHeight + avoidedBottom }}
-        >
-          <ActivityIndicator color={appColors.primary[600]} />
-        </View>
-      ) : (
-        <FlatList
-          ref={listRef}
-          data={processedMessages}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }) => {
-            const prevMsg = processedMessages[index - 1];
-            const showSeparator =
-              !prevMsg || isDifferentDay(prevMsg.createdAt, item.createdAt);
-            const isMine = item.senderId === myDbId;
-            return (
-              <>
-                {showSeparator ? <DateSeparator date={item.createdAt} /> : null}
-                {isMine ? (
-                  <OutgoingBubble msg={item} avatarUrl={myAvatarUrl} name={myName} />
-                ) : (
-                  <IncomingBubble
-                    msg={item}
-                    avatarUrl={otherAvatarUrl}
-                    avatarSource={otherAvatarSource}
-                    name={otherName}
-                  />
-                )}
-              </>
-            );
-          }}
-          contentContainerStyle={{
-            paddingHorizontal: 12,
-            paddingTop: 12,
-            paddingBottom: 8,
-            flexGrow: 1,
-            justifyContent: processedMessages.length === 0 ? "center" : "flex-end",
-          }}
-          ListEmptyComponent={
-            <View className="items-center px-8">
-              <View
-                className="w-16 h-16 rounded-full items-center justify-center mb-4"
-                style={{ backgroundColor: appColors.primary[50] }}
-              >
-                <Ionicons name="chatbubbles-outline" size={32} color={appColors.primary[400]} />
+      <View className="flex-1" style={{ marginBottom: composerHeight + avoidedBottom }}>
+        <ChatThreadBackdrop />
+        {isLoading ? (
+          <View className="flex-1 items-center justify-center">
+            <ActivityIndicator color={appColors.primary[600]} />
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={processedMessages}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item, index }) => {
+              const prevMsg = processedMessages[index - 1];
+              const showSeparator =
+                !prevMsg || isDifferentDay(prevMsg.createdAt, item.createdAt);
+              const isMine = item.senderId === myDbId;
+              return (
+                <>
+                  {showSeparator ? <DateSeparator date={item.createdAt} /> : null}
+                  {isMine ? (
+                    <OutgoingBubble msg={item} avatarUrl={myAvatarUrl} name={myName} />
+                  ) : (
+                    <IncomingBubble
+                      msg={item}
+                      avatarUrl={otherAvatarUrl}
+                      avatarSource={otherAvatarSource}
+                      name={otherName}
+                    />
+                  )}
+                </>
+              );
+            }}
+            contentContainerStyle={{
+              paddingHorizontal: 12,
+              paddingTop: 12,
+              paddingBottom: 8,
+              flexGrow: 1,
+              justifyContent: processedMessages.length === 0 ? "center" : "flex-end",
+            }}
+            ListEmptyComponent={
+              <View className="items-center px-8">
+                <View className="mb-4 h-16 w-16 items-center justify-center rounded-full bg-primary-50">
+                  <Ionicons name="chatbubbles-outline" size={32} color={appColors.primary[400]} />
+                </View>
+                <Text className="mb-1 text-base font-semibold text-ink">No messages yet</Text>
+                <Text className="text-center text-sm leading-5 text-ink-muted">
+                  {isAdminChat
+                    ? "Message WayNow Admin about payouts or account support."
+                    : "Your messages with this customer are private and secure."}
+                </Text>
               </View>
-              <Text className="text-ink font-semibold text-base mb-1">No messages yet</Text>
-              <Text className="text-ink-muted text-sm text-center leading-5">
-                {isAdminChat
-                  ? "Message WayNow Admin about payouts or account support."
-                  : "Your messages with this customer are private and secure."}
-              </Text>
-            </View>
-          }
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollToBottom(false)}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="interactive"
-          style={{
-            backgroundColor: appColors.canvas.sunken,
-            marginBottom: composerHeight + avoidedBottom,
-          }}
-        />
-      )}
+            }
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => scrollToBottom(false)}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            style={{ backgroundColor: "transparent" }}
+          />
+        )}
+      </View>
 
       {/* ── Input bar (pinned above keyboard) ───────────────────────────── */}
       <View

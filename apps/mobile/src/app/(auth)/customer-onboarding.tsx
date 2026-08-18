@@ -29,6 +29,7 @@ import { showToast } from "@repo/ui";
 import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
+import { PhoneNumberField } from "../../components/PhoneNumberField";
 import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
@@ -144,7 +145,7 @@ export default function CustomerOnboardingScreen() {
     const firstName = clerkUser?.firstName?.trim() ?? "";
     const lastName = clerkUser?.lastName?.trim() ?? "";
     if (!isValidRequiredPhone(trimmedPhone)) {
-      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
+      showToast("error", "Phone number is required", "Pick a country and enter a valid number for that country.");
       return;
     }
     if (!firstName || !lastName) {
@@ -255,19 +256,11 @@ export default function CustomerOnboardingScreen() {
           }
         />
 
-        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
-        <TextInput
-          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
-          keyboardType="phone-pad"
-          placeholder="+1234567890"
-          placeholderTextColor={appColors.ink.subtle}
-          style={textInputBaselineStyle}
+        <PhoneNumberField
           value={phone}
-          onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
+          onChange={setPhone}
+          helperText="Required. Only you and admins can see this number — providers cannot."
         />
-        <Text className="text-ink-muted text-xs mb-5 leading-5">
-          Required. Only you and admins can see this number — providers cannot.
-        </Text>
 
         <Text className="text-ink text-sm font-medium mb-2">Primary location</Text>
         <Text className="text-ink-muted text-xs mb-2 leading-4">

@@ -8,12 +8,17 @@ import {
 import type { Prisma } from "@prisma/client";
 import type {
   CustomerOnboarding,
+  ProviderAvailabilityDay,
   ProviderOnboarding,
   SavedLocation,
   UserRole,
   UpdateUserProfileInput,
 } from "@repo/schemas";
-import { safeParseProviderOnboardingJson } from "@repo/schemas";
+import {
+  parseAvailabilityDays,
+  reconcileProviderAvailability,
+  safeParseProviderOnboardingJson,
+} from "@repo/schemas";
 
 import type { ClerkUserPayload } from "../auth/webhook.controller";
 import { GoogleMapsService } from "../maps/google-maps.service";
@@ -251,6 +256,7 @@ export class UsersService {
             totalReviews: true,
             isOnline: true,
             verificationStatus: true,
+            availabilityDays: true,
           },
         },
       },
@@ -269,6 +275,7 @@ export class UsersService {
             totalReviews: providerProfile.totalReviews,
             isOnline: providerProfile.isOnline,
             verificationStatus: providerProfile.verificationStatus,
+            availabilityDays: parseAvailabilityDays(providerProfile.availabilityDays),
           }
         : undefined,
     };
@@ -299,6 +306,7 @@ export class UsersService {
             totalReviews: true,
             isOnline: true,
             verificationStatus: true,
+            availabilityDays: true,
           },
         },
       },
@@ -315,6 +323,7 @@ export class UsersService {
             totalReviews: providerProfile.totalReviews,
             isOnline: providerProfile.isOnline,
             verificationStatus: providerProfile.verificationStatus,
+            availabilityDays: parseAvailabilityDays(providerProfile.availabilityDays),
           }
         : undefined,
     };
@@ -342,6 +351,30 @@ export class UsersService {
     await this.prisma.providerProfile.update({
       where: { id: user.providerProfile.id },
       data: { isOnline },
+    });
+
+    return this.findByClerkId(clerkId);
+  }
+
+  async updateProviderAvailability(clerkId: string, days: ProviderAvailabilityDay[]) {
+    const user = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: {
+        id: true,
+        role: true,
+        providerProfile: { select: { id: true, availabilityDays: true } },
+      },
+    });
+    if (!user) throw new NotFoundException("User not found");
+    if (user.role !== "PROVIDER" || !user.providerProfile) {
+      throw new ForbiddenException("Only providers can update their calendar");
+    }
+
+    const nextDays = reconcileProviderAvailability(user.providerProfile.availabilityDays, days);
+
+    await this.prisma.providerProfile.update({
+      where: { id: user.providerProfile.id },
+      data: { availabilityDays: nextDays },
     });
 
     return this.findByClerkId(clerkId);

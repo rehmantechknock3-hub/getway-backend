@@ -11,6 +11,7 @@ import { showToast } from "@repo/ui";
 import { fetchGoogleGeocodeLocation, reportError } from "@repo/utils";
 
 import { LocationPreviewMap } from "../../components/LocationPreviewMap";
+import { PhoneNumberField } from "../../components/PhoneNumberField";
 import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { appColors } from "../../styles/colors";
 import { textInputBaselineStyle } from "../../styles/text-input";
@@ -114,7 +115,7 @@ export default function CustomerEditInfoScreen() {
     }
     const trimmedPhone = sanitizePhoneInput(phone.trim());
     if (!isValidRequiredPhone(trimmedPhone)) {
-      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
+      showToast("error", "Phone number is required", "Pick a country and enter a valid number for that country.");
       return;
     }
     try {
@@ -224,17 +225,11 @@ export default function CustomerEditInfoScreen() {
           Same as your sign-in email. Update it in your account settings if needed.
         </Text>
 
-        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
-        <TextInput
-          className="bg-canvas border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
-          keyboardType="phone-pad"
-          style={textInputBaselineStyle}
+        <PhoneNumberField
           value={phone}
-          onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
+          onChange={setPhone}
+          helperText="Required. Only you and admins can see this number."
         />
-        <Text className="text-ink-muted text-xs mb-4 leading-5">
-          Required. Only you and admins can see this number.
-        </Text>
 
         <TouchableOpacity
           className="bg-primary-600 rounded-2xl py-3.5 items-center"

@@ -1,4 +1,5 @@
 // User
+export * from "./phone";
 export * from "./user.schema";
 
 // Provider & Services

@@ -242,7 +242,12 @@ export default function EarningsScreen() {
                   <Pressable
                     key={row.id}
                     className="bg-canvas-raised border border-ink-faint rounded-2xl p-4"
-                    onPress={() => router.push(`/(provider)/booking/${row.id}`)}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/(provider)/booking/[bookingId]",
+                        params: { bookingId: row.id },
+                      })
+                    }
                     accessibilityRole="button"
                     accessibilityLabel={`Open booking details for ${row.serviceTitle}`}
                   >

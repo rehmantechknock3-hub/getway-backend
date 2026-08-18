@@ -106,6 +106,8 @@ model ProviderProfile {
   bio                String?
   verificationStatus VerificationStatus @default(PENDING)
   isOnline           Boolean            @default(false)
+  /** Rolling 30-day calendar the provider saved from their current day. */
+  availabilityDays   Json               @default("[]")
   averageRating      Float              @default(0)
   totalReviews       Int                @default(0)
   totalEarnings      Float              @default(0)

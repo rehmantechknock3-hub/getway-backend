@@ -2,7 +2,9 @@ import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 
 import {
+  parseAvailabilityDays,
   safeParseProviderOnboardingJson,
+  type ProviderBookedSlot,
   type ProviderPublicDetail,
   type ProviderPublicSummary,
   type ProviderServiceOffer,
@@ -126,7 +128,27 @@ export class ProvidersService {
       bio: row.bio ?? undefined,
       experienceYears: onboarding?.experienceYears,
       hasTools: onboarding?.hasTools,
+      availabilityDays: parseAvailabilityDays(row.availabilityDays),
     };
+  }
+
+  private async listBookedSlots(providerProfileId: string): Promise<ProviderBookedSlot[]> {
+    const rows = await this.prisma.booking.findMany({
+      where: {
+        providerId: providerProfileId,
+        status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] },
+        scheduledAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+      select: {
+        scheduledAt: true,
+        service: { select: { duration: true } },
+      },
+      orderBy: { scheduledAt: "asc" },
+    });
+    return rows.map((row) => ({
+      scheduledAt: row.scheduledAt,
+      durationMinutes: row.service.duration,
+    }));
   }
 
   async listPublicSummaries(
@@ -267,7 +289,8 @@ export class ProvidersService {
       throw new NotFoundException("Provider not found");
     }
 
-    return this.toDetail(row);
+    const bookedSlots = await this.listBookedSlots(row.id);
+    return { ...this.toDetail(row), bookedSlots };
   }
 
   async listActiveServices(providerProfileId: string, requestId?: string): Promise<ProviderServiceOffer[]> {

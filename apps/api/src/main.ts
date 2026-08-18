@@ -24,12 +24,18 @@ async function bootstrap() {
   }
   app.useStaticAssets(uploadsRoot, { prefix: "/uploads/" });
 
+  const isProduction = configService.get<string>("NODE_ENV") === "production";
+  const productionOrigins = [
+    configService.get<string>("WEB_URL"),
+    configService.get<string>("SOCKET_CORS_ORIGIN"),
+  ]
+    .flatMap((value) => (value ?? "").split(","))
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+
   app.enableCors({
-    // Dev mobile (Expo Go) may send an Origin; allow all non-production origins.
-    origin:
-      configService.get<string>("NODE_ENV") === "production"
-        ? [configService.get<string>("WEB_URL") ?? "http://localhost:3000"]
-        : true,
+    // Native apps do not use CORS. Production browsers (admin web) must match WEB_URL.
+    origin: isProduction ? productionOrigins : true,
     credentials: true,
   });
   app.useWebSocketAdapter(new SocketIoAdapter(app, configService));

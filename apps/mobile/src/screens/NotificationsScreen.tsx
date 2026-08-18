@@ -58,7 +58,10 @@ export function NotificationsScreen({ stack }: { stack: StackRole }) {
     }
     if (n.bookingId) {
       if (stack === "customer") {
-        router.push(`/(customer)/booking/${n.bookingId}`);
+        router.push({
+          pathname: "/(customer)/booking/[bookingId]",
+          params: { bookingId: n.bookingId },
+        });
       } else {
         router.replace("/(provider)/(tabs)/jobs");
       }
