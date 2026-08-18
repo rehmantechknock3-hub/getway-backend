@@ -51,6 +51,7 @@ export const UpdateBookingStatusSchema = z.object({
 
 /** Customer booking payload including an existing review, if any. */
 export const BookingWithReviewSchema = BookingSchema.extend({
+  serviceTitle: z.string(),
   review: ReviewSchema.nullable().optional(),
 });
 

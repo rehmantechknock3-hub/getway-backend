@@ -29,6 +29,7 @@ import {
 import { showToast } from "@repo/ui";
 import { enrichShopLocationsWithCoordinates, reportError } from "@repo/utils";
 
+import { PhoneNumberField } from "../../components/PhoneNumberField";
 import { ProfilePhotoField } from "../../components/ProfilePhotoField";
 import { ProviderServiceCategoriesField } from "../../components/ProviderServiceCategoriesField";
 import { ShopAddressField } from "../../components/ShopAddressField";
@@ -88,7 +89,7 @@ export default function ProviderOnboardingScreen() {
         ? [...shopLocations, { address: pendingAddress, placeId: shopPlaceId }]
         : shopLocations;
     if (!isValidRequiredPhone(trimmedPhone)) {
-      showToast("error", "Phone number is required", "Enter a valid phone number with at least 6 digits.");
+      showToast("error", "Phone number is required", "Pick a country and enter a valid number for that country.");
       return;
     }
     if (!firstName || !lastName) {
@@ -265,19 +266,11 @@ export default function ProviderOnboardingScreen() {
           onPress={handlePickPhoto}
         />
 
-        <Text className="text-ink text-sm font-medium mb-2">Phone number</Text>
-        <TextInput
-          className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3.5 text-ink text-base mb-1"
-          keyboardType="phone-pad"
-          placeholder="+1234567890"
-          placeholderTextColor={appColors.ink.subtle}
-          style={textInputBaselineStyle}
+        <PhoneNumberField
           value={phone}
-          onChangeText={(value) => setPhone(sanitizePhoneInput(value))}
+          onChange={setPhone}
+          helperText="Required. Only you and admins can see this number — customers cannot."
         />
-        <Text className="text-ink-muted text-xs mb-5 leading-5">
-          Required. Only you and admins can see this number — customers cannot.
-        </Text>
 
         <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4 mb-5">
           <ProviderServiceCategoriesField value={serviceCategories} onChange={setServiceCategories} />

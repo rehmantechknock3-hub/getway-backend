@@ -2,6 +2,19 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 import { BookingsService } from "./bookings.service";
 
+function upcomingBookableSlot(hour = 10) {
+  const scheduledAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  scheduledAt.setUTCHours(hour, 0, 0, 0);
+  if (scheduledAt.getTime() <= Date.now()) {
+    scheduledAt.setUTCDate(scheduledAt.getUTCDate() + 1);
+  }
+  const date = scheduledAt.toISOString().slice(0, 10);
+  return {
+    scheduledAt,
+    availabilityDays: [{ date, enabled: true, startHour: 9, endHour: 18 }],
+  };
+}
+
 describe("BookingsService", () => {
   const cache = {
     get: vi.fn().mockResolvedValue(undefined),
@@ -45,6 +58,7 @@ describe("BookingsService", () => {
     prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) =>
       fn(prisma),
     );
+    prisma.booking.findMany.mockResolvedValue([]);
     service = new BookingsService(
       prisma as never,
       notificationsService as never,
@@ -71,6 +85,7 @@ describe("BookingsService", () => {
   });
 
   it("create inserts booking with service price", async () => {
+    const slot = upcomingBookableSlot();
     prisma.user.findUnique.mockResolvedValue({
       id: "u-1",
       role: "CUSTOMER",
@@ -82,7 +97,12 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 99.5,
       title: "Test service",
-      provider: { isOnline: true, verificationStatus: "APPROVED" },
+      duration: 60,
+      provider: {
+        isOnline: true,
+        verificationStatus: "APPROVED",
+        availabilityDays: slot.availabilityDays,
+      },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -91,7 +111,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       serviceId: "svc-1",
       status: "PENDING",
-      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      scheduledAt: slot.scheduledAt,
       address: "1 Main St",
       latitude: 40.7,
       longitude: -74,
@@ -103,7 +123,7 @@ describe("BookingsService", () => {
 
     const result = await service.create("clerk-1", {
       serviceId: "svc-1",
-      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      scheduledAt: slot.scheduledAt,
       address: "1 Main St",
       latitude: 40.7,
       longitude: -74,
@@ -124,7 +144,47 @@ describe("BookingsService", () => {
     expect(result.status).toBe("PENDING");
   });
 
+  it("create rejects an overlapping booked slot", async () => {
+    const slot = upcomingBookableSlot();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "CUSTOMER",
+      savedLocations: [],
+      customerOnboarding: null,
+    });
+    prisma.service.findFirst.mockResolvedValue({
+      id: "svc-1",
+      providerId: "pp-1",
+      price: 99.5,
+      title: "Test service",
+      duration: 60,
+      provider: {
+        isOnline: true,
+        verificationStatus: "APPROVED",
+        availabilityDays: slot.availabilityDays,
+      },
+    });
+    prisma.booking.findMany.mockResolvedValue([
+      {
+        scheduledAt: slot.scheduledAt,
+        service: { duration: 60 },
+      },
+    ]);
+
+    await expect(
+      service.create("clerk-1", {
+        serviceId: "svc-1",
+        scheduledAt: slot.scheduledAt,
+        address: "1 Main St",
+        latitude: 40.7,
+        longitude: -74,
+      })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
   it("create prefers customer profile location over request payload", async () => {
+    const slot = upcomingBookableSlot();
     prisma.user.findUnique.mockResolvedValue({
       id: "u-1",
       role: "CUSTOMER",
@@ -142,7 +202,12 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 99.5,
       title: "Test service",
-      provider: { isOnline: true, verificationStatus: "APPROVED" },
+      duration: 60,
+      provider: {
+        isOnline: true,
+        verificationStatus: "APPROVED",
+        availabilityDays: slot.availabilityDays,
+      },
     });
     const createdAt = new Date();
     prisma.booking.create.mockResolvedValue({
@@ -151,7 +216,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       serviceId: "svc-1",
       status: "PENDING",
-      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      scheduledAt: slot.scheduledAt,
       address: "Profile Home Address",
       latitude: 25.2,
       longitude: 55.3,
@@ -163,7 +228,7 @@ describe("BookingsService", () => {
 
     await service.create("clerk-1", {
       serviceId: "svc-1",
-      scheduledAt: new Date("2026-05-01T10:00:00Z"),
+      scheduledAt: slot.scheduledAt,
       address: "Typed Address",
       latitude: 1,
       longitude: 2,
@@ -209,6 +274,7 @@ describe("BookingsService", () => {
       providerId: "pp-2",
       price: 50,
       title: "Other service",
+      duration: 60,
       provider: { isOnline: true, verificationStatus: "APPROVED" },
     });
     const createdAt = new Date();
@@ -259,6 +325,7 @@ describe("BookingsService", () => {
       providerId: "pp-1",
       price: 90,
       title: "Test service",
+      duration: 60,
       provider: { isOnline: false, verificationStatus: "APPROVED" },
     });
 
@@ -271,6 +338,72 @@ describe("BookingsService", () => {
         longitude: -74,
       })
     ).rejects.toMatchObject({ status: 403 });
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
+  it("create rejects bookings more than 30 days ahead", async () => {
+    const slot = upcomingBookableSlot();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "CUSTOMER",
+      savedLocations: [],
+      customerOnboarding: null,
+    });
+    prisma.service.findFirst.mockResolvedValue({
+      id: "svc-1",
+      providerId: "pp-1",
+      price: 90,
+      title: "Test service",
+      duration: 60,
+      provider: {
+        isOnline: true,
+        verificationStatus: "APPROVED",
+        availabilityDays: slot.availabilityDays,
+      },
+    });
+
+    await expect(
+      service.create("clerk-1", {
+        serviceId: "svc-1",
+        scheduledAt: new Date(Date.now() + 40 * 24 * 60 * 60 * 1000),
+        address: "1 Main St",
+        latitude: 40.7,
+        longitude: -74,
+      })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(prisma.booking.create).not.toHaveBeenCalled();
+  });
+
+  it("create rejects bookings on a closed calendar day", async () => {
+    const slot = upcomingBookableSlot();
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "CUSTOMER",
+      savedLocations: [],
+      customerOnboarding: null,
+    });
+    prisma.service.findFirst.mockResolvedValue({
+      id: "svc-1",
+      providerId: "pp-1",
+      price: 90,
+      title: "Test service",
+      duration: 60,
+      provider: {
+        isOnline: true,
+        verificationStatus: "APPROVED",
+        availabilityDays: slot.availabilityDays.map((day) => ({ ...day, enabled: false })),
+      },
+    });
+
+    await expect(
+      service.create("clerk-1", {
+        serviceId: "svc-1",
+        scheduledAt: slot.scheduledAt,
+        address: "1 Main St",
+        latitude: 40.7,
+        longitude: -74,
+      })
+    ).rejects.toMatchObject({ status: 400 });
     expect(prisma.booking.create).not.toHaveBeenCalled();
   });
 
@@ -625,5 +758,65 @@ describe("BookingsService", () => {
     await expect(
       service.updateStatusForProvider("clerk-p", "b-1", { status: "ACCEPTED" })
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("listForCustomer includes the service title", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "cust-1", role: "CUSTOMER" });
+    const createdAt = new Date();
+    prisma.booking.findMany.mockResolvedValue([
+      {
+        id: "b-1",
+        customerId: "cust-1",
+        providerId: "pp-1",
+        serviceId: "s-1",
+        status: "PENDING",
+        scheduledAt: new Date("2026-06-01T12:00:00Z"),
+        address: "1 St",
+        latitude: 1,
+        longitude: 2,
+        notes: null,
+        totalAmount: 40,
+        createdAt,
+        updatedAt: createdAt,
+        provider: { latitude: 41, longitude: -71 },
+        service: { title: "Car Wash" },
+        review: null,
+      },
+    ]);
+    prisma.booking.count.mockResolvedValue(1);
+
+    const result = await service.listForCustomer("clerk-c", 1, 20);
+
+    expect(result.data[0]).toMatchObject({
+      id: "b-1",
+      serviceTitle: "Car Wash",
+    });
+  });
+
+  it("findOneForCustomer includes the service title", async () => {
+    prisma.user.findUnique.mockResolvedValue({ id: "cust-1", role: "CUSTOMER" });
+    const createdAt = new Date();
+    prisma.booking.findFirst.mockResolvedValue({
+      id: "b-1",
+      customerId: "cust-1",
+      providerId: "pp-1",
+      serviceId: "s-1",
+      status: "PENDING",
+      scheduledAt: new Date("2026-06-01T12:00:00Z"),
+      address: "1 St",
+      latitude: 1,
+      longitude: 2,
+      notes: null,
+      totalAmount: 40,
+      createdAt,
+      updatedAt: createdAt,
+      provider: { latitude: 41, longitude: -71 },
+      service: { title: "Car Wash" },
+      review: null,
+    });
+
+    const result = await service.findOneForCustomer("clerk-c", "b-1");
+
+    expect(result.serviceTitle).toBe("Car Wash");
   });
 });

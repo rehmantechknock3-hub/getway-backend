@@ -661,4 +661,79 @@ describe("UsersService", () => {
 
     await expect(service.updateProviderPresence("clerk_customer", true)).rejects.toThrow();
   });
+
+  it("updateProviderAvailability saves the rolling calendar", async () => {
+    const days = [{ date: "2026-08-20", enabled: true, startHour: 9, endHour: 18 }];
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u-p",
+          role: "PROVIDER",
+          providerProfile: { id: "pp-1", availabilityDays: [] },
+        }),
+      },
+      providerProfile: {
+        update: vi.fn().mockResolvedValue({ id: "pp-1" }),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    const findByClerkIdSpy = vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u-p" } as never);
+
+    await service.updateProviderAvailability("clerk_provider", days);
+
+    expect(prisma.providerProfile.update).toHaveBeenCalledWith({
+      where: { id: "pp-1" },
+      data: { availabilityDays: days },
+    });
+    expect(findByClerkIdSpy).toHaveBeenCalledWith("clerk_provider");
+  });
+
+  it("updateProviderAvailability keeps already scheduled days locked", async () => {
+    const stored = [{ date: "2026-08-20", enabled: true, startHour: 9, endHour: 18 }];
+    const incoming = [
+      { date: "2026-08-20", enabled: false, startHour: 10, endHour: 16 },
+      { date: "2026-08-21", enabled: true, startHour: 8, endHour: 17 },
+    ];
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u-p",
+          role: "PROVIDER",
+          providerProfile: { id: "pp-1", availabilityDays: stored },
+        }),
+      },
+      providerProfile: {
+        update: vi.fn().mockResolvedValue({ id: "pp-1" }),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+    vi.spyOn(service, "findByClerkId").mockResolvedValue({ id: "u-p" } as never);
+
+    await service.updateProviderAvailability("clerk_provider", incoming);
+
+    expect(prisma.providerProfile.update).toHaveBeenCalledWith({
+      where: { id: "pp-1" },
+      data: {
+        availabilityDays: [
+          stored[0],
+          { date: "2026-08-21", enabled: true, startHour: 8, endHour: 17 },
+        ],
+      },
+    });
+  });
+
+  it("updateProviderAvailability rejects non-provider users", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "u-c",
+          role: "CUSTOMER",
+          providerProfile: null,
+        }),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+
+    await expect(service.updateProviderAvailability("clerk_customer", [])).rejects.toThrow();
+  });
 });

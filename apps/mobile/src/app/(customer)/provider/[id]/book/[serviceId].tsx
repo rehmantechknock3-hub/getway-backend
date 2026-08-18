@@ -17,26 +17,27 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   bookingKeys,
+  fetchReverseGeocode,
   useCreateBooking,
   useProvider,
   useProviderServices,
 } from "@repo/api-client";
+import {
+  civilDateKeyFromLocal,
+  hourOverlapsBookedSlot,
+  mergeRollingAvailability,
+  parseCivilDateKey,
+  type ProviderAvailabilityDay,
+  type ProviderBookedSlot,
+} from "@repo/schemas";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
+import { AvailabilityMonthGrid } from "../../../../../components/AvailabilityMonthGrid";
+import { LocationPreviewMap } from "../../../../../components/LocationPreviewMap";
 import { appColors } from "../../../../../styles/colors";
 import { textInputBaselineStyle } from "../../../../../styles/text-input";
 import { requestDeviceLocation } from "../../../../../utils/device-location";
-
-const DAY_OFFSETS = [1, 2, 3, 5, 7] as const;
-const SLOT_LABELS = [
-  { label: "Morning", hour: 9 },
-  { label: "Midday", hour: 12 },
-  { label: "Afternoon", hour: 15 },
-  { label: "Evening", hour: 18 },
-] as const;
-
-const PLACEHOLDER_MUTED = appColors.ink.subtle;
 
 function startOfDay(d: Date): Date {
   const x = new Date(d);
@@ -44,10 +45,9 @@ function startOfDay(d: Date): Date {
   return x;
 }
 
-function addDays(base: Date, days: number): Date {
-  const x = new Date(base);
-  x.setDate(x.getDate() + days);
-  return x;
+function dateFromKey(dateKey: string): Date {
+  const { year, month, day } = parseCivilDateKey(dateKey);
+  return startOfDay(new Date(year, month - 1, day));
 }
 
 function combineDateAndHour(day: Date, hour: number): Date {
@@ -56,14 +56,57 @@ function combineDateAndHour(day: Date, hour: number): Date {
   return x;
 }
 
+function formatHour(hour: number): string {
+  const safeHour = ((hour % 24) + 24) % 24;
+  if (safeHour === 0) return "12:00 AM";
+  if (safeHour < 12) return `${safeHour}:00 AM`;
+  if (safeHour === 12) return "12:00 PM";
+  return `${safeHour - 12}:00 PM`;
+}
+
 function formatDayChip(d: Date): string {
   return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
 }
 
-function formatSlotSummary(day: Date, hour: number): string {
-  const slot = SLOT_LABELS.find((s) => s.hour === hour)?.label ?? `${hour}:00`;
-  return `${formatDayChip(day)} · ${slot}`;
+function formatSlotSummary(dateKey: string, hour: number): string {
+  return `${formatDayChip(dateFromKey(dateKey))} · ${formatHour(hour)}`;
 }
+
+function hourIsBooked(
+  day: ProviderAvailabilityDay,
+  hour: number,
+  bookedSlots: ProviderBookedSlot[],
+  durationMinutes: number
+): boolean {
+  return bookedSlots.some((slot) => hourOverlapsBookedSlot(day.date, hour, slot, durationMinutes));
+}
+
+function bookableHours(
+  day: ProviderAvailabilityDay,
+  now: Date,
+  bookedSlots: ProviderBookedSlot[] = [],
+  durationMinutes = 60
+): number[] {
+  const hours: number[] = [];
+  for (let hour = day.startHour; hour <= day.endHour; hour++) {
+    const at = combineDateAndHour(dateFromKey(day.date), hour);
+    if (at.getTime() <= now.getTime() + 5 * 60 * 1000) continue;
+    if (hourIsBooked(day, hour, bookedSlots, durationMinutes)) continue;
+    hours.push(hour);
+  }
+  return hours;
+}
+
+function listedHours(day: ProviderAvailabilityDay, now: Date): number[] {
+  const hours: number[] = [];
+  for (let hour = day.startHour; hour <= day.endHour; hour++) {
+    const at = combineDateAndHour(dateFromKey(day.date), hour);
+    if (at.getTime() > now.getTime() + 5 * 60 * 1000) hours.push(hour);
+  }
+  return hours;
+}
+
+const PLACEHOLDER_MUTED = appColors.ink.subtle;
 
 function formatMoney(n: number, currency?: string): string {
   return new Intl.NumberFormat("en-US", {
@@ -85,18 +128,14 @@ export default function BookServiceScreen() {
   const { isLoaded, isSignedIn } = useAuth();
   const [step, setStep] = useState<Step>(1);
   const [createdBookingId, setCreatedBookingId] = useState<string | null>(null);
+  const now = useMemo(() => new Date(), []);
 
-  const today = useMemo(() => startOfDay(new Date()), []);
-  const dayOptions = useMemo(
-    () => DAY_OFFSETS.map((off) => addDays(today, off)),
-    [today]
-  );
-
-  const [selectedDay, setSelectedDay] = useState(() => dayOptions[0] ?? addDays(today, 1));
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
   const [selectedHour, setSelectedHour] = useState<number>(9);
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapEpoch, setMapEpoch] = useState(0);
   const [locating, setLocating] = useState(false);
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -108,14 +147,74 @@ export default function BookServiceScreen() {
   const providerQuery = useProvider(providerId);
   const createBooking = useCreateBooking();
 
+  const monthDays = useMemo(
+    () =>
+      mergeRollingAvailability(
+        civilDateKeyFromLocal(now),
+        providerQuery.data?.availabilityDays
+      ),
+    [now, providerQuery.data?.availabilityDays]
+  );
+  const bookedSlots = providerQuery.data?.bookedSlots ?? [];
   const service = useMemo(
     () => servicesQuery.data?.find((s) => s.id === svcId),
     [servicesQuery.data, svcId]
   );
+  const durationMinutes = service?.duration ?? 60;
+  const bookableDays = useMemo(
+    () =>
+      monthDays.filter(
+        (day) => day.enabled && bookableHours(day, now, bookedSlots, durationMinutes).length > 0
+      ),
+    [monthDays, now, bookedSlots, durationMinutes]
+  );
+  const bookedDates = useMemo(
+    () =>
+      monthDays
+        .filter((day) => {
+          if (!day.enabled) return false;
+          const listed = listedHours(day, now);
+          if (listed.length === 0) return false;
+          return listed.every((hour) => hourIsBooked(day, hour, bookedSlots, durationMinutes));
+        })
+        .map((day) => day.date),
+    [monthDays, now, bookedSlots, durationMinutes]
+  );
+  const selectedDay = useMemo(
+    () => monthDays.find((day) => day.date === selectedDate) ?? bookableDays[0],
+    [monthDays, selectedDate, bookableDays]
+  );
+  const listedHourOptions = useMemo(
+    () => (selectedDay ? listedHours(selectedDay, now) : []),
+    [selectedDay, now]
+  );
+  const hourOptions = useMemo(
+    () => (selectedDay ? bookableHours(selectedDay, now, bookedSlots, durationMinutes) : []),
+    [selectedDay, now, bookedSlots, durationMinutes]
+  );
+
+  useEffect(() => {
+    if (!selectedDay && bookableDays[0]) {
+      setSelectedDate(bookableDays[0].date);
+      const hours = bookableHours(bookableDays[0], now, bookedSlots, durationMinutes);
+      if (hours[0] != null) setSelectedHour(hours[0]);
+      return;
+    }
+    if (selectedDay && !bookableDays.some((day) => day.date === selectedDay.date)) {
+      const next = bookableDays[0];
+      setSelectedDate(next?.date);
+      const hours = next ? bookableHours(next, now, bookedSlots, durationMinutes) : [];
+      if (hours[0] != null) setSelectedHour(hours[0]);
+      return;
+    }
+    if (hourOptions.length > 0 && !hourOptions.includes(selectedHour)) {
+      setSelectedHour(hourOptions[0] ?? 9);
+    }
+  }, [bookableDays, bookedSlots, durationMinutes, hourOptions, now, selectedDay, selectedHour]);
 
   const scheduledAt = useMemo(
-    () => combineDateAndHour(selectedDay, selectedHour),
-    [selectedDay, selectedHour]
+    () => combineDateAndHour(dateFromKey(selectedDay?.date ?? civilDateKeyFromLocal(now)), selectedHour),
+    [selectedDay?.date, selectedHour, now]
   );
 
   const providerName = useMemo(() => {
@@ -148,11 +247,28 @@ export default function BookServiceScreen() {
         longitude: result.data.coords.longitude,
       });
       setAddress(result.data.addressLabel);
+      setMapEpoch((n) => n + 1);
     } catch (error: unknown) {
       reportError(error, { action: "book_use_my_location" });
       if (!opts?.silent) {
         setFormError("Could not read your location. Try again or enter an address.");
       }
+    } finally {
+      setLocating(false);
+    }
+  }, []);
+
+  const applyMapTap = useCallback(async (next: { latitude: number; longitude: number }) => {
+    setFormError(null);
+    setCoords(next);
+    setLocating(true);
+    try {
+      const result = await fetchReverseGeocode(next.latitude, next.longitude);
+      setAddress(result.address);
+    } catch (error: unknown) {
+      reportError(error, { action: "book_map_tap" });
+      setAddress(`${next.latitude.toFixed(5)}, ${next.longitude.toFixed(5)}`);
+      showToast("info", "Pinned the map. Address lookup failed — you can still edit it.");
     } finally {
       setLocating(false);
     }
@@ -326,7 +442,7 @@ export default function BookServiceScreen() {
             <View className="flex-row items-center gap-2 mb-2">
               <Ionicons name="calendar-outline" size={16} color={appColors.glow.blue} />
               <Text className="text-surface-soft text-sm">
-                {formatSlotSummary(selectedDay, selectedHour)}
+                {formatSlotSummary(selectedDay?.date ?? "", selectedHour)}
               </Text>
             </View>
             <View className="flex-row items-center gap-2 mb-2">
@@ -365,7 +481,10 @@ export default function BookServiceScreen() {
             className="bg-glow-blue rounded-2xl py-4 items-center mb-3"
             activeOpacity={0.9}
             onPress={() =>
-              router.replace(`/(customer)/booking/${createdBookingId}` as const)
+              router.replace({
+                pathname: "/(customer)/booking/[bookingId]",
+                params: { bookingId: createdBookingId },
+              })
             }
           >
             <Text className="text-white font-bold text-base">View appointment</Text>
@@ -422,68 +541,77 @@ export default function BookServiceScreen() {
         <View>
           <Text className="text-lg font-bold text-ink mb-1">Pick a date & time</Text>
           <Text className="text-ink-muted text-sm mb-5 leading-5">
-            Choose a day, then select a time window.
+            Book any open day in the next month. Booked times are marked and cannot be chosen.
           </Text>
 
           <Text className="text-sm font-bold text-ink mb-2">Day</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 10, paddingBottom: 16 }}
-          >
-            {dayOptions.map((d) => {
-              const active = d.getTime() === selectedDay.getTime();
-              return (
-                <TouchableOpacity
-                  key={d.toISOString()}
-                  onPress={() => setSelectedDay(d)}
-                  activeOpacity={0.85}
-                  className={`px-4 py-3 rounded-2xl border ${
-                    active
-                      ? "bg-primary-50 border-primary-600"
-                      : "bg-canvas-raised border-ink-faint"
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-semibold ${active ? "text-primary-600" : "text-ink"}`}
-                  >
-                    {formatDayChip(d)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          <Text className="text-sm font-bold text-ink mb-2">Time</Text>
-          <View className="flex-row flex-wrap gap-2 mb-8">
-            {SLOT_LABELS.map((slot) => {
-              const active = selectedHour === slot.hour;
-              return (
-                <TouchableOpacity
-                  key={slot.label}
-                  onPress={() => setSelectedHour(slot.hour)}
-                  activeOpacity={0.85}
-                  className={`px-4 py-2.5 rounded-2xl border min-w-[44%] ${
-                    active
-                      ? "bg-primary-50 border-primary-600"
-                      : "bg-canvas-raised border-ink-faint"
-                  }`}
-                >
-                  <Text
-                    className={`text-sm font-semibold text-center ${
-                      active ? "text-primary-600" : "text-ink-soft"
-                    }`}
-                  >
-                    {slot.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+          <View className="mb-5">
+            <AvailabilityMonthGrid
+              days={monthDays}
+              selectedDate={selectedDay?.date}
+              lockedDates={monthDays.filter((day) => day.enabled).map((day) => day.date)}
+              bookedDates={bookedDates}
+              onPressDay={(dateKey) => {
+                const next = monthDays.find((day) => day.date === dateKey);
+                if (!next?.enabled) return;
+                if (bookedDates.includes(dateKey)) return;
+                setSelectedDate(dateKey);
+                const hours = bookableHours(next, now, bookedSlots, durationMinutes);
+                if (hours[0] != null) setSelectedHour(hours[0]);
+              }}
+            />
           </View>
+
+          {bookableDays.length === 0 ? (
+            <Text className="text-ink-muted text-sm mb-8">
+              This provider has no open times in the next month.
+            </Text>
+          ) : (
+            <>
+              <Text className="text-sm font-bold text-ink mb-2">Time</Text>
+              <View className="flex-row flex-wrap gap-2 mb-8">
+                {listedHourOptions.map((hour) => {
+                  const booked = selectedDay
+                    ? hourIsBooked(selectedDay, hour, bookedSlots, durationMinutes)
+                    : false;
+                  const active = !booked && selectedHour === hour;
+                  return (
+                    <TouchableOpacity
+                      key={hour}
+                      onPress={() => {
+                        if (booked) return;
+                        setSelectedHour(hour);
+                      }}
+                      disabled={booked}
+                      activeOpacity={0.85}
+                      className={`px-4 py-2.5 rounded-2xl border min-w-[44%] ${
+                        booked
+                          ? "bg-amber-50 border-amber-400"
+                          : active
+                            ? "bg-primary-50 border-primary-600"
+                            : "bg-canvas-raised border-ink-faint"
+                      }`}
+                      style={{ opacity: booked ? 0.85 : 1 }}
+                    >
+                      <Text
+                        className={`text-sm font-semibold text-center ${
+                          booked ? "text-amber-800" : active ? "text-primary-600" : "text-ink-soft"
+                        }`}
+                      >
+                        {booked ? `${formatHour(hour)} · Booked` : formatHour(hour)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           <TouchableOpacity
             className="bg-primary-600 rounded-2xl py-4 items-center active:opacity-90"
             onPress={() => setStep(2)}
+            disabled={!selectedDay || hourOptions.length === 0}
+            style={{ opacity: !selectedDay || hourOptions.length === 0 ? 0.65 : 1 }}
             activeOpacity={0.9}
           >
             <Text className="text-white font-bold text-base">Next</Text>
@@ -551,7 +679,7 @@ export default function BookServiceScreen() {
             <View className="bg-canvas-raised border border-ink-faint rounded-2xl p-4">
               <Text className="text-ink-muted text-xs font-semibold mb-1">Date & time</Text>
               <Text className="text-ink font-semibold">
-                {formatSlotSummary(selectedDay, selectedHour)}
+                {formatSlotSummary(selectedDay?.date ?? "", selectedHour)}
               </Text>
               {notes.trim() ? (
                 <Text className="text-ink-soft text-sm mt-2" numberOfLines={3}>
@@ -564,13 +692,24 @@ export default function BookServiceScreen() {
           <Text className="text-sm font-bold text-ink mb-2">Service address</Text>
           <Text className="text-ink-muted text-xs mb-2 leading-4">
             {locating
-              ? "Detecting your current location…"
+              ? "Updating the pin…"
               : locationPermissionDenied
-                ? "Location access was denied. Type your service address below."
+                ? "Location access was denied. Tap the map or type the address."
                 : coords
-                  ? "Using your current location. Edit the address if needed."
-                  : "We'll fill this from GPS when allowed, or you can type it."}
+                  ? "Check the pin. Tap the map to move it, or use GPS again."
+                  : "Use GPS or tap the map so the provider gets the right spot."}
           </Text>
+          <LocationPreviewMap
+            title="Service location"
+            description="Auto-detect, or tap the map to drop a pin."
+            latitude={coords?.latitude}
+            longitude={coords?.longitude}
+            markers={coords ? [{ ...coords, id: "booking" }] : undefined}
+            isLoading={locating}
+            emptyMessage="Use GPS or tap the map to choose where the service should happen."
+            onSelectCoordinate={(next) => void applyMapTap(next)}
+            recenterKey={mapEpoch}
+          />
           <TextInput
             className="bg-canvas-raised border border-ink-faint rounded-2xl px-4 py-3 text-ink text-base mb-3 min-h-[88px]"
             placeholder="Street, apartment, city, ZIP"

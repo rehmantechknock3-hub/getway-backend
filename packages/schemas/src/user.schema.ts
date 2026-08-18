@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { isValidStoredPhone } from "./phone";
+import { ProviderAvailabilityDaySchema } from "./provider.schema";
+
 export const UserRole = z.enum(["CUSTOMER", "PROVIDER", "ADMIN"]);
 export type UserRole = z.infer<typeof UserRole>;
 
@@ -98,17 +101,14 @@ export function safeParseProviderOnboardingJson(raw: unknown) {
   return ProviderOnboardingSchema.safeParse(raw);
 }
 
-/** Required phone for profile updates / first onboarding. Own profile + admin only. */
+/** Required phone for profile updates / first onboarding. Own profile + admin only. E.164. */
 export const PhoneNumberSchema = z
   .string()
   .trim()
   .min(1, "Phone number is required")
   .max(20)
-  .refine((value) => /^\+?\d+$/.test(value), {
-    message: "Phone must contain only + and digits",
-  })
-  .refine((value) => value.replace(/\D/g, "").length >= 6, {
-    message: "Phone must include at least 6 digits",
+  .refine((value) => isValidStoredPhone(value), {
+    message: "Enter a valid international phone number",
   });
 
 export const UserSchema = z.object({
@@ -132,6 +132,7 @@ export const UserSchema = z.object({
     totalReviews: z.number().int().min(0),
     isOnline: z.boolean(),
     verificationStatus: z.enum(["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED"]),
+    availabilityDays: z.array(ProviderAvailabilityDaySchema).optional(),
   }).optional(),
   createdAt:   z.coerce.date(),
   updatedAt:   z.coerce.date(),

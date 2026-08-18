@@ -60,8 +60,12 @@ function statusLabel(status: string): string {
 export default function ProviderBookingDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const bookingId = typeof id === "string" ? id : "";
+  const { bookingId: bookingIdParam } = useLocalSearchParams<{
+    bookingId: string | string[];
+  }>();
+  const bookingId = Array.isArray(bookingIdParam)
+    ? (bookingIdParam[bookingIdParam.length - 1] ?? "")
+    : (bookingIdParam ?? "");
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const getTokenRef = useRef(getToken);

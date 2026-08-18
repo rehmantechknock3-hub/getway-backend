@@ -21,7 +21,7 @@ import type {
   Review as ReviewDto,
   UpdateBookingStatusInput,
 } from "@repo/schemas";
-import { CustomerOnboardingSchema } from "@repo/schemas";
+import { CustomerOnboardingSchema, bookingsOverlap, scheduledAtAllowed } from "@repo/schemas";
 
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../prisma/prisma.service";
@@ -139,6 +139,31 @@ export class BookingsService {
     return fallback;
   }
 
+  private async assertNoBookingOverlap(
+    providerId: string,
+    scheduledAt: Date,
+    durationMinutes: number
+  ): Promise<void> {
+    const windowMs = Math.max(durationMinutes, 24 * 60) * 60_000;
+    const nearby = await this.prisma.booking.findMany({
+      where: {
+        providerId,
+        status: { in: ["PENDING", "ACCEPTED", "IN_PROGRESS"] },
+        scheduledAt: {
+          gte: new Date(scheduledAt.getTime() - windowMs),
+          lte: new Date(scheduledAt.getTime() + windowMs),
+        },
+      },
+      select: { scheduledAt: true, service: { select: { duration: true } } },
+    });
+    const taken = nearby.some((row) =>
+      bookingsOverlap(scheduledAt, durationMinutes, row.scheduledAt, row.service.duration)
+    );
+    if (taken) {
+      throw new ConflictException("That time is already booked");
+    }
+  }
+
   private allowedProviderNextStatuses(
     current: BookingDto["status"]
   ): BookingDto["status"][] {
@@ -226,6 +251,7 @@ export class BookingsService {
       latitude: number | null;
       longitude: number | null;
     };
+    service: { title: string };
     review: {
       id: string;
       bookingId: string;
@@ -240,6 +266,7 @@ export class BookingsService {
         providerLatitude: row.provider.latitude,
         providerLongitude: row.provider.longitude,
       }),
+      serviceTitle: row.service.title,
       review: row.review ? this.reviewToDto(row.review) : null,
     };
   }
@@ -259,7 +286,8 @@ export class BookingsService {
         price: true,
         priceCurrency: true,
         title: true,
-        provider: { select: { isOnline: true, verificationStatus: true } },
+        duration: true,
+        provider: { select: { isOnline: true, verificationStatus: true, availabilityDays: true } },
       },
     });
     if (!service) {
@@ -276,6 +304,11 @@ export class BookingsService {
       input.scheduledAt instanceof Date
         ? input.scheduledAt
         : new Date(input.scheduledAt);
+    const availabilityError = scheduledAtAllowed(scheduledAt, service.provider.availabilityDays);
+    if (availabilityError) {
+      throw new BadRequestException(availabilityError);
+    }
+    await this.assertNoBookingOverlap(service.providerId, scheduledAt, service.duration);
     const serviceLocation = this.resolveCustomerBookingLocation(user, {
       address: input.address,
       latitude: input.latitude,
@@ -336,6 +369,7 @@ export class BookingsService {
         providerId: true,
         price: true,
         priceCurrency: true,
+        duration: true,
         provider: { select: { isOnline: true, verificationStatus: true } },
       },
     });
@@ -353,6 +387,7 @@ export class BookingsService {
       input.scheduledAt instanceof Date
         ? input.scheduledAt
         : new Date(input.scheduledAt);
+    await this.assertNoBookingOverlap(service.providerId, scheduledAt, service.duration);
     const serviceLocation = this.resolveCustomerBookingLocation(user, {
       address: input.address,
       latitude: input.latitude,
@@ -459,7 +494,11 @@ export class BookingsService {
         orderBy: { createdAt: "desc" },
         skip,
         take: safeLimit,
-        include: { review: true, provider: { select: { latitude: true, longitude: true } } },
+        include: {
+          review: true,
+          provider: { select: { latitude: true, longitude: true } },
+          service: { select: { title: true } },
+        },
       }),
       this.prisma.booking.count({ where: { customerId: user.id } }),
     ]);
@@ -481,7 +520,11 @@ export class BookingsService {
 
     const row = await this.prisma.booking.findFirst({
       where: { id, customerId: user.id },
-      include: { review: true, provider: { select: { latitude: true, longitude: true } } },
+      include: {
+        review: true,
+        provider: { select: { latitude: true, longitude: true } },
+        service: { select: { title: true } },
+      },
     });
     if (!row) throw new NotFoundException("Booking not found");
 

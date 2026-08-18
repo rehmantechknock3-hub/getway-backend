@@ -28,7 +28,7 @@ export default function ProviderLayout() {
         }}
       />
       <Stack.Screen
-        name="booking/[id]"
+        name="booking/[bookingId]"
         options={{
           ...lightHeader,
           title: "Job",

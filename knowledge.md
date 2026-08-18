@@ -131,13 +131,14 @@ marketplace/
 | POST | `/api/v1/auth/webhook` | Public | Clerk webhook → user upsert | M1 |
 | GET | `/api/v1/users/me` | Any | Get current user profile | M1 |
 | PATCH | `/api/v1/users/me` | Any | Update current user profile | M1 |
+| PUT | `/api/v1/users/me/provider/availability` | PROVIDER | Save rolling 30-day calendar | M3 |
 | POST | `/api/v1/uploads/verification-doc` | PROVIDER | Upload ID document to S3 | M1 |
 | POST | `/api/v1/uploads/provider-photo` | PROVIDER | Upload service/profile photo | M1 |
 | GET | `/api/v1/providers` | CUSTOMER | List/search nearby providers | M2 |
-| GET | `/api/v1/providers/:id` | Any | Get provider profile + services | M2 |
-| POST | `/api/v1/bookings` | CUSTOMER | Create a booking | M2 |
-| GET | `/api/v1/bookings` | Any | List user's bookings | M2 |
-| GET | `/api/v1/bookings/:id` | Any | Get booking detail | M2 |
+| GET | `/api/v1/providers/:id` | Any | Get provider profile + services + 30-day calendar | M2 |
+| POST | `/api/v1/bookings` | CUSTOMER | Create a booking (max 30 days ahead, calendar days only) | M2 |
+| GET | `/api/v1/bookings` | CUSTOMER | List customer bookings (includes `serviceTitle`) | M2 |
+| GET | `/api/v1/bookings/:id` | CUSTOMER | Get booking detail (includes `serviceTitle`) | M2 |
 | PATCH | `/api/v1/bookings/:id/status` | Any | Update booking status | M2 |
 | POST | `/api/v1/favorites` | CUSTOMER | Add favorite provider | M2 |
 | GET | `/api/v1/favorites` | CUSTOMER | List favorite providers | M2 |

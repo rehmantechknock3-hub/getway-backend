@@ -1,13 +1,15 @@
 import { Module } from "@nestjs/common";
-import { ClerkAuthGuard }    from "./clerk.guard";
-import { RolesGuard }        from "./roles.guard";
+
+import { AuthController } from "./auth.controller";
+import { ClerkAuthGuard } from "./clerk.guard";
+import { HealthController } from "./health.controller";
+import { RolesGuard } from "./roles.guard";
 import { WebhookController } from "./webhook.controller";
-import { AuthController }    from "./auth.controller";
-import { UsersModule }       from "../users/users.module";
+import { UsersModule } from "../users/users.module";
 
 @Module({
   imports:     [UsersModule],
-  controllers: [WebhookController, AuthController],
+  controllers: [WebhookController, AuthController, HealthController],
   providers:   [ClerkAuthGuard, RolesGuard],
   exports:     [ClerkAuthGuard, RolesGuard],
 })

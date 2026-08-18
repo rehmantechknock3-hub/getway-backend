@@ -105,11 +105,171 @@ export const ProviderPublicSummarySchema = z.object({
   serviceSearchText: z.string().optional(),
 });
 
+/** Rolling booking window from the provider's current day. */
+export const PROVIDER_AVAILABILITY_WINDOW_DAYS = 30;
+
+export const ProviderAvailabilityDaySchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    enabled: z.boolean(),
+    startHour: z.number().int().min(0).max(23),
+    endHour: z.number().int().min(0).max(23),
+  })
+  .refine((day) => day.endHour >= day.startHour, {
+    message: "End hour must be at or after start hour",
+  });
+
+export const UpdateProviderAvailabilitySchema = z.object({
+  days: z
+    .array(ProviderAvailabilityDaySchema)
+    .min(1)
+    .max(PROVIDER_AVAILABILITY_WINDOW_DAYS + 1)
+    .refine((days) => new Set(days.map((day) => day.date)).size === days.length, {
+      message: "Availability days must be unique",
+    }),
+});
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+export function civilDateKeyFromLocal(date: Date): string {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+export function civilDateKeyFromUtc(date: Date): string {
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+}
+
+export function parseCivilDateKey(dateKey: string): { year: number; month: number; day: number } {
+  return {
+    year: Number(dateKey.slice(0, 4)),
+    month: Number(dateKey.slice(5, 7)),
+    day: Number(dateKey.slice(8, 10)),
+  };
+}
+
+export function addCivilDays(dateKey: string, days: number): string {
+  const { year, month, day } = parseCivilDateKey(dateKey);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return civilDateKeyFromUtc(next);
+}
+
+export function rollingCivilDateKeys(
+  todayKey: string,
+  count = PROVIDER_AVAILABILITY_WINDOW_DAYS
+): string[] {
+  return Array.from({ length: count }, (_, index) => addCivilDays(todayKey, index));
+}
+
+export function defaultAvailabilityDay(dateKey: string): ProviderAvailabilityDay {
+  return { date: dateKey, enabled: false, startHour: 9, endHour: 18 };
+}
+
+export function lockedAvailabilityDates(stored: unknown): Set<string> {
+  return new Set(
+    parseAvailabilityDays(stored)
+      .filter((day) => day.enabled)
+      .map((day) => day.date)
+  );
+}
+
+/** Saved open days stay as stored; the provider can only add new open days. */
+export function reconcileProviderAvailability(
+  stored: unknown,
+  incoming: ProviderAvailabilityDay[]
+): ProviderAvailabilityDay[] {
+  const storedByDate = new Map(parseAvailabilityDays(stored).map((day) => [day.date, day]));
+  return incoming.map((day) => {
+    const prev = storedByDate.get(day.date);
+    if (prev?.enabled) return prev;
+    return day;
+  });
+}
+
+export const ProviderBookedSlotSchema = z.object({
+  scheduledAt: z.coerce.date(),
+  durationMinutes: z.number().int().positive(),
+});
+
+export function bookingsOverlap(
+  aStart: Date,
+  aMinutes: number,
+  bStart: Date,
+  bMinutes: number
+): boolean {
+  const aEnd = aStart.getTime() + Math.max(1, aMinutes) * 60_000;
+  const bEnd = bStart.getTime() + Math.max(1, bMinutes) * 60_000;
+  return aStart.getTime() < bEnd && bStart.getTime() < aEnd;
+}
+
+export function hourOverlapsBookedSlot(
+  dateKey: string,
+  hour: number,
+  slot: { scheduledAt: Date | string; durationMinutes: number },
+  slotMinutes = 60
+): boolean {
+  const { year, month, day } = parseCivilDateKey(dateKey);
+  const hourStart = new Date(year, month - 1, day, hour, 0, 0, 0);
+  return bookingsOverlap(hourStart, slotMinutes, new Date(slot.scheduledAt), slot.durationMinutes);
+}
+
+export function parseAvailabilityDays(raw: unknown): ProviderAvailabilityDay[] {
+  const parsed = z.array(ProviderAvailabilityDaySchema).safeParse(raw);
+  return parsed.success ? parsed.data : [];
+}
+
+export function mergeRollingAvailability(
+  todayKey: string,
+  stored: unknown
+): ProviderAvailabilityDay[] {
+  const byDate = new Map(parseAvailabilityDays(stored).map((day) => [day.date, day]));
+  return rollingCivilDateKeys(todayKey).map((dateKey) => byDate.get(dateKey) ?? defaultAvailabilityDay(dateKey));
+}
+
+export function instantFitsAvailabilityDay(
+  scheduledAt: Date,
+  day: ProviderAvailabilityDay
+): boolean {
+  if (!day.enabled) return false;
+  for (let offset = -12; offset <= 14; offset++) {
+    const shifted = new Date(scheduledAt.getTime() + offset * 3_600_000);
+    if (civilDateKeyFromUtc(shifted) !== day.date) continue;
+    const hour = shifted.getUTCHours();
+    if (hour >= day.startHour && hour <= day.endHour) return true;
+  }
+  return false;
+}
+
+export function scheduledAtAllowed(
+  scheduledAt: Date,
+  storedAvailability: unknown,
+  now = new Date()
+): string | null {
+  if (Number.isNaN(scheduledAt.getTime())) return "Invalid booking time";
+  if (scheduledAt.getTime() < now.getTime() - 60_000) {
+    return "Choose a future date and time";
+  }
+  const maxMs = now.getTime() + PROVIDER_AVAILABILITY_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  if (scheduledAt.getTime() > maxMs) {
+    return "Bookings can be scheduled up to 30 days ahead";
+  }
+  const days = mergeRollingAvailability(civilDateKeyFromUtc(now), storedAvailability);
+  if (!days.some((day) => instantFitsAvailabilityDay(scheduledAt, day))) {
+    return "That time is outside the provider's calendar";
+  }
+  return null;
+}
+
 /** Full public provider profile for customer detail view. */
 export const ProviderPublicDetailSchema = ProviderPublicSummarySchema.extend({
   bio: z.string().optional(),
   experienceYears: z.number().int().min(0).max(60).optional(),
   hasTools: z.boolean().optional(),
+  /** Stored rolling-month days; clients merge with local today. */
+  availabilityDays: z.array(ProviderAvailabilityDaySchema).optional(),
+  /** Occupied times for this provider. No customer identity. */
+  bookedSlots: z.array(ProviderBookedSlotSchema).optional(),
 });
 
 /** Service row returned with category label for customers. */
@@ -144,3 +304,6 @@ export type UpdateServiceInput       = z.infer<typeof UpdateServiceSchema>;
 export type ProviderPublicSummary      = z.infer<typeof ProviderPublicSummarySchema>;
 export type ProviderPublicDetail       = z.infer<typeof ProviderPublicDetailSchema>;
 export type ProviderServiceOffer       = z.infer<typeof ProviderServiceOfferSchema>;
+export type ProviderAvailabilityDay    = z.infer<typeof ProviderAvailabilityDaySchema>;
+export type ProviderBookedSlot         = z.infer<typeof ProviderBookedSlotSchema>;
+export type UpdateProviderAvailabilityInput = z.infer<typeof UpdateProviderAvailabilitySchema>;

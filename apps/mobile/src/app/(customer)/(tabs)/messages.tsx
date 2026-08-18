@@ -8,81 +8,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { messageKeys, useConversations, useMe } from "@repo/api-client";
-import type { ConversationListItem } from "@repo/schemas";
 import { reportError } from "@repo/utils";
 
-import { ChatAvatar } from "../../../components/ChatAvatar";
+import { ConversationCard } from "../../../components/ConversationCard";
 import { appColors } from "../../../styles/colors";
-
-function timeAgo(date: Date | string | undefined): string {
-  if (!date) return "";
-  const d = date instanceof Date ? date : new Date(date);
-  const diffMs = Date.now() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return "Just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH}h ago`;
-  return `${Math.floor(diffH / 24)}d ago`;
-}
-
-function ConversationRow({
-  item,
-  myUserId,
-  onPress,
-}: {
-  item: ConversationListItem;
-  myUserId: string;
-  onPress: () => void;
-}) {
-  const name = `${item.otherPartyFirstName} ${item.otherPartyLastName}`.trim();
-  const isMine = item.lastMessageSenderId === myUserId;
-  const preview = item.lastMessageContent
-    ? `${isMine ? "You: " : ""}${item.lastMessageContent}`
-    : "No messages yet";
-
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      className="flex-row items-center px-5 py-4 border-b border-ink-faint bg-canvas"
-      accessibilityRole="button"
-      accessibilityLabel={`Open conversation with ${name}`}
-    >
-      <View className="mr-3">
-        <ChatAvatar
-          uri={item.otherPartyAvatarUrl}
-          name={name || item.otherPartyFirstName}
-          size="lg"
-        />
-      </View>
-      <View className="flex-1 min-w-0">
-        <View className="flex-row items-center justify-between mb-0.5">
-          <Text
-            className="text-ink font-semibold text-sm flex-1 mr-2"
-            numberOfLines={1}
-          >
-            {name}
-          </Text>
-          <Text className="text-ink-muted text-xs flex-shrink-0">
-            {timeAgo(item.lastMessageAt)}
-          </Text>
-        </View>
-        <View className="flex-row items-center justify-between">
-          <Text className="text-ink-soft text-sm flex-1 mr-2" numberOfLines={1}>
-            {preview}
-          </Text>
-          {item.unreadCount > 0 ? (
-            <View className="bg-primary-600 rounded-full min-w-[20px] h-5 items-center justify-center px-1">
-              <Text className="text-white text-xs font-bold">
-                {item.unreadCount > 99 ? "99+" : item.unreadCount}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 export default function CustomerMessagesScreen() {
   const insets = useSafeAreaInsets();
@@ -107,10 +36,11 @@ export default function CustomerMessagesScreen() {
 
   return (
     <View className="flex-1 bg-canvas" style={{ paddingTop: insets.top }}>
-      <View className="px-5 pb-3 pt-2">
+      <View className="px-5 pb-4 pt-2">
         <Text className="text-2xl font-bold text-ink" style={{ letterSpacing: -0.5 }}>
           Messages
         </Text>
+        <Text className="mt-1 text-sm text-ink-muted">Chats with your providers</Text>
       </View>
 
       {!enabled || isLoading ? (
@@ -120,24 +50,24 @@ export default function CustomerMessagesScreen() {
       ) : isError ? (
         <View className="flex-1 items-center justify-center px-6">
           <Ionicons name="alert-circle-outline" size={40} color={appColors.semantic.destructive} />
-          <Text className="text-ink-soft text-center mt-3">
+          <Text className="mt-3 text-center text-ink-soft">
             Could not load conversations. Pull down to retry.
           </Text>
           <TouchableOpacity
             onPress={() => void refetch()}
-            className="mt-4 bg-primary-600 rounded-2xl px-5 py-2.5"
+            className="mt-4 rounded-2xl bg-primary-600 px-5 py-2.5"
             accessibilityRole="button"
           >
-            <Text className="text-white font-semibold text-sm">Retry</Text>
+            <Text className="text-sm font-semibold text-white">Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (data?.length ?? 0) === 0 ? (
         <View className="flex-1 items-center justify-center px-6">
-          <View className="w-16 h-16 rounded-2xl bg-primary-50 items-center justify-center mb-1">
+          <View className="mb-1 h-16 w-16 items-center justify-center rounded-2xl bg-primary-50">
             <Ionicons name="chatbubbles-outline" size={32} color={appColors.primary[600]} />
           </View>
-          <Text className="text-ink font-semibold text-base mt-4">No messages yet</Text>
-          <Text className="text-ink-muted text-sm text-center mt-2 leading-5">
+          <Text className="mt-4 text-base font-semibold text-ink">No messages yet</Text>
+          <Text className="mt-2 text-center text-sm leading-5 text-ink-muted">
             When you book a service, you can message the provider directly from the booking.
           </Text>
         </View>
@@ -146,7 +76,7 @@ export default function CustomerMessagesScreen() {
           data={data}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <ConversationRow
+            <ConversationCard
               item={item}
               myUserId={me?.id ?? ""}
               onPress={() =>
@@ -156,7 +86,11 @@ export default function CustomerMessagesScreen() {
               }
             />
           )}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingBottom: insets.bottom + 16,
+            gap: 12,
+          }}
           showsVerticalScrollIndicator={false}
         />
       )}

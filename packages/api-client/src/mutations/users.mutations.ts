@@ -5,6 +5,7 @@ import type {
   User,
   UpdateUserProfileInput,
   CustomerOnboarding,
+  ProviderAvailabilityDay,
   ProviderOnboarding,
 } from "@repo/schemas";
 
@@ -150,6 +151,22 @@ export function useUpdateProviderPresence() {
     mutationFn: async (isOnline: boolean) => {
       const { data } = await apiClient.patch<User>("/api/v1/users/me/provider/presence", {
         isOnline,
+      });
+      return data;
+    },
+    onSuccess: (data) => {
+      refreshMeCache(queryClient, data);
+      void queryClient.invalidateQueries({ queryKey: providerKeys.all() });
+    },
+  });
+}
+
+export function useUpdateProviderAvailability() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (days: ProviderAvailabilityDay[]) => {
+      const { data } = await apiClient.put<User>("/api/v1/users/me/provider/availability", {
+        days,
       });
       return data;
     },

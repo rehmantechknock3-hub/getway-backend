@@ -131,7 +131,12 @@ function ProviderJobRow({ job, updatingId, onRunStatus }: ProviderJobRowProps) {
     <View className="bg-canvas-raised rounded-2xl border border-ink-faint overflow-hidden">
       <TouchableOpacity
         activeOpacity={0.92}
-        onPress={() => router.push(`/(provider)/booking/${job.id}`)}
+        onPress={() =>
+          router.push({
+            pathname: "/(provider)/booking/[bookingId]",
+            params: { bookingId: job.id },
+          })
+        }
         accessibilityRole="button"
         accessibilityLabel={`${job.serviceTitle}, ${customerName}. Tap to track booking status.`}
       >

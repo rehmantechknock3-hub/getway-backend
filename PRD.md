@@ -101,7 +101,7 @@ Select provider
 Select service type
 Select location
 View estimated price
-Schedule service or request immediate service
+Schedule service (up to 1 month ahead on the provider’s open days) or request immediate service
 Confirm booking
 Booking statuses:
 • requested
@@ -173,6 +173,8 @@ Providers can control availability.
 Features:
 • online / offline toggle
 • receive bookings only when online
+• set a rolling 30-day calendar from the current day (open/closed days + working hours)
+Customers can schedule a service up to one month ahead on days the provider has marked open.
 
 14. Navigation
 Providers can navigate to customer location.
@@ -369,7 +371,7 @@ Choose location
 Estimated price
 
 
-Schedule booking
+Schedule booking (up to 1 month ahead)
 
 
 Instant booking
@@ -437,6 +439,8 @@ View upcoming bookings
 Earnings summary
 Availability
 Online/offline toggle
+Rolling 30-day calendar (set once from today)
+Customers can book up to 1 month ahead
 Navigation
 View customer location
 

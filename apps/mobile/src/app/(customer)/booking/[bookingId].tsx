@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
@@ -179,8 +179,12 @@ function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
 export default function BookingDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const bookingId = typeof id === "string" ? id : "";
+  const { bookingId: bookingIdParam } = useLocalSearchParams<{
+    bookingId: string | string[];
+  }>();
+  const bookingId = Array.isArray(bookingIdParam)
+    ? (bookingIdParam[bookingIdParam.length - 1] ?? "")
+    : (bookingIdParam ?? "");
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const socketRef = useRef<Socket | null>(null);
   const getTokenRef = useRef(getToken);
@@ -324,8 +328,9 @@ export default function BookingDetailScreen() {
       }}
       showsVerticalScrollIndicator={false}
     >
+      <Stack.Screen options={{ title: booking?.serviceTitle ?? "Appointment" }} />
       <Text className="text-2xl font-bold text-ink mb-1" style={{ letterSpacing: -0.5 }}>
-        Appointment
+        {booking?.serviceTitle ?? "Appointment"}
       </Text>
       {booking ? (
         <View className="flex-row items-center gap-2 mb-6">

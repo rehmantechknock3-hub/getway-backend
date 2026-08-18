@@ -20,7 +20,7 @@ import { FileInterceptor } from "@nestjs/platform-express";
 import sharp from "sharp";
 import { z } from "zod";
 
-import { UpdateOnboardingSchema, UpdateSavedLocationsSchema, UpdateUserProfileSchema } from "@repo/schemas";
+import { UpdateOnboardingSchema, UpdateProviderAvailabilitySchema, UpdateSavedLocationsSchema, UpdateUserProfileSchema } from "@repo/schemas";
 
 import { ClerkAuthGuard } from "../auth/clerk.guard";
 import { Roles } from "../auth/roles.decorator";
@@ -100,6 +100,17 @@ export class UsersController {
     if (!parsed.success) throw new BadRequestException("Invalid provider presence payload");
 
     return this.usersService.updateProviderPresence(clerkId, parsed.data.isOnline);
+  }
+
+  @Put("me/provider/availability")
+  async updateProviderAvailability(@Req() req: Request, @Body() body: unknown) {
+    const clerkId = req.auth?.sub;
+    if (!clerkId) throw new BadRequestException("No authenticated user");
+
+    const parsed = UpdateProviderAvailabilitySchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException("Invalid availability payload");
+
+    return this.usersService.updateProviderAvailability(clerkId, parsed.data.days);
   }
 
   @Post("me/avatar/upload")
