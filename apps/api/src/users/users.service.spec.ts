@@ -89,9 +89,35 @@ describe("UsersService", () => {
     await expect(service.findById("missing")).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it("provisionIfMissing no-ops when the user already exists", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({ id: "u1" }),
+        upsert: vi.fn(),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+
+    await service.provisionIfMissing("clerk_1");
+
+    expect(prisma.user.upsert).not.toHaveBeenCalled();
+  });
+
+  it("provisionIfMissing 404s when the user is missing and Clerk is not configured", async () => {
+    const prisma = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue(null),
+      },
+    };
+    const service = new UsersService(prisma as never, { get: vi.fn() } as never);
+
+    await expect(service.provisionIfMissing("clerk_missing")).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it("updates customer profile fields", async () => {
     const prisma = {
       user: {
+        findUnique: vi.fn().mockResolvedValue({ id: "u1" }),
         update: vi.fn().mockResolvedValue({ id: "u1" }),
       },
     };
@@ -119,6 +145,7 @@ describe("UsersService", () => {
   it("updateProfile persists required phone", async () => {
     const prisma = {
       user: {
+        findUnique: vi.fn().mockResolvedValue({ id: "u1" }),
         update: vi.fn().mockResolvedValue({ id: "u1" }),
       },
     };
@@ -144,6 +171,7 @@ describe("UsersService", () => {
   it("updateProfile rejects for invalid/unauthorized user id", async () => {
     const prisma = {
       user: {
+        findUnique: vi.fn().mockResolvedValue(null),
         update: vi.fn().mockRejectedValue(new Error("Record to update not found")),
       },
     };
@@ -161,6 +189,7 @@ describe("UsersService", () => {
   it("stores saved locations as JSON payload", async () => {
     const prisma = {
       user: {
+        findUnique: vi.fn().mockResolvedValue({ id: "u1" }),
         update: vi.fn().mockResolvedValue({ id: "u1" }),
       },
     };

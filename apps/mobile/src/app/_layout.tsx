@@ -37,7 +37,8 @@ setApiBaseUrl(
   resolveApiUrlForDevice(
     process.env["EXPO_PUBLIC_API_URL"] ??
       process.env["NEXT_PUBLIC_API_URL"] ??
-      "http://127.0.0.1:3010"
+      // Release/APK builds sometimes miss Expo dotenv; never ship a localhost default.
+      (__DEV__ ? "http://127.0.0.1:3010" : "https://getway-api.onrender.com")
   )
 );
 
@@ -154,6 +155,7 @@ function RootNavigator() {
     if (
       role &&
       meQuery.isSuccess &&
+      meQuery.data &&
       !meQuery.data.onboardingCompleted
     ) {
       if (inAuthGroup && authSegment === "role-select" && allowRoleChange) {
@@ -183,7 +185,16 @@ function RootNavigator() {
         return;
       }
 
-      if (meQuery.isSuccess && !meQuery.data.onboardingCompleted) {
+      if (meQuery.isError) {
+        if (role === "PROVIDER" && authSegment !== "provider-onboarding") {
+          router.replace("/(auth)/provider-onboarding");
+        } else if (role === "CUSTOMER" && authSegment !== "customer-onboarding") {
+          router.replace("/(auth)/customer-onboarding");
+        }
+        return;
+      }
+
+      if (meQuery.isSuccess && meQuery.data && !meQuery.data.onboardingCompleted) {
         if (role === "PROVIDER" && authSegment !== "provider-onboarding") {
           router.replace("/(auth)/provider-onboarding");
         } else if (role === "CUSTOMER" && authSegment !== "customer-onboarding") {

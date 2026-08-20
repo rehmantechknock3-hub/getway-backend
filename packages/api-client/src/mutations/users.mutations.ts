@@ -69,10 +69,16 @@ export function useUpdateAvatar() {
         formData.append("file", input);
       } else {
         const uriInput = input as UploadAvatarUriInput;
+        const rawMime = uriInput.mimeType?.trim().toLowerCase() ?? "";
+        const type =
+          rawMime === "image/jpg" || rawMime === "image/pjpeg" || !rawMime.startsWith("image/")
+            ? "image/jpeg"
+            : rawMime;
+        const name = uriInput.fileName?.includes(".") ? uriInput.fileName : `avatar-${Date.now()}.jpg`;
         formData.append("file", {
           uri: uriInput.uri,
-          type: uriInput.mimeType ?? "image/jpeg",
-          name: uriInput.fileName ?? `avatar-${Date.now()}.jpg`,
+          type,
+          name,
         } as never);
       }
 

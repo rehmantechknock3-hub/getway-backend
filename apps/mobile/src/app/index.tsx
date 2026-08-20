@@ -33,7 +33,14 @@ export default function IndexScreen() {
     return <BootScreen />;
   }
 
-  if (meQuery.isSuccess && !meQuery.data.onboardingCompleted) {
+  if (meQuery.isError) {
+    if (role === "PROVIDER") {
+      return <Redirect href="/(auth)/provider-onboarding" />;
+    }
+    return <Redirect href="/(auth)/customer-onboarding" />;
+  }
+
+  if (meQuery.isSuccess && meQuery.data && !meQuery.data.onboardingCompleted) {
     if (role === "PROVIDER") {
       return <Redirect href="/(auth)/provider-onboarding" />;
     }

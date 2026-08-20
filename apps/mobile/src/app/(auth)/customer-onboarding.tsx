@@ -16,9 +16,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 
 import {
   apiClient,
+  getApiBaseUrl,
   setAuthToken,
   useSubmitCustomerOnboarding,
   useUpdateAvatar,
@@ -158,6 +160,23 @@ export default function CustomerOnboardingScreen() {
     }
     if (isSubmitting) return;
 
+    const formatStepError = (step: string, error: unknown): string => {
+      if (isAxiosError(error)) {
+        const base = getApiBaseUrl() || "(no API URL)";
+        if (!error.response) {
+          return `${step} failed: network error talking to ${base}. Keep USB plugged in and retry.`;
+        }
+        const serverMessage =
+          typeof error.response.data === "object" &&
+          error.response.data != null &&
+          "message" in error.response.data
+            ? String((error.response.data as { message?: unknown }).message ?? error.message)
+            : error.message;
+        return `${step} failed (${error.response.status}): ${serverMessage}`;
+      }
+      return error instanceof Error ? error.message : `${step} failed`;
+    };
+
     setIsSubmitting(true);
     try {
       const token = await getToken({ skipCache: true });
@@ -165,11 +184,15 @@ export default function CustomerOnboardingScreen() {
         throw new Error("Your session expired. Please sign in again.");
       }
       setAuthToken(token);
-      await apiClient.post(
-        "/api/v1/auth/set-role",
-        { role: "CUSTOMER" },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      try {
+        await apiClient.post(
+          "/api/v1/auth/set-role",
+          { role: "CUSTOMER" },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Set role", error));
+      }
       await clerk.session?.reload();
       const refreshedToken = await getToken({ skipCache: true });
       if (!refreshedToken) {
@@ -177,25 +200,37 @@ export default function CustomerOnboardingScreen() {
       }
       setAuthToken(refreshedToken);
 
-      await updateProfile.mutateAsync({
-        firstName,
-        lastName,
-        phone: trimmedPhone,
-      });
-      if (localPhoto) {
-        await uploadAvatar.mutateAsync({
-          uri: localPhoto.uri,
-          mimeType: localPhoto.mimeType,
-          fileName: localPhoto.fileName,
+      try {
+        await updateProfile.mutateAsync({
+          firstName,
+          lastName,
+          phone: trimmedPhone,
         });
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Save profile", error));
+      }
+      if (localPhoto) {
+        try {
+          await uploadAvatar.mutateAsync({
+            uri: localPhoto.uri,
+            mimeType: localPhoto.mimeType,
+            fileName: localPhoto.fileName,
+          });
+        } catch (error: unknown) {
+          throw new Error(formatStepError("Photo upload", error));
+        }
       }
 
-      await submitOnboarding.mutateAsync({
-        primaryLocation: primaryLocation.trim(),
-        carCompany: carCompany.trim(),
-        carModel: carModel.trim(),
-        notes: notes.trim() ? notes.trim() : undefined,
-      });
+      try {
+        await submitOnboarding.mutateAsync({
+          primaryLocation: primaryLocation.trim(),
+          carCompany: carCompany.trim(),
+          carModel: carModel.trim(),
+          notes: notes.trim() ? notes.trim() : undefined,
+        });
+      } catch (error: unknown) {
+        throw new Error(formatStepError("Save onboarding", error));
+      }
       await queryClient.refetchQueries({ queryKey: userKeys.me() });
       router.replace("/(customer)/(tabs)/home");
     } catch (error: unknown) {

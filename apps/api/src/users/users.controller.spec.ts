@@ -169,6 +169,20 @@ describe("UsersController", () => {
     expect(service.updateProviderAvailability).toHaveBeenCalledWith("clerk_provider", days);
   });
 
+  it("findMe provisions a missing user then returns /me", async () => {
+    const service = {
+      syncRoleFromClerkSession: vi.fn().mockResolvedValue(undefined),
+      provisionIfMissing: vi.fn().mockResolvedValue(undefined),
+      findByClerkId: vi.fn().mockResolvedValue({ id: "u1", role: "CUSTOMER" }),
+    };
+    const controller = new UsersController(service as never);
+
+    const out = await controller.findMe({ auth: { sub: "clerk_1" } } as never);
+
+    expect(service.provisionIfMissing).toHaveBeenCalledWith("clerk_1");
+    expect(out).toEqual({ id: "u1", role: "CUSTOMER" });
+  });
+
   it("findOne hides phone from non-admin callers", async () => {
     const service = {
       findByClerkId: vi.fn().mockResolvedValue({ id: "me", role: "CUSTOMER" }),
