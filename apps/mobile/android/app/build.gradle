@@ -11,6 +11,9 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
+    // Gradle root is apps/mobile/android. Metro must bundle from apps/mobile, not the
+    // pnpm workspace root (D:\Getway), or export:embed looks for D:\Getway\index.js.
+    root = new File(projectRoot)
     // Local entry under apps/mobile — avoids Metro relativizing into deep pnpm paths.
     entryFile = new File(projectRoot, "index.js")
     // Windows MAX_PATH: use short copy (repo/nm/rn) instead of deep pnpm path.
@@ -26,6 +29,7 @@ react {
     // works correctly with Expo projects.
     cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, rootDir).text.trim())
     bundleCommand = "export:embed"
+    extraPackagerArgs = ["--entry-file", new File(projectRoot, "index.js").absolutePath]
 
     /* Folders */
      //   The root of your project, i.e. where "package.json" lives. Default is '../..'

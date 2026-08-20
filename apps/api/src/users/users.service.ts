@@ -4,8 +4,11 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from "@nestjs/common";
-import type { Prisma } from "@prisma/client";
+import { ConfigService } from "@nestjs/config";
+import { createClerkClient } from "@clerk/backend";
+import { Prisma } from "@prisma/client";
 import type {
   CustomerOnboarding,
   ProviderAvailabilityDay,
@@ -49,8 +52,41 @@ export class UsersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly googleMaps: GoogleMapsService
+    private readonly googleMaps: GoogleMapsService,
+    @Optional() private readonly configService?: ConfigService
   ) {}
+
+  /**
+   * Render (and any env without a working Clerk webhook) has Clerk users with no Postgres row.
+   * Profile/onboarding `update` then 404s. Create the row from Clerk before writing.
+   */
+  async provisionIfMissing(clerkId: string): Promise<void> {
+    const existing = await this.prisma.user.findUnique({
+      where: { clerkId },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const secretKey = this.configService?.get<string>("CLERK_SECRET_KEY");
+    if (!secretKey) {
+      throw new NotFoundException("User not found");
+    }
+
+    const clerk = createClerkClient({ secretKey });
+    const clerkUser = await clerk.users.getUser(clerkId);
+    await this.upsertFromClerk({
+      id: clerkUser.id,
+      primary_email_address_id: clerkUser.primaryEmailAddressId,
+      email_addresses: clerkUser.emailAddresses.map((e) => ({
+        id: e.id,
+        email_address: e.emailAddress,
+      })),
+      first_name: clerkUser.firstName,
+      last_name: clerkUser.lastName,
+      image_url: clerkUser.imageUrl,
+      public_metadata: clerkUser.publicMetadata as { role?: string },
+    });
+  }
 
   private async geocodeProviderLocations(
     locations: Array<{
@@ -381,6 +417,7 @@ export class UsersService {
   }
 
   async updateProfile(clerkId: string, input: UpdateUserProfileInput) {
+    await this.provisionIfMissing(clerkId);
     await this.prisma.user.update({
       where: { clerkId },
       data: {
@@ -407,6 +444,7 @@ export class UsersService {
   }
 
   async updateAvatar(clerkId: string, avatarUrl: string) {
+    await this.provisionIfMissing(clerkId);
     await this.prisma.user.update({
       where: { clerkId },
       data: { avatarUrl },
@@ -428,6 +466,7 @@ export class UsersService {
   }
 
   async updateCustomerOnboarding(clerkId: string, data: CustomerOnboarding, requestId?: string) {
+    await this.provisionIfMissing(clerkId);
     await this.requirePhoneForFirstOnboarding(clerkId);
     const existing = await this.prisma.user.findUnique({
       where: { clerkId },
@@ -478,6 +517,7 @@ export class UsersService {
   }
 
   async updateProviderOnboarding(clerkId: string, data: ProviderOnboarding, requestId?: string) {
+    await this.provisionIfMissing(clerkId);
     await this.requirePhoneForFirstOnboarding(clerkId);
     const geocodedLocations = await this.geocodeProviderLocations(
       data.shopLocations.map((location) => ({

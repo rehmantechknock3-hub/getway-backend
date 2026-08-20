@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -33,7 +34,14 @@ const UpdateProviderPresenceSchema = z.object({
   isOnline: z.boolean(),
 });
 
-const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 
 @UseGuards(ClerkAuthGuard)
@@ -46,7 +54,10 @@ export class UsersController {
     const clerkId = req.auth?.sub;
     if (!clerkId) throw new BadRequestException("No authenticated user");
     await this.usersService.syncRoleFromClerkSession(clerkId, req.auth);
-    return this.usersService.findByClerkId(clerkId);
+    await this.usersService.provisionIfMissing(clerkId);
+    const user = await this.usersService.findByClerkId(clerkId);
+    if (!user) throw new NotFoundException("User not found");
+    return user;
   }
 
   @Post("me/provider/ensure-listing")

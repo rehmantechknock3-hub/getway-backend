@@ -18,8 +18,8 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "We need your location to show nearby service providers.",
         "NSLocationAlwaysUsageDescription": "We need your location to track service providers during a booking.",
-        "NSPhotoLibraryUsageDescription": "Allow WayNow to access your photos so you can upload a provider profile picture.",
-        "NSCameraUsageDescription": "Allow WayNow to use your camera so you can take a provider profile picture.",
+        "NSPhotoLibraryUsageDescription": "Allow WayNow to access your photos so you can set a profile picture.",
+        "NSCameraUsageDescription": "Allow WayNow to use your camera so you can take a profile picture.",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         }
@@ -36,9 +36,7 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_MEDIA_IMAGES",
-        "READ_EXTERNAL_STORAGE"
+        "CAMERA"
       ]
     },
     "plugins": [
@@ -53,8 +51,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow WayNow to access your photos so you can upload a provider profile picture.",
-          "cameraPermission": "Allow WayNow to use your camera so you can take a provider profile picture."
+          "photosPermission": "Allow WayNow to access your photos so you can set a profile picture.",
+          "cameraPermission": "Allow WayNow to use your camera so you can take a profile picture."
         }
       ],
       [
