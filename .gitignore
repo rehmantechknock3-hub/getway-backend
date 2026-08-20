@@ -15,7 +15,6 @@ out
 
 
 # Environment variables (never commit secrets)
-.env
 .env.development.local
 .env.test.local
 .env.production.local
