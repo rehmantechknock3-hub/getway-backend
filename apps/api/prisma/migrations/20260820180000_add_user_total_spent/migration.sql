@@ -1,0 +1,7 @@
+-- AlterTable
+DO $$
+BEGIN
+  ALTER TABLE "users" ADD COLUMN "totalSpent" DOUBLE PRECISION NOT NULL DEFAULT 0;
+EXCEPTION
+  WHEN duplicate_column THEN NULL;
+END $$;

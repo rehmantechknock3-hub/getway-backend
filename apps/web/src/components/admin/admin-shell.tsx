@@ -8,7 +8,14 @@ import { AdminAccountBox } from "./admin-account-box";
 import { AdminApiAuthBridge } from "./admin-api-auth-bridge";
 import { AdminSignOutButton } from "./admin-sign-out-button";
 
-const NAV = [
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  exact?: boolean;
+};
+
+const NAV: NavItem[] = [
   { href: "/dashboard", label: "Overview", exact: true, icon: "◈" },
   { href: "/dashboard/bookings", label: "Bookings", icon: "◎" },
   { href: "/dashboard/messages", label: "Messages", icon: "✉" },
@@ -16,7 +23,7 @@ const NAV = [
   { href: "/dashboard/providers", label: "Providers", icon: "◇" },
   { href: "/dashboard/services", label: "Services", icon: "⬡" },
   { href: "/dashboard/payments", label: "Payments", icon: "✦" },
-] as const;
+];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
