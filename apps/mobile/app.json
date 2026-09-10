@@ -62,7 +62,15 @@
           "color": "#8B5CF6"
         }
       ],
-      "@clerk/expo"
+      "@clerk/expo",
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.marketplace.app",
+          "enableGooglePay": false
+        }
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
