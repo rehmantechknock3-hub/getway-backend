@@ -1,0 +1,22 @@
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/.turbo
+**/coverage
+.git
+.env
+.env.*
+!apps/api/.env.example
+!apps/web/.env.example
+!apps/mobile/.env.example
+deploy/.env.deploy
+deploy/.env.deploy.example
+deploy/state.env
+
+# Mobile app isn't part of either server image — keep the heavy native folders
+# out of the build context, but leave package.json so pnpm workspace resolution
+# still works (pnpm-workspace.yaml expects every apps/* member to be present).
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/.expo
