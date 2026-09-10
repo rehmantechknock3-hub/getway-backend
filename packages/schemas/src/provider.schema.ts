@@ -16,6 +16,10 @@ export const ProviderProfileSchema = z.object({
   totalEarnings:      z.number().default(0),
   latitude:           z.number().optional(),
   longitude:          z.number().optional(),
+  /** Stripe Connect status — server-derived from webhooks, never client-writable. */
+  stripeChargesEnabled:   z.boolean().default(false),
+  stripePayoutsEnabled:   z.boolean().default(false),
+  stripeDetailsSubmitted: z.boolean().default(false),
   createdAt:          z.coerce.date(),
   updatedAt:          z.coerce.date(),
 });
@@ -26,6 +30,17 @@ export const UpdateProviderProfileSchema = ProviderProfileSchema.pick({
   latitude: true,
   longitude: true,
 }).partial();
+
+/** Provider's Stripe Connect onboarding status, surfaced on the earnings screen. */
+export const StripeConnectStatusSchema = z.object({
+  chargesEnabled:   z.boolean(),
+  payoutsEnabled:   z.boolean(),
+  detailsSubmitted: z.boolean(),
+});
+
+export const StripeConnectOnboardingLinkSchema = z.object({
+  url: z.string().url(),
+});
 
 export const ServiceCategorySchema = z.object({
   id:          z.string().uuid(),
@@ -295,6 +310,8 @@ export const UpdateServiceSchema = CreateServiceSchema.partial().extend({
 
 export type ProviderProfile            = z.infer<typeof ProviderProfileSchema>;
 export type UpdateProviderProfileInput = z.infer<typeof UpdateProviderProfileSchema>;
+export type StripeConnectStatus         = z.infer<typeof StripeConnectStatusSchema>;
+export type StripeConnectOnboardingLink = z.infer<typeof StripeConnectOnboardingLinkSchema>;
 export type ServiceCategory            = z.infer<typeof ServiceCategorySchema>;
 export type CreateServiceCategoryInput = z.infer<typeof CreateServiceCategorySchema>;
 export type Service                    = z.infer<typeof ServiceSchema>;

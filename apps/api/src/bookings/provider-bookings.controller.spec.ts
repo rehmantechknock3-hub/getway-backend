@@ -54,12 +54,15 @@ describe("ProviderBookingsController", () => {
     };
     const controller = new ProviderBookingsController(bookingsService as never);
 
-    const req = { auth: { sub: "clerk_prov" } } as never;
+    const req = { auth: { sub: "clerk_prov" }, requestId: "rid-1" } as never;
     const result = await controller.patchStatus(req, "booking-uuid", { status: "ACCEPTED" });
 
-    expect(bookingsService.updateStatusForProvider).toHaveBeenCalledWith("clerk_prov", "booking-uuid", {
-      status: "ACCEPTED",
-    });
+    expect(bookingsService.updateStatusForProvider).toHaveBeenCalledWith(
+      "clerk_prov",
+      "booking-uuid",
+      { status: "ACCEPTED" },
+      "rid-1"
+    );
     expect(result).toEqual({ id: "b-1" });
   });
 });

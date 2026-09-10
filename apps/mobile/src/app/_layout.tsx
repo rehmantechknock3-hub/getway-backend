@@ -9,6 +9,7 @@ import {
   useRootNavigationState,
 } from "expo-router";
 import { ClerkProvider, useAuth, useUser } from "@clerk/expo";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -221,16 +222,18 @@ export default function RootLayout() {
         publishableKey={process.env["EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY"]!}
         tokenCache={tokenCache}
       >
-        <QueryClientProvider client={queryClient}>
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: appColors.canvas.DEFAULT },
-            }}
-          />
-          <RootNavigator />
-          <Toast />
-        </QueryClientProvider>
+        <StripeProvider publishableKey={process.env["EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY"] ?? ""}>
+          <QueryClientProvider client={queryClient}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: appColors.canvas.DEFAULT },
+              }}
+            />
+            <RootNavigator />
+            <Toast />
+          </QueryClientProvider>
+        </StripeProvider>
       </ClerkProvider>
     </View>
   );

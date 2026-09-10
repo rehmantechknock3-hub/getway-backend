@@ -46,6 +46,9 @@ describe("BookingsService", () => {
     notifyProviderNewBooking: vi.fn().mockResolvedValue(undefined),
     notifyCustomerBookingStatus: vi.fn().mockResolvedValue(undefined),
   };
+  const paymentsService = {
+    captureBookingPayment: vi.fn().mockResolvedValue(undefined),
+  };
   const bookingGateway = {
     emitStatusChange: vi.fn(),
   };
@@ -62,6 +65,7 @@ describe("BookingsService", () => {
     service = new BookingsService(
       prisma as never,
       notificationsService as never,
+      paymentsService as never,
       cache as never,
       bookingGateway as never
     );
@@ -720,13 +724,49 @@ describe("BookingsService", () => {
 
     const result = await service.updateStatusForProvider("clerk-p", "b-1", {
       status: "COMPLETED",
-    });
+    }, "rid-1");
 
     expect(result.status).toBe("COMPLETED");
     expect(prisma.user.update).toHaveBeenCalledWith({
       where: { id: "cust-1" },
       data: { totalSpent: { increment: 55.25 } },
     });
+    expect(paymentsService.captureBookingPayment).toHaveBeenCalledWith("b-1", "rid-1");
+  });
+
+  it("updateStatusForProvider does not fail the request when payment capture throws", async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      id: "u-1",
+      role: "PROVIDER",
+      providerProfile: { id: "pp-1" },
+    });
+    const t = new Date();
+    const row = {
+      id: "b-1",
+      customerId: "cust-1",
+      providerId: "pp-1",
+      serviceId: "s",
+      scheduledAt: t,
+      address: "a",
+      latitude: 0,
+      longitude: 0,
+      notes: null,
+      totalAmount: 55.25,
+      createdAt: t,
+      updatedAt: t,
+      customer: { firstName: "A", lastName: "B" },
+      service: { title: "X" },
+    };
+    prisma.booking.findFirst
+      .mockResolvedValueOnce({ ...row, status: "IN_PROGRESS" })
+      .mockResolvedValueOnce({ ...row, status: "COMPLETED" });
+    prisma.booking.updateMany.mockResolvedValue({ count: 1 });
+    prisma.user.update.mockResolvedValue({ id: "cust-1" });
+    paymentsService.captureBookingPayment.mockRejectedValueOnce(new Error("stripe down"));
+
+    const result = await service.updateStatusForProvider("clerk-p", "b-1", { status: "COMPLETED" });
+
+    expect(result.status).toBe("COMPLETED");
   });
 
   it("updateStatusForProvider rejects stale updates (double-accept race)", async () => {

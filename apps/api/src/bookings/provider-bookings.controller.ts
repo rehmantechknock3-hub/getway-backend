@@ -57,6 +57,6 @@ export class ProviderBookingsController {
     const parsed = UpdateBookingStatusSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException("Invalid status payload");
 
-    return this.bookingsService.updateStatusForProvider(clerkId, id, parsed.data);
+    return this.bookingsService.updateStatusForProvider(clerkId, id, parsed.data, req.requestId);
   }
 }

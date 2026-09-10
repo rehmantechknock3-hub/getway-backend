@@ -35,3 +35,29 @@ export async function safeClerkCall<R>(
     };
   }
 }
+
+/**
+ * Wraps a Stripe React Native SDK call (e.g. `initPaymentSheet`, `presentPaymentSheet`) that
+ * claims to return `{ error }` but can throw a raw `Error` internally when preconditions
+ * aren't met (missing publishable key, no active StripeProvider, etc).
+ *
+ * Guarantees: always returns the full SDK result shape — never throws.
+ *
+ * @example
+ * const { error } = await safeStripeCall(() => initPaymentSheet({ ... }));
+ * if (error) {
+ *   showToast('error', error.message ?? 'Could not start payment');
+ *   return;
+ * }
+ */
+export async function safeStripeCall<R>(
+  fn: () => Promise<R>,
+): Promise<R | { error: Error }> {
+  try {
+    return await fn();
+  } catch (thrown: unknown) {
+    return {
+      error: thrown instanceof Error ? thrown : new Error(String(thrown)),
+    };
+  }
+}

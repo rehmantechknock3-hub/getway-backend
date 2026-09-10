@@ -24,6 +24,7 @@ import type {
 import { CustomerOnboardingSchema, bookingsOverlap, scheduledAtAllowed } from "@repo/schemas";
 
 import { NotificationsService } from "../notifications/notifications.service";
+import { PaymentsService } from "../payments/payments.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { BookingGateway } from "../realtime/booking.gateway";
 
@@ -60,6 +61,7 @@ export class BookingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationsService,
+    private readonly paymentsService: PaymentsService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
     private readonly bookingGateway: BookingGateway
   ) {}
@@ -661,7 +663,8 @@ export class BookingsService {
   async updateStatusForProvider(
     clerkId: string,
     bookingId: string,
-    input: UpdateBookingStatusInput
+    input: UpdateBookingStatusInput,
+    requestId?: string
   ): Promise<ProviderBookingView> {
     const user = await this.prisma.user.findUnique({
       where: { clerkId },
@@ -722,6 +725,18 @@ export class BookingsService {
 
     this.bumpProviderBookingListCache(user.providerProfile.id);
     this.bookingGateway.emitStatusChange(updated.id, next);
+
+    if (next === "COMPLETED") {
+      // Best-effort: capture the customer's pre-authorized payment now that the job is done.
+      // Never blocks or fails this response — the job is already complete either way.
+      await this.paymentsService.captureBookingPayment(updated.id, requestId).catch((error: unknown) => {
+        this.logger.warn(
+          `Failed to capture payment for completed booking ${updated.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      });
+    }
 
     void this.notificationsService
       .notifyCustomerBookingStatus({

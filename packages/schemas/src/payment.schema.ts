@@ -17,12 +17,22 @@ export const PaymentSchema = z.object({
   status:                   PaymentStatus.default("PENDING"),
   stripePaymentIntentId:    z.string().optional(),
   stripeTransferId:         z.string().optional(),
+  capturedAt:               z.coerce.date().optional(),
+  failureReason:            z.string().optional(),
   createdAt:                z.coerce.date(),
   updatedAt:                z.coerce.date(),
 });
 
 export const CreatePaymentIntentSchema = z.object({
   bookingId: z.string().uuid(),
+});
+
+/** Returned to the mobile app so it can drive Stripe's PaymentSheet. Publishable key is app-level env, not per-request. */
+export const CreatePaymentIntentResponseSchema = z.object({
+  clientSecret:    z.string(),
+  ephemeralKey:    z.string(),
+  customerId:      z.string(),
+  paymentIntentId: z.string(),
 });
 
 export const ProviderPayoutRangeSchema = z.enum(["week", "month", "all"]);
@@ -37,6 +47,7 @@ export const ProviderPayoutSummarySchema = z.object({
   pendingAmount: z.number().nonnegative(),
 });
 
-export type Payment                   = z.infer<typeof PaymentSchema>;
-export type CreatePaymentIntentInput  = z.infer<typeof CreatePaymentIntentSchema>;
+export type Payment                       = z.infer<typeof PaymentSchema>;
+export type CreatePaymentIntentInput      = z.infer<typeof CreatePaymentIntentSchema>;
+export type CreatePaymentIntentResponse   = z.infer<typeof CreatePaymentIntentResponseSchema>;
 export type ProviderPayoutSummary = z.infer<typeof ProviderPayoutSummarySchema>;

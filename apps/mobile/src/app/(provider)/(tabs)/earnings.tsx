@@ -13,8 +13,15 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
 
-import { useProviderBookings, useProviderPayoutSummary, useOrCreateAdminThread } from "@repo/api-client";
+import {
+  useConnectStatus,
+  useCreateConnectOnboardingLink,
+  useProviderBookings,
+  useProviderPayoutSummary,
+  useOrCreateAdminThread,
+} from "@repo/api-client";
 import { showToast } from "@repo/ui";
 import { reportError } from "@repo/utils";
 
@@ -38,6 +45,56 @@ function formatDate(value: Date): string {
     day: "numeric",
     year: "numeric",
   }).format(value instanceof Date ? value : new Date(value));
+}
+
+/** Shown until the provider has finished Stripe Express onboarding — gates receiving real payouts. */
+function ConnectPayoutsBanner({ enabled }: { enabled: boolean }) {
+  const statusQuery = useConnectStatus({ enabled });
+  const createOnboardingLink = useCreateConnectOnboardingLink();
+
+  if (!statusQuery.data || (statusQuery.data.chargesEnabled && statusQuery.data.payoutsEnabled)) {
+    return null;
+  }
+
+  const setUpPayouts = async () => {
+    try {
+      const { url } = await createOnboardingLink.mutateAsync();
+      await WebBrowser.openAuthSessionAsync(url, "waynow://provider/stripe-connect-return");
+      await statusQuery.refetch();
+    } catch (error: unknown) {
+      reportError(error, { screen: "ProviderEarnings", action: "setUpPayouts" });
+      showToast("error", "Could not open payout setup", "Check your connection and try again.");
+    }
+  };
+
+  return (
+    <View className="bg-canvas-raised border border-primary-100 rounded-2xl p-4 mb-6">
+      <View className="flex-row items-center gap-2 mb-1">
+        <Ionicons name="card-outline" size={18} color={appColors.primary[600]} />
+        <Text className="text-ink font-semibold text-sm">Set up payouts</Text>
+      </View>
+      <Text className="text-ink-muted text-xs mb-3 leading-4">
+        Finish Stripe onboarding to receive customer payments directly to your bank account.
+      </Text>
+      <Pressable
+        onPress={() => void setUpPayouts()}
+        disabled={createOnboardingLink.isPending}
+        className={`rounded-xl py-2.5 items-center ${
+          createOnboardingLink.isPending ? "bg-ink-faint" : "bg-primary-600"
+        }`}
+        accessibilityRole="button"
+        accessibilityLabel="Set up payouts"
+      >
+        <Text
+          className={`font-bold text-sm ${
+            createOnboardingLink.isPending ? "text-ink-muted" : "text-white"
+          }`}
+        >
+          {createOnboardingLink.isPending ? "Opening…" : "Continue setup"}
+        </Text>
+      </Pressable>
+    </View>
+  );
 }
 
 export default function EarningsScreen() {
@@ -140,6 +197,8 @@ export default function EarningsScreen() {
         </View>
         <Ionicons name="chevron-forward" size={18} color={appColors.ink.muted} />
       </Pressable>
+
+      <ConnectPayoutsBanner enabled={enabled} />
 
       {!enabled || historyQuery.isLoading ? (
         <View className="py-20 items-center">

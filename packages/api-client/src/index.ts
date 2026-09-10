@@ -33,3 +33,5 @@ export * from "./mutations/favorites.mutations";
 export * from "./mutations/users.mutations";
 export * from "./mutations/provider-services.mutations";
 export * from "./mutations/messages.mutations";
+export * from "./mutations/payments.mutations";
+export * from "./mutations/stripe-connect.mutations";

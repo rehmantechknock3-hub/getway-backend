@@ -13,13 +13,14 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/expo";
 import { Ionicons } from "@expo/vector-icons";
+import { PaymentSheetError, useStripe } from "@stripe/stripe-react-native";
 import { io, type Socket } from "socket.io-client";
 
-import { useBooking, useCreateReview } from "@repo/api-client";
+import { useBooking, useCreatePaymentIntent, useCreateReview } from "@repo/api-client";
 import { isLiveMapTrackingStatus, isTerminalBookingStatus, useBookingTracking } from "@repo/hooks";
 import type { BookingWithReview } from "@repo/schemas";
 import { showToast } from "@repo/ui";
-import { reportError } from "@repo/utils";
+import { reportError, safeStripeCall } from "@repo/utils";
 
 import { BookingStatusTimeline } from "../../../components/BookingStatusTimeline";
 import { LiveTrackingMapCard } from "../../../components/LiveTrackingMapCard";
@@ -65,6 +66,81 @@ function statusLabel(status: string): string {
 }
 
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
+
+/** Shown once the job is under way — authorizes a card now; the provider's COMPLETED transition captures it. */
+function PayCard({ booking }: { booking: BookingWithReview }) {
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
+  const createPaymentIntent = useCreatePaymentIntent();
+  const [authorized, setAuthorized] = useState(false);
+
+  if (booking.status !== "IN_PROGRESS" || authorized) return null;
+
+  const payNow = async () => {
+    try {
+      const intent = await createPaymentIntent.mutateAsync(booking.id);
+
+      const initResult = await safeStripeCall(() =>
+        initPaymentSheet({
+          merchantDisplayName: "WayNow",
+          customerId: intent.customerId,
+          customerEphemeralKeySecret: intent.ephemeralKey,
+          paymentIntentClientSecret: intent.clientSecret,
+        })
+      );
+      if (initResult.error) {
+        showToast("error", "Could not start payment", initResult.error.message);
+        return;
+      }
+
+      const presentResult = await safeStripeCall(() => presentPaymentSheet());
+      if (presentResult.error) {
+        const wasUserCancel =
+          "code" in presentResult.error && presentResult.error.code === PaymentSheetError.Canceled;
+        if (!wasUserCancel) {
+          showToast("error", "Payment not completed", presentResult.error.message);
+        }
+        return;
+      }
+
+      setAuthorized(true);
+      showToast("success", "Payment authorized", "You'll be charged once the job is marked complete.");
+    } catch (error: unknown) {
+      // Booking was already paid (e.g. re-opened this screen after a successful earlier authorization).
+      if (error instanceof Error && error.message.toLowerCase().includes("already been paid")) {
+        setAuthorized(true);
+        return;
+      }
+      reportError(error, { screen: "CustomerBookingDetail", action: "payNow", extra: { bookingId: booking.id } });
+      showToast("error", "Could not start payment", "Check your connection and try again.");
+    }
+  };
+
+  return (
+    <View className="bg-canvas-raised rounded-2xl border border-primary-100 p-4 mt-4">
+      <Text className="text-ink font-semibold text-base mb-1">Authorize payment</Text>
+      <Text className="text-ink-muted text-sm mb-4 leading-5">
+        Add a card now — you’ll only be charged once the job is marked complete.
+      </Text>
+      <TouchableOpacity
+        className={`rounded-2xl py-3.5 items-center ${
+          createPaymentIntent.isPending ? "bg-ink-faint" : "bg-primary-600"
+        }`}
+        disabled={createPaymentIntent.isPending}
+        onPress={() => void payNow()}
+        accessibilityRole="button"
+        accessibilityLabel="Pay now"
+      >
+        <Text
+          className={`font-bold text-sm ${
+            createPaymentIntent.isPending ? "text-ink-muted" : "text-white"
+          }`}
+        >
+          {createPaymentIntent.isPending ? "Preparing…" : "Pay now"}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function CustomerReviewBlock({ booking }: { booking: BookingWithReview }) {
   const [rating, setRating] = useState(0);
@@ -401,6 +477,8 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
           </View>
+
+          <PayCard booking={booking} />
 
           <View className="bg-canvas-raised rounded-2xl border border-ink-faint p-4 mt-4">
             <Text className="text-ink font-semibold mb-3">Before you go</Text>

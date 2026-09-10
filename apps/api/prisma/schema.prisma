@@ -72,6 +72,8 @@ model User {
   providerOnboarding  Json?
   /** Lifetime spend from completed bookings (customer). Incremented on COMPLETED. */
   totalSpent          Float    @default(0)
+  /** Stripe Customer id — backs the PaymentSheet ephemeral key so returning customers get saved cards. */
+  stripeCustomerId    String?  @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -115,6 +117,11 @@ model ProviderProfile {
   longitude          Float?
   /** Category IDs hidden from this provider’s service picker (shared catalog rows may still exist). */
   dismissedServiceCategoryIds String[] @default([])
+  /** Stripe Connect Express account id, created on first onboarding-link request. */
+  stripeAccountId         String?  @unique
+  stripeChargesEnabled    Boolean  @default(false)
+  stripePayoutsEnabled    Boolean  @default(false)
+  stripeDetailsSubmitted  Boolean  @default(false)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -266,6 +273,8 @@ model Payment {
   status                   PaymentStatus @default(PENDING)
   stripePaymentIntentId    String?       @unique
   stripeTransferId         String?
+  capturedAt               DateTime?
+  failureReason            String?
   createdAt                DateTime      @default(now())
   updatedAt                DateTime      @updatedAt
 
